@@ -1,13 +1,16 @@
 const express = require("express");
-const app = express();
+const connectDB = require("./config/db");
+const router = require("./routes/router");
 
-app.get("/", async (req, res) => {
-  try {
-    res.send({ message: "Welcome to Practical Exam!" });
-  } catch (error) {
-    res.send({ error: error.message });
-  }
-});
+const app = express();
+app.use(express.json());
+
+let dbConnection;
+(async () => {
+  dbConnection = await connectDB();
+})();
+
+app.use("/api", router);
 
 const PORT = process.env.PORT || 9999;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
