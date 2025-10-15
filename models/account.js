@@ -1,32 +1,23 @@
 const connectDB = require("../config/db");
 
-let dbConnection;
-
-const initializeDB = async () => {
-  if (!dbConnection) {
-    dbConnection = await connectDB();
-  }
-  return dbConnection;
+const findAccountByEmail = async (email) => {
+  const db = await connectDB();
+  const [rows] = await db.query("SELECT * FROM account WHERE Email = ?", [
+    email,
+  ]);
+  return rows[0];
 };
 
-const Account = {
-  create: async (accountData) => {
-    const connection = await initializeDB();
-    const { username, email, phone, password, status } = accountData;
-    const query = `
-      INSERT INTO atps.account (username, email, phone, password, status)
-      VALUES (?, ?, ?, ?, ?)
-    `;
-    const [result] = await connection.execute(query, [
-      username,
-      email,
-      phone,
-      password,
-      status || "active",
-    ]);
-    return { id: result.insertId, ...accountData };
-  },
+const createAccount = async (username, email, phone, password) => {
+  const db = await connectDB();
+  const [result] = await db.query(
+    "INSERT INTO account (Username, Email, Phone, Password, Status) VALUES (?, ?, ?, ?, ?)",
+    [username, email, phone, password, "active"]
+  );
+  return result.insertId;
 };
 
-// Export initializeDB để sử dụng ở nơi khác nếu cần
-module.exports = { Account, initializeDB };
+module.exports = {
+  findAccountByEmail,
+  createAccount,
+};
