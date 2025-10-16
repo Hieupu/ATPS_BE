@@ -3,7 +3,7 @@ const jwt = require("jsonwebtoken");
 const { findAccountByEmail } = require("../models/account");
 require("dotenv").config();
 
-const loginService = async (email, password, provider = "local") => {
+const loginService = async (email, password, provider ) => {
   const user = await findAccountByEmail(email);
   if (!user) {
     throw new Error("User not found");
