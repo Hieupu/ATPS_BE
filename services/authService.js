@@ -3,23 +3,21 @@ const jwt = require("jsonwebtoken");
 const { findAccountByEmail } = require("../models/account");
 require("dotenv").config();
 
-const loginService = async (email, password) => {
+const loginService = async (email, password, provider = "local") => {
   const user = await findAccountByEmail(email);
   if (!user) {
-    throw new Error("Email not found");
+    throw new Error("User not found");
   }
 
-  const isMatch = await bcrypt.compare(password, user.Password);
-  if (!isMatch) {
-    throw new Error("Incorrect password");
+  if (provider === "local") {
+    if (!password || !(await bcrypt.compare(password, user.password))) {
+      throw new Error("Invalid credentials");
+    }
   }
 
-  const token = jwt.sign(
-    { AccID: user.AccID, Email: user.Email },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN || "1d" }
-  );
-
+  const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, {
+    expiresIn: "1h",
+  });
   return { token, user };
 };
 
