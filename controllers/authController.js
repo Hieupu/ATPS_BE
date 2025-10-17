@@ -6,12 +6,18 @@ const FacebookStrategy = require("passport-facebook").Strategy;
 const { loginService } = require("../services/authService");
 const { findAccountByEmail, createAccount } = require("../models/account");
 
-
-
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    const { token, user } = await loginService(email, password);
+
+    // Kiểm tra dữ liệu đầu vào
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ message: "Email and password are required" });
+    }
+
+    const { token, user } = await loginService(email, password, "local");
 
     const { Username, Email } = user;
 
@@ -21,15 +27,14 @@ const login = async (req, res) => {
       user: { Username, Email },
     });
   } catch (error) {
+    console.error("Login error:", error);
     res.status(401).json({ message: error.message });
   }
 };
 
-
 const logout = async (req, res) => {
   res.json({ message: "Logout successful (client should remove token)" });
 };
-
 
 const register = async (req, res) => {
   try {
@@ -37,7 +42,8 @@ const register = async (req, res) => {
 
     if (!username || !email || !password) {
       return res.status(400).json({
-        message: "Please enter complete information: username, email, password!",
+        message:
+          "Please enter complete information: username, email, password!",
       });
     }
 
@@ -78,7 +84,6 @@ const register = async (req, res) => {
   }
 };
 
-
 passport.use(
   new GoogleStrategy(
     {
@@ -97,17 +102,29 @@ passport.use(
             console.log("Google user already exists, logging in:", email);
             return done(null, user);
           } else {
-            console.warn(`Email ${email} has been registered by ${user.provider}`);
+            console.warn(
+              `Email ${email} has been registered by ${user.provider}`
+            );
             return done(null, false, {
-              errorMessage: "This account has been registered, please return to the login page!",
+              errorMessage:
+                "This account has been registered, please return to the login page!",
             });
           }
         } else {
           const randomPassword = crypto.randomBytes(6).toString("hex");
           const hashedPassword = await bcrypt.hash(randomPassword, 10);
-          const id = await createAccount(username, email, null, hashedPassword, "google");
+          const id = await createAccount(
+            username,
+            email,
+            null,
+            hashedPassword,
+            "google"
+          );
           user = { id, username, email, provider: "google" };
-          console.log("Created new Google user:", { email, rawPassword: randomPassword });
+          console.log("Created new Google user:", {
+            email,
+            rawPassword: randomPassword,
+          });
           return done(null, user);
         }
       } catch (error) {
@@ -118,32 +135,36 @@ passport.use(
   )
 );
 
-const googleAuth = passport.authenticate("google", { scope: ["profile", "email"] });
+const googleAuth = passport.authenticate("google", {
+  scope: ["profile", "email"],
+});
 
 const googleAuthCallback = (req, res, next) => {
-  passport.authenticate("google", { session: false, failWithError: true }, async (err, user, info) => {
-    if (err) {
-      console.error("Google auth error:", err);
-      return res.status(400).json({ message: err.message });
+  passport.authenticate(
+    "google",
+    { session: false, failWithError: true },
+    async (err, user, info) => {
+      if (err) {
+        console.error("Google auth error:", err);
+        return res.status(400).json({ message: err.message });
+      }
+      if (info && info.errorMessage) {
+        return res.status(400).json({ message: info.errorMessage });
+      }
+      if (!user) {
+        return res.status(400).json({ message: "Authentication failed" });
+      }
+      req.user = user;
+      try {
+        const { token } = await loginService(user.email, null, user.provider);
+        res.json({ message: "Google authentication successful", token, user });
+      } catch (error) {
+        console.error("Error in Google callback:", error);
+        res.status(500).json({ message: error.message });
+      }
     }
-    if (info && info.errorMessage) {
-      return res.status(400).json({ message: info.errorMessage });
-    }
-    if (!user) {
-      return res.status(400).json({ message: "Authentication failed" });
-    }
-    req.user = user;
-    try {
-      const { token } = await loginService(user.email, null, user.provider);
-      res.json({ message: "Google authentication successful", token, user });
-    } catch (error) {
-      console.error("Error in Google callback:", error);
-      res.status(500).json({ message: error.message });
-    }
-  })(req, res, next);
+  )(req, res, next);
 };
-
-
 
 passport.use(
   new FacebookStrategy(
@@ -155,7 +176,8 @@ passport.use(
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
-        const email = profile.emails && profile.emails[0] ? profile.emails[0].value : null;
+        const email =
+          profile.emails && profile.emails[0] ? profile.emails[0].value : null;
         const userEmail = email || `facebook_${profile.id}@placeholder.com`;
         const username = profile.displayName || `facebook_${profile.id}`;
 
@@ -166,22 +188,37 @@ passport.use(
             console.log("Facebook user already exists, logging in:", userEmail);
             return done(null, user);
           } else {
-            console.warn(`Email ${userEmail} has been registered by ${user.provider}`);
+            console.warn(
+              `Email ${userEmail} has been registered by ${user.provider}`
+            );
             return done(null, false, {
-              errorMessage: "This account has been registered, please return to the login page!",
+              errorMessage:
+                "This account has been registered, please return to the login page!",
             });
           }
         }
 
         const randomPassword = crypto.randomBytes(6).toString("hex");
         const hashedPassword = await bcrypt.hash(randomPassword, 10);
-        const id = await createAccount(username, userEmail, null, hashedPassword, "facebook", profile.id);
+        const id = await createAccount(
+          username,
+          userEmail,
+          null,
+          hashedPassword,
+          "facebook",
+          profile.id
+        );
 
         user = { id, username, email: userEmail, provider: "facebook" };
-        console.log("Created new Facebook user:", { email: userEmail, rawPassword: randomPassword });
+        console.log("Created new Facebook user:", {
+          email: userEmail,
+          rawPassword: randomPassword,
+        });
 
         if (!email) {
-          console.warn(`Facebook user ${profile.id} has no email, using placeholder: ${userEmail}`);
+          console.warn(
+            `Facebook user ${profile.id} has no email, using placeholder: ${userEmail}`
+          );
         }
 
         return done(null, user);
@@ -193,34 +230,38 @@ passport.use(
   )
 );
 
-
 const facebookAuth = passport.authenticate("facebook", { scope: ["email"] });
 
 const facebookAuthCallback = (req, res, next) => {
-  passport.authenticate("facebook", { session: false, failWithError: true }, async (err, user, info) => {
-    if (err) {
-      console.error("Facebook auth error:", err);
-      return res.status(400).json({ message: err.message });
+  passport.authenticate(
+    "facebook",
+    { session: false, failWithError: true },
+    async (err, user, info) => {
+      if (err) {
+        console.error("Facebook auth error:", err);
+        return res.status(400).json({ message: err.message });
+      }
+      if (info && info.errorMessage) {
+        return res.status(400).json({ message: info.errorMessage });
+      }
+      if (!user) {
+        return res.status(400).json({ message: "Authentication failed" });
+      }
+      req.user = user;
+      try {
+        const { token } = await loginService(user.email, null, user.provider);
+        res.json({
+          message: "Facebook authentication successful",
+          token,
+          user,
+        });
+      } catch (error) {
+        console.error("Error in Facebook callback:", error);
+        res.status(500).json({ message: error.message });
+      }
     }
-    if (info && info.errorMessage) {
-      return res.status(400).json({ message: info.errorMessage });
-    }
-    if (!user) {
-      return res.status(400).json({ message: "Authentication failed" });
-    }
-    req.user = user;
-    try {
-      const { token } = await loginService(user.email, null, user.provider);
-      res.json({ message: "Facebook authentication successful", token, user });
-    } catch (error) {
-      console.error("Error in Facebook callback:", error);
-      res.status(500).json({ message: error.message });
-    }
-  })(req, res, next);
+  )(req, res, next);
 };
-
-
-
 
 module.exports = {
   login,
