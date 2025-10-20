@@ -1,26 +1,18 @@
-const bcrypt = require("bcryptjs");
 const passport = require("passport");
 const crypto = require("crypto");
+const bcrypt = require("bcryptjs");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const FacebookStrategy = require("passport-facebook").Strategy;
 const { loginService } = require("../services/authService");
 const { findAccountByEmail, createAccount } = require("../models/account");
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+
 
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-
-    // Kiểm tra dữ liệu đầu vào
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Email and password are required" });
-    }
-
-    const { token, user } = await loginService(email, password, "local");
-
+    const { token, user } = await loginService(email, password);
     const { Username, Email } = user;
-
     res.json({
       message: "Login successful",
       token,
@@ -146,21 +138,26 @@ const googleAuthCallback = (req, res, next) => {
     async (err, user, info) => {
       if (err) {
         console.error("Google auth error:", err);
-        return res.status(400).json({ message: err.message });
+        return res.redirect(buildOAuthErrorRedirect("google", err.message));
       }
       if (info && info.errorMessage) {
-        return res.status(400).json({ message: info.errorMessage });
+        return res.redirect(buildOAuthErrorRedirect("google", info.errorMessage));
       }
       if (!user) {
-        return res.status(400).json({ message: "Authentication failed" });
+        return res.redirect(buildOAuthErrorRedirect("google", "Authentication failed"));
       }
-      req.user = user;
+
       try {
-        const { token } = await loginService(user.email, null, user.provider);
-        res.json({ message: "Google authentication successful", token, user });
-      } catch (error) {
-        console.error("Error in Google callback:", error);
-        res.status(500).json({ message: error.message });
+        const { token } = await loginService(user.email, null, "google");
+        const safeUser = {
+          Username: user.username || user.Username,
+          Email: user.email || user.Email,
+          Provider: "google",
+        };
+        return res.redirect(buildOAuthRedirect("google", token, safeUser));
+      } catch (e) {
+        console.error("Error in Google callback:", e);
+        return res.redirect(buildOAuthErrorRedirect("google", e.message));
       }
     }
   )(req, res, next);
@@ -239,29 +236,42 @@ const facebookAuthCallback = (req, res, next) => {
     async (err, user, info) => {
       if (err) {
         console.error("Facebook auth error:", err);
-        return res.status(400).json({ message: err.message });
+        return res.redirect(buildOAuthErrorRedirect("facebook", err.message));
       }
       if (info && info.errorMessage) {
-        return res.status(400).json({ message: info.errorMessage });
+        return res.redirect(buildOAuthErrorRedirect("facebook", info.errorMessage));
       }
       if (!user) {
-        return res.status(400).json({ message: "Authentication failed" });
+        return res.redirect(buildOAuthErrorRedirect("facebook", "Authentication failed"));
       }
-      req.user = user;
+
       try {
-        const { token } = await loginService(user.email, null, user.provider);
-        res.json({
-          message: "Facebook authentication successful",
-          token,
-          user,
-        });
-      } catch (error) {
-        console.error("Error in Facebook callback:", error);
-        res.status(500).json({ message: error.message });
+        const { token } = await loginService(user.email, null, "facebook");
+        const safeUser = {
+          Username: user.username || user.Username,
+          Email: user.email || user.Email,
+          Provider: "facebook",
+        };
+        return res.redirect(buildOAuthRedirect("facebook", token, safeUser));
+      } catch (e) {
+        console.error("Error in Facebook callback:", e);
+        return res.redirect(buildOAuthErrorRedirect("facebook", e.message));
       }
     }
   )(req, res, next);
 };
+
+const buildOAuthRedirect = (provider, token, userObj) => {
+  const u = encodeURIComponent(btoa(JSON.stringify(userObj || {})));
+  return `${FRONTEND_URL}/oauth/callback?provider=${provider}&token=${token}&u=${u}`;
+};
+
+const buildOAuthErrorRedirect = (provider, message) => {
+  const msg = encodeURIComponent(message || "Authentication failed");
+  return `${FRONTEND_URL}/oauth/callback?provider=${provider}&error=${msg}`;
+};
+
+
 
 module.exports = {
   login,
