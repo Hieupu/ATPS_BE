@@ -1,5 +1,19 @@
 const connectDB = require("../config/db");
 
+const getFeaturesByAccountId = async (accountId) => {
+  const db = await connectDB();
+  const [rows] = await db.query(
+    `
+    SELECT f.Name
+    FROM atps.feature f
+    JOIN atps.accountfeature af ON f.FeatureID = af.FeatureID
+    WHERE af.AccountID = ?
+    `,
+    [accountId]
+  );
+  return rows.map((row) => row.Name);
+};
+
 const findAccountByEmail = async (email) => {
   const db = await connectDB();
   const [rows] = await db.query("SELECT * FROM account WHERE Email = ?", [
@@ -20,4 +34,5 @@ const createAccount = async (username, email, phone, password) => {
 module.exports = {
   findAccountByEmail,
   createAccount,
+  getFeaturesByAccountId,
 };

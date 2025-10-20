@@ -3,10 +3,12 @@ const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const FacebookStrategy = require("passport-facebook").Strategy;
-const { loginService } = require("../services/authService");
+const {
+  loginService,
+  getAllAccountsService,
+} = require("../services/authService");
 const { findAccountByEmail, createAccount } = require("../models/account");
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
-
 
 const login = async (req, res) => {
   try {
@@ -141,10 +143,14 @@ const googleAuthCallback = (req, res, next) => {
         return res.redirect(buildOAuthErrorRedirect("google", err.message));
       }
       if (info && info.errorMessage) {
-        return res.redirect(buildOAuthErrorRedirect("google", info.errorMessage));
+        return res.redirect(
+          buildOAuthErrorRedirect("google", info.errorMessage)
+        );
       }
       if (!user) {
-        return res.redirect(buildOAuthErrorRedirect("google", "Authentication failed"));
+        return res.redirect(
+          buildOAuthErrorRedirect("google", "Authentication failed")
+        );
       }
 
       try {
@@ -239,10 +245,14 @@ const facebookAuthCallback = (req, res, next) => {
         return res.redirect(buildOAuthErrorRedirect("facebook", err.message));
       }
       if (info && info.errorMessage) {
-        return res.redirect(buildOAuthErrorRedirect("facebook", info.errorMessage));
+        return res.redirect(
+          buildOAuthErrorRedirect("facebook", info.errorMessage)
+        );
       }
       if (!user) {
-        return res.redirect(buildOAuthErrorRedirect("facebook", "Authentication failed"));
+        return res.redirect(
+          buildOAuthErrorRedirect("facebook", "Authentication failed")
+        );
       }
 
       try {
@@ -270,8 +280,6 @@ const buildOAuthErrorRedirect = (provider, message) => {
   const msg = encodeURIComponent(message || "Authentication failed");
   return `${FRONTEND_URL}/oauth/callback?provider=${provider}&error=${msg}`;
 };
-
-
 
 module.exports = {
   login,

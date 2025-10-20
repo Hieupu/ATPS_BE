@@ -18,6 +18,19 @@ const verifyToken = (req, res, next) => {
   }
 };
 
+const authorizeFeature = (featureName) => (req, res, next) => {
+  const userFeatures = req.user?.features || [];
+
+  if (!userFeatures.includes(featureName)) {
+    return res
+      .status(403)
+      .json({ message: "Access denied: missing feature permission" });
+  }
+
+  next();
+};
+
 module.exports = {
   verifyToken,
+  authorizeFeature,
 };
