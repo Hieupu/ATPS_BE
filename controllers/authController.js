@@ -5,6 +5,10 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const FacebookStrategy = require("passport-facebook").Strategy;
 const { loginService } = require("../services/authService");
 const { findAccountByEmail, createAccount } = require("../models/account");
+const { sendVerificationEmail, generateVerificationCode } = require("../utils/nodemailer");
+const jwt = require("jsonwebtoken");
+const connectDB = require("../config/db");
+
 
 
 
@@ -219,7 +223,134 @@ const facebookAuthCallback = (req, res, next) => {
   })(req, res, next);
 };
 
+// Lưu trữ tạm thời mã xác thực (trong production nên dùng Redis)
+const verificationCodes = new Map();
+// Gửi mã xác thực cho quên mật khẩu
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
 
+    if (!email) {
+      return res.status(400).json({ message: "Vui lòng nhập email!" });
+    }
+
+    // Kiểm tra email có tồn tại không
+    const user = await findAccountByEmail(email);
+    if (!user) {
+      return res.status(404).json({ message: "Email không tồn tại trong hệ thống!" });
+    }
+
+    // Tạo mã xác thực
+    const verificationCode = generateVerificationCode();
+    
+    // Lưu mã xác thực (hết hạn sau 15 phút)
+    verificationCodes.set(email, {
+      code: verificationCode,
+      expiresAt: Date.now() + 15 * 60 * 1000, // 15 phút
+      userId: user.AccID
+    });
+
+    // Gửi email
+    sendVerificationEmail(email, verificationCode);
+
+    res.json({
+      message: "Mã xác thực đã được gửi đến email của bạn!",
+      email: email
+    });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    res.status(500).json({ message: "Hệ thống lỗi, vui lòng thử lại sau!" });
+  }
+};
+
+// Xác thực mã code
+const verifyResetCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    if (!email || !code) {
+      return res.status(400).json({ message: "Vui lòng nhập email và mã xác thực!" });
+    }
+
+    const storedData = verificationCodes.get(email);
+    
+    if (!storedData) {
+      return res.status(400).json({ message: "Mã xác thực không tồn tại hoặc đã hết hạn!" });
+    }
+
+    if (Date.now() > storedData.expiresAt) {
+      verificationCodes.delete(email);
+      return res.status(400).json({ message: "Mã xác thực đã hết hạn!" });
+    }
+
+    if (storedData.code !== parseInt(code)) {
+      return res.status(400).json({ message: "Mã xác thực không chính xác!" });
+    }
+
+    // Mã hợp lệ, trả về token để reset password
+    const resetToken = jwt.sign(
+      { userId: storedData.userId, email: email }, 
+      process.env.JWT_SECRET + "_reset", 
+      { expiresIn: '15m' }
+    );
+
+    // Xóa mã xác thực sau khi xác nhận thành công
+    verificationCodes.delete(email);
+
+    res.json({
+      message: "Xác thực thành công!",
+      resetToken: resetToken
+    });
+  } catch (error) {
+    console.error("Verify code error:", error);
+    res.status(500).json({ message: "Hệ thống lỗi, vui lòng thử lại sau!" });
+  }
+};
+
+// Đổi mật khẩu
+const resetPassword = async (req, res) => {
+  try {
+    const { resetToken, newPassword } = req.body;
+
+    if (!resetToken || !newPassword) {
+      return res.status(400).json({ message: "Vui lòng nhập token và mật khẩu mới!" });
+    }
+
+    // Xác thực token
+    const decoded = jwt.verify(resetToken, process.env.JWT_SECRET + "_reset");
+    
+    // Kiểm tra mật khẩu mới
+    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*?&]{6,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      return res.status(400).json({
+        message: "Mật khẩu phải có ít nhất 6 ký tự, bao gồm chữ và số!",
+      });
+    }
+
+    // Mã hóa mật khẩu mới
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Cập nhật mật khẩu trong database
+    const db = await connectDB();
+    await db.query(
+      "UPDATE account SET Password = ? WHERE AccID = ?",
+      [hashedPassword, decoded.userId]
+    );
+
+    res.json({
+      message: "Đổi mật khẩu thành công! Vui lòng đăng nhập lại."
+    });
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(400).json({ message: "Token đã hết hạn! Vui lòng thực hiện lại quy trình." });
+    }
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(400).json({ message: "Token không hợp lệ!" });
+    }
+    console.error("Reset password error:", error);
+    res.status(500).json({ message: "Hệ thống lỗi, vui lòng thử lại sau!" });
+  }
+};
 
 
 module.exports = {
@@ -230,4 +361,7 @@ module.exports = {
   googleAuthCallback,
   facebookAuth,
   facebookAuthCallback,
+   forgotPassword,
+  verifyResetCode,
+  resetPassword
 };
