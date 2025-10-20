@@ -3,27 +3,24 @@ const router = express.Router();
 const {
   getUsers,
   getUser,
+  getProfile,
+  updateProfile,
+  uploadProfilePicture,
+  changePassword,
   updateUserInfo,
   deleteUserById,
+  getUserRole,
 } = require("../controllers/userController");
+const { verifyToken } = require("../middlewares/middware");
 
-const { getUserRole } = require("../models/user");
+router.get('/:id/role', getUserRole);
 
-// Các route chính cho user
-router.get("/", getUsers);            // GET /api/users
-router.get("/:id", getUser);          // GET /api/users/:id
-router.put("/:id", updateUserInfo);   // PUT /api/users/:id
-router.delete("/:id", deleteUserById);// DELETE /api/users/:id
+router.use(verifyToken);
 
-router.get('/:id/role', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const role = await getUserRole(id);
-    res.json({ role });
-  } catch (error) {
-    console.error("Error getting user role:", error);
-    res.status(500).json({ message: "Server error" });
-  }
-});
+router.get("/profile/:id", getProfile);           // GET /api/users/profile/:id
+router.put("/profile/:id", updateProfile);        // PUT /api/users/profile/:id
+router.post("/profile/:id/upload", uploadProfilePicture); // POST /api/users/profile/:id/upload
+router.post("/profile/:id/change-password", changePassword); // POST /api/users/profile/:id/change-password
+
 
 module.exports = router;
