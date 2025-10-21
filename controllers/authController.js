@@ -3,7 +3,7 @@ const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const FacebookStrategy = require("passport-facebook").Strategy;
-const { loginService } = require("../services/authService");
+const { loginService,registerService  } = require("../services/authService");
 const accountRepository = require("../repositories/accountRepository");
 
 const { sendVerificationEmail, generateVerificationCode } = require("../utils/nodemailer");
@@ -37,55 +37,35 @@ const logout = async (req, res) => {
 
 const register = async (req, res) => {
   try {
-    const { username, email, phone, password } = req.body;
-
-    if (!username || !email || !password) {
-      return res.status(400).json({
-        message:
-          "Please enter complete information: username, email, password!",
-      });
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: "Invalid email!" });
-    }
-
-    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*?&]{6,}$/;
-    if (!passwordRegex.test(password)) {
-      return res.status(400).json({
-        message:
-          "Password must be at least 6 characters, including letters and numbers!",
-      });
-    }
-
-    if (phone && !/^\d{9,11}$/.test(phone)) {
-      return res.status(400).json({
-        message: "Invalid phone number (9–11 digits only)!",
-      });
-    }
-
-    const existing = await accountRepository.findAccountByEmail(email);
-    if (existing) {
-      return res.status(400).json({ message: "Email has been registered!" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    console.log("📦 Body:", req.body);
-    const id = await accountRepository.createAccount({
+    const username = (req.body.username || "").trim();
+    const email = (req.body.email || "").trim().toLowerCase();
+    const phone = (req.body.phone || "").trim();
+    const password = req.body.password || "";
+    const { id } = await registerService({
       username,
       email,
       phone,
-      password: hashedPassword,
+      password,
+      provider: "local",
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "Account created successfully!",
       AccID: id,
     });
   } catch (error) {
     console.error("Register error:", error);
-    res.status(500).json({ message: "System error, please try again later!" });
+
+    if (error.code === "ER_DUP_ENTRY" || /duplicate/i.test(error.message || "")) {
+      return res.status(400).json({ message: "Email has been registered!" });
+    }
+
+    const status = Number(error.status) || 500;
+    const message =
+      status === 500
+        ? "System error, please try again later!"
+        : error.message || "Bad request";
+    return res.status(status).json({ message });
   }
 };
 
@@ -125,7 +105,7 @@ passport.use(
             password: hashedPassword,
             provider: "google",
           });
-
+          
           const newUser = await accountRepository.findAccountByEmail(email);
           console.log("Created new Google user:", {
             email,
@@ -269,7 +249,7 @@ const facebookAuthCallback = (req, res, next) => {
       }
 
       try {
-        const { token } = await loginService(user.email, null, "facebook");
+        const { token } = await loginService(user.Email, null, "facebook");
         const safeUser = {
           Username: user.Username,
           Email: user.Email,
@@ -283,10 +263,9 @@ const facebookAuthCallback = (req, res, next) => {
     }
   )(req, res, next);
 };
-// === Forgot password feature (của bạn) ===
+
+
 const verificationCodes = new Map();
-
-
 const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -309,8 +288,6 @@ const forgotPassword = async (req, res) => {
       userId: user.AccID
     });
     setTimeout(() => verificationCodes.delete(email), 15 * 60 * 1000);
-
-    // Gọi hàm sendVerificationEmail (đảm bảo hàm này đã được định nghĩa)
     sendVerificationEmail(email, verificationCode);
 
     res.json({
@@ -413,7 +390,6 @@ const resetPassword = async (req, res) => {
     res.status(500).json({ message: "Hệ thống lỗi, vui lòng thử lại sau!" });
   }
 };
-// === Giữ các hàm redirect của main ===
 const buildOAuthRedirect = (provider, token, userObj) => {
   const u = encodeURIComponent(
     Buffer.from(JSON.stringify(userObj || {}), "utf-8").toString("base64")
@@ -426,7 +402,6 @@ const buildOAuthErrorRedirect = (provider, message) => {
   return `${FRONTEND_URL}/oauth/callback?provider=${provider}&error=${msg}`;
 };
 
-// === Xuất tất cả các hàm ===
 module.exports = {
   login,
   logout,
