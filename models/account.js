@@ -1,23 +1,13 @@
-const connectDB = require("../config/db");
-
-let dbConnection;
-
-const initializeDB = async () => {
-  if (!dbConnection) {
-    dbConnection = await connectDB();
-  }
-  return dbConnection;
-};
+const pool = require("../config/db");
 
 const Account = {
   create: async (accountData) => {
-    const connection = await initializeDB();
     const { username, email, phone, password, status } = accountData;
     const query = `
       INSERT INTO atps.account (username, email, phone, password, status)
       VALUES (?, ?, ?, ?, ?)
     `;
-    const [result] = await connection.execute(query, [
+    const [result] = await pool.execute(query, [
       username,
       email,
       phone,
@@ -28,5 +18,4 @@ const Account = {
   },
 };
 
-// Export initializeDB để sử dụng ở nơi khác nếu cần
-module.exports = { Account, initializeDB };
+module.exports = { Account };
