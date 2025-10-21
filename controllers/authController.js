@@ -3,11 +3,8 @@ const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const FacebookStrategy = require("passport-facebook").Strategy;
-const {
-  loginService,
-  getAllAccountsService,
-} = require("../services/authService");
-const { findAccountByEmail, createAccount } = require("../models/account");
+const { loginService } = require("../services/authService");
+const accountRepository = require("../repositories/accountRepository");
 
 const { sendVerificationEmail, generateVerificationCode } = require("../utils/nodemailer");
 const jwt = require("jsonwebtoken");
@@ -19,6 +16,8 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log(req.body);
+
     const { token, user } = await loginService(email, password);
     const { Username, Email } = user;
     res.json({
@@ -66,13 +65,19 @@ const register = async (req, res) => {
       });
     }
 
-    const existing = await findAccountByEmail(email);
+    const existing = await accountRepository.findAccountByEmail(email);
     if (existing) {
       return res.status(400).json({ message: "Email has been registered!" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const id = await createAccount(username, email, phone, hashedPassword);
+    console.log("📦 Body:", req.body);
+    const id = await accountRepository.createAccount({
+      username,
+      email,
+      phone,
+      password: hashedPassword,
+    });
 
     res.status(201).json({
       message: "Account created successfully!",
@@ -95,15 +100,15 @@ passport.use(
       try {
         const email = profile.emails[0].value;
         const username = profile.displayName || `google_${profile.id}`;
-        let user = await findAccountByEmail(email);
+        let user = await accountRepository.findAccountByEmail(email);
 
         if (user) {
-          if (user.provider === "google") {
+          if (user.Provider === "google") {
             console.log("Google user already exists, logging in:", email);
             return done(null, user);
           } else {
             console.warn(
-              `Email ${email} has been registered by ${user.provider}`
+              `Email ${email} has been registered by ${user.Provider}`
             );
             return done(null, false, {
               errorMessage:
@@ -113,19 +118,21 @@ passport.use(
         } else {
           const randomPassword = crypto.randomBytes(6).toString("hex");
           const hashedPassword = await bcrypt.hash(randomPassword, 10);
-          const id = await createAccount(
+          const id = await accountRepository.createAccount({
             username,
             email,
-            null,
-            hashedPassword,
-            "google"
-          );
-          user = { id, username, email, provider: "google" };
+            phone: "",
+            password: hashedPassword,
+            provider: "google",
+          });
+
+          const newUser = await accountRepository.findAccountByEmail(email);
           console.log("Created new Google user:", {
             email,
             rawPassword: randomPassword,
           });
-          return done(null, user);
+
+          return done(null, newUser);
         }
       } catch (error) {
         console.error("Google strategy error:", error);
@@ -160,10 +167,10 @@ const googleAuthCallback = (req, res, next) => {
       }
 
       try {
-        const { token } = await loginService(user.email, null, "google");
+        const { token } = await loginService(user.Email, null, "google");
         const safeUser = {
-          Username: user.username || user.Username,
-          Email: user.email || user.Email,
+          Username: user.Username,
+          Email: user.Email,
           Provider: "google",
         };
         return res.redirect(buildOAuthRedirect("google", token, safeUser));
@@ -190,15 +197,15 @@ passport.use(
         const userEmail = email || `facebook_${profile.id}@placeholder.com`;
         const username = profile.displayName || `facebook_${profile.id}`;
 
-        let user = await findAccountByEmail(userEmail);
+        let user = await accountRepository.findAccountByEmail(userEmail);
 
         if (user) {
-          if (user.provider === "facebook") {
+          if (user.Provider === "facebook") {
             console.log("Facebook user already exists, logging in:", userEmail);
             return done(null, user);
           } else {
             console.warn(
-              `Email ${userEmail} has been registered by ${user.provider}`
+              `Email ${userEmail} has been registered by ${user.Provider}`
             );
             return done(null, false, {
               errorMessage:
@@ -209,16 +216,16 @@ passport.use(
 
         const randomPassword = crypto.randomBytes(6).toString("hex");
         const hashedPassword = await bcrypt.hash(randomPassword, 10);
-        const id = await createAccount(
+        const id = await accountRepository.createAccount({
           username,
-          userEmail,
-          null,
-          hashedPassword,
-          "facebook",
-          profile.id
-        );
+          email: userEmail,
+          phone: "",
+          password: hashedPassword,
+          provider: "facebook",
+        });
 
-        user = { id, username, email: userEmail, provider: "facebook" };
+        const newUser = await accountRepository.findAccountByEmail(userEmail);
+
         console.log("Created new Facebook user:", {
           email: userEmail,
           rawPassword: randomPassword,
@@ -230,7 +237,7 @@ passport.use(
           );
         }
 
-        return done(null, user);
+        return done(null, newUser);
       } catch (error) {
         console.error("Facebook strategy error:", error);
         return done(error, null);
@@ -264,8 +271,8 @@ const facebookAuthCallback = (req, res, next) => {
       try {
         const { token } = await loginService(user.email, null, "facebook");
         const safeUser = {
-          Username: user.username || user.Username,
-          Email: user.email || user.Email,
+          Username: user.Username,
+          Email: user.Email,
           Provider: "facebook",
         };
         return res.redirect(buildOAuthRedirect("facebook", token, safeUser));
@@ -279,6 +286,7 @@ const facebookAuthCallback = (req, res, next) => {
 // === Forgot password feature (của bạn) ===
 const verificationCodes = new Map();
 
+
 const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -287,7 +295,8 @@ const forgotPassword = async (req, res) => {
       return res.status(400).json({ message: "Vui lòng nhập email!" });
     }
 
-    const user = await findAccountByEmail(email);
+    const user = await accountRepository.findAccountByEmail(email);
+
     if (!user) {
       return res.status(404).json({ message: "Email không tồn tại trong hệ thống!" });
     }
@@ -299,7 +308,9 @@ const forgotPassword = async (req, res) => {
       expiresAt: Date.now() + 15 * 60 * 1000,
       userId: user.AccID
     });
+    setTimeout(() => verificationCodes.delete(email), 15 * 60 * 1000);
 
+    // Gọi hàm sendVerificationEmail (đảm bảo hàm này đã được định nghĩa)
     sendVerificationEmail(email, verificationCode);
 
     res.json({
@@ -373,10 +384,20 @@ const resetPassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     const db = await connectDB();
-    await db.query(
-      "UPDATE account SET Password = ? WHERE AccID = ?",
+    
+    console.log("Updating password for user ID:", decoded.userId);
+    console.log("New hashed password:", hashedPassword);
+
+    const [result] = await db.query(
+      "UPDATE account SET Password = ? WHERE AccID = ?", 
       [hashedPassword, decoded.userId]
     );
+
+    console.log("Update result:", result);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng!" });
+    }
 
     res.json({
       message: "Đổi mật khẩu thành công! Vui lòng đăng nhập lại.",
@@ -392,10 +413,11 @@ const resetPassword = async (req, res) => {
     res.status(500).json({ message: "Hệ thống lỗi, vui lòng thử lại sau!" });
   }
 };
-
 // === Giữ các hàm redirect của main ===
 const buildOAuthRedirect = (provider, token, userObj) => {
-  const u = encodeURIComponent(btoa(JSON.stringify(userObj || {})));
+  const u = encodeURIComponent(
+    Buffer.from(JSON.stringify(userObj || {}), "utf-8").toString("base64")
+  );
   return `${FRONTEND_URL}/oauth/callback?provider=${provider}&token=${token}&u=${u}`;
 };
 
