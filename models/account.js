@@ -1,6 +1,6 @@
 class Account {
   constructor({
-    AccountID,
+    AccID,
     Username,
     Email,
     Phone,
@@ -8,7 +8,7 @@ class Account {
     Status,
     Provider,
   }) {
-    this.AccountID = AccountID;
+    this.AccID = AccID;
     this.Username = Username;
     this.Email = Email;
     this.Phone = Phone;
@@ -17,5 +17,3 @@ class Account {
     this.Provider = Provider || "local";
   }
 }
-
-module.exports = Account;

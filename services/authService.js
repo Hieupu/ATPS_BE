@@ -4,7 +4,11 @@ const accountRepository = require("../repositories/accountRepository");
 require("dotenv").config();
 
 const loginService = async (email, password, provider = "local") => {
+   console.log("Login attempt for email:", email); // THÊM DÒNG NÀY
+  
   const user = await accountRepository.findAccountByEmail(email);
+  
+  console.log("User found:", user); // THÊM DÒNG NÀY
   if (!user) {
     throw new Error("User not found");
   }
@@ -22,12 +26,12 @@ const loginService = async (email, password, provider = "local") => {
   }
 
   const featureNames = await accountRepository.getFeaturesByAccountId(
-    user.AccountID
+    user.AccID
   );
 
   const token = jwt.sign(
     {
-      id: user.AccountID,
+      id: user.AccID,
       email: user.Email,
       username: user.Username,
       features: featureNames,

@@ -5,7 +5,13 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const FacebookStrategy = require("passport-facebook").Strategy;
 const { loginService } = require("../services/authService");
 const accountRepository = require("../repositories/accountRepository");
+
+const { sendVerificationEmail, generateVerificationCode } = require("../utils/nodemailer");
+const jwt = require("jsonwebtoken");
+const connectDB = require("../config/db");
+
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+
 
 const login = async (req, res) => {
   try {
@@ -277,7 +283,137 @@ const facebookAuthCallback = (req, res, next) => {
     }
   )(req, res, next);
 };
+// === Forgot password feature (của bạn) ===
+const verificationCodes = new Map();
 
+
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Vui lòng nhập email!" });
+    }
+
+    const user = await accountRepository.findAccountByEmail(email);
+
+    if (!user) {
+      return res.status(404).json({ message: "Email không tồn tại trong hệ thống!" });
+    }
+
+    const verificationCode = generateVerificationCode();
+
+    verificationCodes.set(email, {
+      code: verificationCode,
+      expiresAt: Date.now() + 15 * 60 * 1000,
+      userId: user.AccID
+    });
+    setTimeout(() => verificationCodes.delete(email), 15 * 60 * 1000);
+
+    // Gọi hàm sendVerificationEmail (đảm bảo hàm này đã được định nghĩa)
+    sendVerificationEmail(email, verificationCode);
+
+    res.json({
+      message: "Mã xác thực đã được gửi đến email của bạn!",
+      email: email
+    });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    res.status(500).json({ message: "Hệ thống lỗi, vui lòng thử lại sau!" });
+  }
+};
+
+const verifyResetCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    if (!email || !code) {
+      return res.status(400).json({ message: "Vui lòng nhập email và mã xác thực!" });
+    }
+
+    const storedData = verificationCodes.get(email);
+
+    if (!storedData) {
+      return res.status(400).json({ message: "Mã xác thực không tồn tại hoặc đã hết hạn!" });
+    }
+
+    if (Date.now() > storedData.expiresAt) {
+      verificationCodes.delete(email);
+      return res.status(400).json({ message: "Mã xác thực đã hết hạn!" });
+    }
+
+    if (storedData.code !== parseInt(code)) {
+      return res.status(400).json({ message: "Mã xác thực không chính xác!" });
+    }
+
+    const resetToken = jwt.sign(
+      { userId: storedData.userId, email: email },
+      process.env.JWT_SECRET + "_reset",
+      { expiresIn: "15m" }
+    );
+
+    verificationCodes.delete(email);
+
+    res.json({
+      message: "Xác thực thành công!",
+      resetToken: resetToken
+    });
+  } catch (error) {
+    console.error("Verify code error:", error);
+    res.status(500).json({ message: "Hệ thống lỗi, vui lòng thử lại sau!" });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { resetToken, newPassword } = req.body;
+
+    if (!resetToken || !newPassword) {
+      return res.status(400).json({ message: "Vui lòng nhập token và mật khẩu mới!" });
+    }
+
+    const decoded = jwt.verify(resetToken, process.env.JWT_SECRET + "_reset");
+
+    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*?&]{6,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      return res.status(400).json({
+        message: "Mật khẩu phải có ít nhất 6 ký tự, bao gồm chữ và số!",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    const db = await connectDB();
+    
+    console.log("Updating password for user ID:", decoded.userId);
+    console.log("New hashed password:", hashedPassword);
+
+    const [result] = await db.query(
+      "UPDATE account SET Password = ? WHERE AccID = ?", 
+      [hashedPassword, decoded.userId]
+    );
+
+    console.log("Update result:", result);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng!" });
+    }
+
+    res.json({
+      message: "Đổi mật khẩu thành công! Vui lòng đăng nhập lại.",
+    });
+  } catch (error) {
+    if (error.name === "TokenExpiredError") {
+      return res.status(400).json({ message: "Token đã hết hạn! Vui lòng thực hiện lại quy trình." });
+    }
+    if (error.name === "JsonWebTokenError") {
+      return res.status(400).json({ message: "Token không hợp lệ!" });
+    }
+    console.error("Reset password error:", error);
+    res.status(500).json({ message: "Hệ thống lỗi, vui lòng thử lại sau!" });
+  }
+};
+// === Giữ các hàm redirect của main ===
 const buildOAuthRedirect = (provider, token, userObj) => {
   const u = encodeURIComponent(
     Buffer.from(JSON.stringify(userObj || {}), "utf-8").toString("base64")
@@ -290,6 +426,7 @@ const buildOAuthErrorRedirect = (provider, message) => {
   return `${FRONTEND_URL}/oauth/callback?provider=${provider}&error=${msg}`;
 };
 
+// === Xuất tất cả các hàm ===
 module.exports = {
   login,
   logout,
@@ -298,4 +435,7 @@ module.exports = {
   googleAuthCallback,
   facebookAuth,
   facebookAuthCallback,
+  forgotPassword,
+  verifyResetCode,
+  resetPassword,
 };

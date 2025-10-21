@@ -2,6 +2,7 @@ const express = require("express");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const router = require("./routes/routerAuth");
+const profileRoutes = require("./routes/profileRoutes");
 const passport = require("passport");
 const cors = require("cors");
 
@@ -21,9 +22,12 @@ app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
 app.use(express.json());
 app.use(passport.initialize());
-app.use("/api", router);
 
-const PORT = process.env.PORT || 9999;
+
+app.use("/api", router);
+app.use("/api/profile", profileRoutes);
+
+const PORT = process.env.PORT || 9999; 
 connectDB().then(() => {
   app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 });

@@ -1,14 +1,29 @@
 const connectDB = require("../config/db");
-const Account = require("../models/account");
 
 class AccountRepository {
   async findAccountByEmail(email) {
     const db = await connectDB();
+     const normalizedEmail = email.trim().toLowerCase();
+    
+    console.log("Searching for email:", normalizedEmail);
     const [rows] = await db.query("SELECT * FROM account WHERE Email = ?", [
       email,
     ]);
 
-    return rows.length ? new Account(rows[0]) : null;
+      console.log("Query results:", rows);
+
+    if (!rows.length) return null;
+
+    const userData = rows[0];
+    return {
+      AccID: userData.AccID,
+      Username: userData.Username,
+      Email: userData.Email,
+      Phone: userData.Phone,
+      Password: userData.Password,
+      Status: userData.Status,
+      Provider: userData.Provider || "local",
+    };
   }
 
   async createAccount({
@@ -33,7 +48,7 @@ class AccountRepository {
       SELECT f.Name
       FROM atps.feature f
       JOIN atps.accountfeature af ON f.FeatureID = af.FeatureID
-      WHERE af.AccountID = ?
+      WHERE af.AccountID = ?  -- SỬA Ở ĐÂY: AccID → AccountID
       `,
       [accountId]
     );
