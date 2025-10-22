@@ -16,7 +16,6 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    console.log(req.body);
 
     const { token, user } = await loginService(email, password);
     const { Username, Email } = user;
@@ -71,7 +70,6 @@ const register = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    console.log("📦 Body:", req.body);
     const id = await accountRepository.createAccount({
       username,
       email,
@@ -385,15 +383,12 @@ const resetPassword = async (req, res) => {
 
     const db = await connectDB();
     
-    console.log("Updating password for user ID:", decoded.userId);
-    console.log("New hashed password:", hashedPassword);
 
     const [result] = await db.query(
       "UPDATE account SET Password = ? WHERE AccID = ?", 
       [hashedPassword, decoded.userId]
     );
 
-    console.log("Update result:", result);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Không tìm thấy người dùng!" });
