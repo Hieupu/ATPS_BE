@@ -1,56 +1,21 @@
-const pool = require("../config/db");
-
-const Learner = {
-  // Lấy tất cả học viên
-  findAll: async () => {
-    const query = `
-      SELECT 
-        l.LearnerID,
-        l.FullName,
-        l.DateOfBirth,
-        l.ProfilePicture,
-        l.Job,
-        l.Address,
-        a.Email,
-        a.Phone,
-        a.Status as accountStatus
-      FROM learner l
-      LEFT JOIN account a ON l.AccID = a.AccID
-      ORDER BY l.LearnerID DESC
-    `;
-
-    const [learners] = await pool.execute(query);
-    return learners;
-  },
-
-  // Lấy học viên theo ID
-  findById: async (id) => {
-    const query = `
-      SELECT 
-        l.LearnerID,
-        l.FullName,
-        l.DateOfBirth,
-        l.ProfilePicture,
-        l.Job,
-        l.Address,
-        a.Email,
-        a.Phone,
-        a.Status as accountStatus
-      FROM learner l
-      LEFT JOIN account a ON l.AccID = a.AccID
-      WHERE l.LearnerID = ?
-    `;
-
-    const [learners] = await pool.execute(query, [id]);
-    return learners.length > 0 ? learners[0] : null;
-  },
-
-  // Kiểm tra học viên có tồn tại không
-  exists: async (id) => {
-    const query = `SELECT LearnerID FROM learner WHERE LearnerID = ?`;
-    const [result] = await pool.execute(query, [id]);
-    return result.length > 0;
-  },
-};
+class Learner {
+  constructor({
+    LearnerID,
+    AccID,
+    FullName,
+    DateOfBirth,
+    ProfilePicture,
+    Job,
+    Address,
+  }) {
+    this.LearnerID = LearnerID;
+    this.AccID = AccID;
+    this.FullName = FullName;
+    this.DateOfBirth = DateOfBirth;
+    this.ProfilePicture = ProfilePicture;
+    this.Job = Job;
+    this.Address = Address;
+  }
+}
 
 module.exports = Learner;

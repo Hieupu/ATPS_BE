@@ -1,41 +1,16 @@
 const SessionTimeslot = require("../models/sessiontimeslot");
-const Session = require("../models/session");
-const Timeslot = require("../models/timeslot");
 
-const sessionTimeslotController = {
-  // Tạo sessiontimeslot mới
+const sessiontimeslotController = {
+  // Tạo sessiontimeslot
   createSessionTimeslot: async (req, res) => {
     try {
-      const sessionTimeslotData = {
-        SessionID: req.body.SessionID,
-        TimeslotID: req.body.TimeslotID,
-      };
+      const sessionTimeslotData = req.body;
 
       // Validation
       if (!sessionTimeslotData.SessionID || !sessionTimeslotData.TimeslotID) {
         return res.status(400).json({
           success: false,
           message: "SessionID và TimeslotID là bắt buộc",
-        });
-      }
-
-      // Kiểm tra session có tồn tại không
-      const sessionExists = await Session.exists(sessionTimeslotData.SessionID);
-      if (!sessionExists) {
-        return res.status(400).json({
-          success: false,
-          message: "Không tìm thấy session",
-        });
-      }
-
-      // Kiểm tra timeslot có tồn tại không
-      const timeslotExists = await Timeslot.exists(
-        sessionTimeslotData.TimeslotID
-      );
-      if (!timeslotExists) {
-        return res.status(400).json({
-          success: false,
-          message: "Không tìm thấy timeslot",
         });
       }
 
@@ -58,91 +33,21 @@ const sessionTimeslotController = {
     }
   },
 
-  // Gán timeslot cho session (Admin API)
-  assignTimeslotToSession: async (req, res) => {
+  // Lấy tất cả sessiontimeslots
+  getAllSessionTimeslots: async (req, res) => {
     try {
-      
-      const { sessionId } = req.params;
-      const { TimeslotID } = req.body;
+      const sessionTimeslots = await SessionTimeslot.findAll();
 
-      // Validation
-      if (!TimeslotID) {
-        return res.status(400).json({
-          success: false,
-          message: "TimeslotID là bắt buộc",
-        });
-      }
-
-      // Kiểm tra session có tồn tại không
-      const sessionExists = await Session.exists(sessionId);
-      if (!sessionExists) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy session",
-        });
-      }
-
-      // Kiểm tra timeslot có tồn tại không
-      const timeslotExists = await Timeslot.exists(TimeslotID);
-      if (!timeslotExists) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy timeslot",
-        });
-      }
-
-      // Kiểm tra timeslot đã được gán chưa
-      const existingAssignment = await SessionTimeslot.findBySessionAndTimeslot(
-        sessionId,
-        TimeslotID
-      );
-      if (existingAssignment) {
-        return res.status(409).json({
-          success: false,
-          message: "Timeslot đã được gán cho session này",
-        });
-      }
-
-      const sessionTimeslotData = {
-        SessionID: sessionId,
-        TimeslotID: TimeslotID,
-      };
-
-    
-      const newSessionTimeslot = await SessionTimeslot.create(
-        sessionTimeslotData
-      );
-
-      res.status(201).json({
+      res.status(200).json({
         success: true,
-        message: "Gán timeslot cho session thành công",
-        data: newSessionTimeslot,
+        message: "Lấy danh sách sessiontimeslots thành công",
+        data: sessionTimeslots,
       });
     } catch (error) {
+      console.error("Error getting sessiontimeslots:", error);
       res.status(500).json({
         success: false,
-        message: "Lỗi khi gán timeslot cho session",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy timeslots của session (Admin API)
-  getSessionTimeslots: async (req, res) => {
-    try {
-      const { sessionId } = req.params;
-
-      const timeslots = await SessionTimeslot.findBySessionId(sessionId);
-
-      res.json({
-        success: true,
-        message: "Lấy timeslots của session thành công",
-        data: timeslots,
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy timeslots của session",
+        message: "Lỗi khi lấy danh sách sessiontimeslots",
         error: error.message,
       });
     }
@@ -151,8 +56,7 @@ const sessionTimeslotController = {
   // Lấy sessiontimeslot theo ID
   getSessionTimeslotById: async (req, res) => {
     try {
-      const { sessionTimeslotId } = req.params;
-
+      const sessionTimeslotId = req.params.id;
       const sessionTimeslot = await SessionTimeslot.findById(sessionTimeslotId);
 
       if (!sessionTimeslot) {
@@ -164,87 +68,58 @@ const sessionTimeslotController = {
 
       res.status(200).json({
         success: true,
-        message: "Lấy sessiontimeslot thành công",
+        message: "Lấy thông tin sessiontimeslot thành công",
         data: sessionTimeslot,
       });
     } catch (error) {
       console.error("Error getting sessiontimeslot:", error);
       res.status(500).json({
         success: false,
-        message: "Lỗi khi lấy sessiontimeslot",
+        message: "Lỗi khi lấy thông tin sessiontimeslot",
         error: error.message,
       });
     }
   },
 
-  // Lấy sessiontimeslots theo ClassID
-  getSessionTimeslotsByClassId: async (req, res) => {
+  // Lấy sessiontimeslots theo session
+  getSessionTimeslotsBySession: async (req, res) => {
     try {
-      const { classId } = req.params;
-
-      const sessionTimeslots = await SessionTimeslot.findByClassId(classId);
-
-      res.status(200).json({
-        success: true,
-        message: "Lấy danh sách sessiontimeslots thành công",
-        data: sessionTimeslots,
-      });
-    } catch (error) {
-      console.error("Error getting sessiontimeslots by class:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy danh sách sessiontimeslots",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy sessiontimeslots theo SessionID
-  getSessionTimeslotsBySessionId: async (req, res) => {
-    try {
-      const { sessionId } = req.params;
-
+      const sessionId = req.params.sessionId;
       const sessionTimeslots = await SessionTimeslot.findBySessionId(sessionId);
 
       res.status(200).json({
         success: true,
-        message: "Lấy danh sách sessiontimeslots thành công",
+        message: "Lấy sessiontimeslots theo session thành công",
         data: sessionTimeslots,
       });
     } catch (error) {
       console.error("Error getting sessiontimeslots by session:", error);
       res.status(500).json({
         success: false,
-        message: "Lỗi khi lấy danh sách sessiontimeslots",
+        message: "Lỗi khi lấy sessiontimeslots theo session",
         error: error.message,
       });
     }
   },
 
-  // Lấy lịch học của học viên
-  getLearnerSchedule: async (req, res) => {
+  // Lấy sessiontimeslots theo timeslot
+  getSessionTimeslotsByTimeslot: async (req, res) => {
     try {
-      const { learnerId } = req.query;
-
-      if (!learnerId) {
-        return res.status(400).json({
-          success: false,
-          message: "LearnerID là bắt buộc",
-        });
-      }
-
-      const schedule = await SessionTimeslot.getLearnerSchedule(learnerId);
+      const timeslotId = req.params.timeslotId;
+      const sessionTimeslots = await SessionTimeslot.findByTimeslotId(
+        timeslotId
+      );
 
       res.status(200).json({
         success: true,
-        message: "Lấy lịch học thành công",
-        data: schedule,
+        message: "Lấy sessiontimeslots theo timeslot thành công",
+        data: sessionTimeslots,
       });
     } catch (error) {
-      console.error("Error getting learner schedule:", error);
+      console.error("Error getting sessiontimeslots by timeslot:", error);
       res.status(500).json({
         success: false,
-        message: "Lỗi khi lấy lịch học",
+        message: "Lỗi khi lấy sessiontimeslots theo timeslot",
         error: error.message,
       });
     }
@@ -253,22 +128,20 @@ const sessionTimeslotController = {
   // Cập nhật sessiontimeslot
   updateSessionTimeslot: async (req, res) => {
     try {
-      const { sessionTimeslotId } = req.params;
-      const sessionTimeslotData = req.body;
+      const sessionTimeslotId = req.params.id;
+      const updateData = req.body;
 
-      // Kiểm tra sessiontimeslot có tồn tại không
-      const exists = await SessionTimeslot.exists(sessionTimeslotId);
-      if (!exists) {
+      const updatedSessionTimeslot = await SessionTimeslot.update(
+        sessionTimeslotId,
+        updateData
+      );
+
+      if (!updatedSessionTimeslot) {
         return res.status(404).json({
           success: false,
           message: "Không tìm thấy sessiontimeslot",
         });
       }
-
-      const updatedSessionTimeslot = await SessionTimeslot.update(
-        sessionTimeslotId,
-        sessionTimeslotData
-      );
 
       res.status(200).json({
         success: true,
@@ -288,7 +161,7 @@ const sessionTimeslotController = {
   // Xóa sessiontimeslot
   deleteSessionTimeslot: async (req, res) => {
     try {
-      const { sessionTimeslotId } = req.params;
+      const sessionTimeslotId = req.params.id;
 
       const deleted = await SessionTimeslot.delete(sessionTimeslotId);
 
@@ -312,6 +185,56 @@ const sessionTimeslotController = {
       });
     }
   },
+
+  // Kiểm tra sessiontimeslot có tồn tại không
+  checkSessionTimeslotExists: async (req, res) => {
+    try {
+      const sessionTimeslotId = req.params.id;
+      const exists = await SessionTimeslot.exists(sessionTimeslotId);
+
+      res.status(200).json({
+        success: true,
+        message: "Kiểm tra sessiontimeslot thành công",
+        data: { exists },
+      });
+    } catch (error) {
+      console.error("Error checking sessiontimeslot exists:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi kiểm tra sessiontimeslot",
+        error: error.message,
+      });
+    }
+  },
+
+  // Lấy thống kê sessiontimeslot
+  getSessionTimeslotStatistics: async (req, res) => {
+    try {
+      const { sessionId, timeslotId } = req.query;
+
+      let statistics;
+      if (sessionId) {
+        statistics = await SessionTimeslot.getStatisticsBySession(sessionId);
+      } else if (timeslotId) {
+        statistics = await SessionTimeslot.getStatisticsByTimeslot(timeslotId);
+      } else {
+        statistics = await SessionTimeslot.getOverallStatistics();
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Lấy thống kê sessiontimeslot thành công",
+        data: statistics,
+      });
+    } catch (error) {
+      console.error("Error getting sessiontimeslot statistics:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy thống kê sessiontimeslot",
+        error: error.message,
+      });
+    }
+  },
 };
 
-module.exports = sessionTimeslotController;
+module.exports = sessiontimeslotController;

@@ -35,23 +35,21 @@ const materialController = {
     }
   },
 
-  // Lấy tài liệu của khóa học
-  getCourseMaterials: async (req, res) => {
+  // Lấy tất cả tài liệu
+  getAllMaterials: async (req, res) => {
     try {
-      const { courseId } = req.params;
+      const materials = await Material.findAll();
 
-      const materials = await Material.findByCourseId(courseId);
-
-      res.json({
+      res.status(200).json({
         success: true,
-        message: "Lấy tài liệu khóa học thành công",
+        message: "Lấy danh sách tài liệu thành công",
         data: materials,
       });
     } catch (error) {
-      console.error("Error getting course materials:", error);
+      console.error("Error getting materials:", error);
       res.status(500).json({
         success: false,
-        message: "Lỗi khi lấy tài liệu khóa học",
+        message: "Lỗi khi lấy danh sách tài liệu",
         error: error.message,
       });
     }
@@ -60,8 +58,7 @@ const materialController = {
   // Lấy tài liệu theo ID
   getMaterialById: async (req, res) => {
     try {
-      const { materialId } = req.params;
-
+      const materialId = req.params.id;
       const material = await Material.findById(materialId);
 
       if (!material) {
@@ -71,16 +68,37 @@ const materialController = {
         });
       }
 
-      res.json({
+      res.status(200).json({
         success: true,
-        message: "Lấy tài liệu thành công",
+        message: "Lấy thông tin tài liệu thành công",
         data: material,
       });
     } catch (error) {
       console.error("Error getting material:", error);
       res.status(500).json({
         success: false,
-        message: "Lỗi khi lấy tài liệu",
+        message: "Lỗi khi lấy thông tin tài liệu",
+        error: error.message,
+      });
+    }
+  },
+
+  // Lấy tài liệu theo khóa học
+  getMaterialsByCourse: async (req, res) => {
+    try {
+      const courseId = req.params.courseId;
+      const materials = await Material.findByCourseId(courseId);
+
+      res.status(200).json({
+        success: true,
+        message: "Lấy tài liệu theo khóa học thành công",
+        data: materials,
+      });
+    } catch (error) {
+      console.error("Error getting materials by course:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy tài liệu theo khóa học",
         error: error.message,
       });
     }
@@ -89,10 +107,10 @@ const materialController = {
   // Cập nhật tài liệu
   updateMaterial: async (req, res) => {
     try {
-      const { materialId } = req.params;
-      const materialData = req.body;
+      const materialId = req.params.id;
+      const updateData = req.body;
 
-      const updatedMaterial = await Material.update(materialId, materialData);
+      const updatedMaterial = await Material.update(materialId, updateData);
 
       if (!updatedMaterial) {
         return res.status(404).json({
@@ -101,7 +119,7 @@ const materialController = {
         });
       }
 
-      res.json({
+      res.status(200).json({
         success: true,
         message: "Cập nhật tài liệu thành công",
         data: updatedMaterial,
@@ -119,7 +137,7 @@ const materialController = {
   // Xóa tài liệu
   deleteMaterial: async (req, res) => {
     try {
-      const { materialId } = req.params;
+      const materialId = req.params.id;
 
       const deleted = await Material.delete(materialId);
 
@@ -130,7 +148,7 @@ const materialController = {
         });
       }
 
-      res.json({
+      res.status(200).json({
         success: true,
         message: "Xóa tài liệu thành công",
       });
@@ -144,52 +162,58 @@ const materialController = {
     }
   },
 
-  // Lấy tài liệu của học viên (đã enroll)
-  getLearnerMaterials: async (req, res) => {
+  // Lấy tài liệu công khai (không cần đăng nhập)
+  getPublicMaterials: async (req, res) => {
     try {
-      const { learnerId } = req.query;
+      const materials = await Material.findPublicMaterials();
 
-      if (!learnerId) {
-        return res.status(400).json({
-          success: false,
-          message: "LearnerID là bắt buộc",
-        });
-      }
-
-      const materials = await Material.findByLearnerId(learnerId);
-
-      res.json({
+      res.status(200).json({
         success: true,
-        message: "Lấy tài liệu học viên thành công",
+        message: "Lấy tài liệu công khai thành công",
         data: materials,
       });
     } catch (error) {
-      console.error("Error getting learner materials:", error);
+      console.error("Error getting public materials:", error);
       res.status(500).json({
         success: false,
-        message: "Lỗi khi lấy tài liệu học viên",
+        message: "Lỗi khi lấy tài liệu công khai",
         error: error.message,
       });
     }
   },
 
-  // Lấy tài liệu theo SessionID
-  getSessionMaterials: async (req, res) => {
+  // Tải xuống tài liệu
+  downloadMaterial: async (req, res) => {
     try {
-      const { sessionId } = req.params;
+      const materialId = req.params.id;
+      const material = await Material.findById(materialId);
 
-      const materials = await Material.findBySessionId(sessionId);
+      if (!material) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy tài liệu",
+        });
+      }
 
-      res.json({
+      // Tăng số lần tải xuống
+      await Material.incrementDownloadCount(materialId);
+
+      res.status(200).json({
         success: true,
-        message: "Lấy tài liệu session thành công",
-        data: materials,
+        message: "Tải xuống tài liệu thành công",
+        data: {
+          MaterialID: material.MaterialID,
+          Title: material.Title,
+          FileURL: material.FileURL,
+          FileType: material.FileType,
+          FileSize: material.FileSize,
+        },
       });
     } catch (error) {
-      console.error("Error getting session materials:", error);
+      console.error("Error downloading material:", error);
       res.status(500).json({
         success: false,
-        message: "Lỗi khi lấy tài liệu session",
+        message: "Lỗi khi tải xuống tài liệu",
         error: error.message,
       });
     }

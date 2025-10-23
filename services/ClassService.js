@@ -1,276 +1,364 @@
-const ClassModel = require("../models/class");
-const ClassRequest = require("../requests/ClassRequest");
+const classRepository = require("../repositories/classRepository");
+const courseRepository = require("../repositories/courseRepository");
+const instructorRepository = require("../repositories/instructorRepository");
+const enrollmentRepository = require("../repositories/enrollmentRepository");
+const sessionRepository = require("../repositories/sessionRepository");
+const timeslotRepository = require("../repositories/timeslotRepository");
+const sessiontimeslotRepository = require("../repositories/sessiontimeslotRepository");
+const attendanceRepository = require("../repositories/attendanceRepository");
+const paymentRepository = require("../repositories/paymentRepository");
+const pool = require("../config/db");
 
-/**
- * ClassService - Business logic layer cho Class management
- */
 class ClassService {
-  // Tạo lớp học mới
-  static async createClass(data) {
+  async createClass(data) {
     try {
-      console.log("🏫 ClassService.createClass - Input data:", data);
-
-      // Tạo ClassRequest object và validate
-      const classRequest = new ClassRequest(data);
-      const validation = classRequest.validateForCreate();
-
-      if (!validation.isValid) {
-        return {
-          success: false,
-          message: "Validation failed",
-          errors: validation.errors,
-        };
+      // Validate required fields (CourseID is optional)
+      if (!data.ClassName || !data.InstructorID) {
+        throw new Error("ClassName and InstructorID are required");
       }
 
-      // Chuyển đổi thành database object
-      const classData = classRequest.toDatabaseObject();
-      console.log("🏫 ClassService.createClass - Database object:", classData);
-
-      // Gọi model để tạo class
-      const newClass = await ClassModel.create(classData);
-      console.log("✅ ClassService.createClass - Result:", newClass);
-
-      return {
-        success: true,
-        message: "Tạo lớp học thành công",
-        data: newClass,
-      };
-    } catch (error) {
-      console.error("❌ ClassService.createClass - Error:", error);
-      return {
-        success: false,
-        message: "Lỗi khi tạo lớp học",
-        error: error.message,
-      };
-    }
-  }
-
-  // Lấy danh sách lớp học
-  static async getAllClasses(options = {}) {
-    try {
-      console.log("🏫 ClassService.getAllClasses - Options:", options);
-
-      const result = await ClassModel.findAll(options);
-      console.log("✅ ClassService.getAllClasses - Result:", result);
-
-      // Thêm StartDate và EndDate cho mỗi class
-      for (let classItem of result.data) {
-        try {
-          const dateRange = await ClassModel.getClassDateRange(
-            classItem.ClassID
-          );
-          classItem.StartDate = dateRange.StartDate;
-          classItem.EndDate = dateRange.EndDate;
-        } catch (error) {
-          console.warn(
-            `Warning: Could not get date range for class ${classItem.ClassID}:`,
-            error.message
-          );
-          classItem.StartDate = null;
-          classItem.EndDate = null;
+      // Check if course exists (only if CourseID is provided)
+      if (data.CourseID) {
+        const course = await courseRepository.findById(data.CourseID);
+        if (!course) {
+          throw new Error("Course not found");
         }
       }
 
-      return {
-        success: true,
-        message: "Lấy danh sách lớp học thành công",
-        data: result.data,
-        pagination: result.pagination,
-      };
-    } catch (error) {
-      console.error("❌ ClassService.getAllClasses - Error:", error);
-      return {
-        success: false,
-        message: "Lỗi khi lấy danh sách lớp học",
-        error: error.message,
-      };
-    }
-  }
-
-  // Lấy chi tiết lớp học
-  static async getClassById(classId) {
-    try {
-      console.log("🏫 ClassService.getClassById - ClassID:", classId);
-
-      const classData = await ClassModel.findByIdDetailed(classId);
-
-      if (!classData) {
-        return {
-          success: false,
-          message: "Không tìm thấy lớp học",
-          data: null,
-        };
+      // Check if instructor exists
+      const instructor = await instructorRepository.findById(data.InstructorID);
+      if (!instructor) {
+        throw new Error("Instructor not found");
       }
 
-      console.log("✅ ClassService.getClassById - Result:", classData);
-
-      return {
-        success: true,
-        message: "Lấy chi tiết lớp học thành công",
-        data: classData,
-      };
+      // Create class
+      const newClass = await classRepository.create(data);
+      return newClass;
     } catch (error) {
-      console.error("❌ ClassService.getClassById - Error:", error);
-      return {
-        success: false,
-        message: "Lỗi khi lấy chi tiết lớp học",
-        error: error.message,
-      };
-    }
-  }
-
-  // Cập nhật lớp học
-  static async updateClass(classId, data) {
-    try {
-      console.log(
-        "🏫 ClassService.updateClass - ClassID:",
-        classId,
-        "Data:",
-        data
-      );
-
-      // Tạo ClassRequest object và validate
-      const classRequest = new ClassRequest(data);
-      const validation = classRequest.validateForUpdate();
-
-      if (!validation.isValid) {
-        return {
-          success: false,
-          message: "Validation failed",
-          errors: validation.errors,
-        };
-      }
-
-      // Chuyển đổi thành database object
-      const classData = classRequest.toDatabaseObject();
-      console.log("🏫 ClassService.updateClass - Database object:", classData);
-
-      // Gọi model để cập nhật class
-      const updatedClass = await ClassModel.update(classId, classData);
-
-      if (!updatedClass) {
-        return {
-          success: false,
-          message: "Không tìm thấy lớp học để cập nhật",
-          data: null,
-        };
-      }
-
-      console.log("✅ ClassService.updateClass - Result:", updatedClass);
-
-      return {
-        success: true,
-        message: "Cập nhật lớp học thành công",
-        data: updatedClass,
-      };
-    } catch (error) {
-      console.error("❌ ClassService.updateClass - Error:", error);
-      return {
-        success: false,
-        message: "Lỗi khi cập nhật lớp học",
-        error: error.message,
-      };
-    }
-  }
-
-  // Xóa lớp học
-  static async deleteClass(classId) {
-    try {
-      console.log("🏫 ClassService.deleteClass - ClassID:", classId);
-
-      const deleted = await ClassModel.delete(classId);
-
-      if (!deleted) {
-        return {
-          success: false,
-          message: "Không tìm thấy lớp học để xóa",
-          data: null,
-        };
-      }
-
-      console.log("✅ ClassService.deleteClass - Result:", deleted);
-
-      return {
-        success: true,
-        message: "Xóa lớp học thành công",
-        data: { ClassID: classId },
-      };
-    } catch (error) {
-      console.error("❌ ClassService.deleteClass - Error:", error);
-      return {
-        success: false,
-        message: "Lỗi khi xóa lớp học",
-        error: error.message,
-      };
-    }
-  }
-
-  // Lấy thống kê lớp học
-  static async getClassStatistics(classId) {
-    try {
-      console.log("🏫 ClassService.getClassStatistics - ClassID:", classId);
-
-      const stats = await ClassModel.getStatistics(classId);
-      console.log("✅ ClassService.getClassStatistics - Result:", stats);
-
-      return {
-        success: true,
-        message: "Lấy thống kê lớp học thành công",
-        data: stats,
-      };
-    } catch (error) {
-      console.error("❌ ClassService.getClassStatistics - Error:", error);
-      return {
-        success: false,
-        message: "Lỗi khi lấy thống kê lớp học",
-        error: error.message,
-      };
-    }
-  }
-
-  // Lấy tất cả lớp học với lịch học (sessions)
-  static async getAllClassesWithSchedules() {
-    try {
-      console.log("🏫 ClassService.getAllClassesWithSchedules - Starting...");
-
-      const result = await ClassModel.findAllWithSchedules();
-      console.log(
-        "✅ ClassService.getAllClassesWithSchedules - Result:",
-        result
-      );
-
-      return result;
-    } catch (error) {
-      console.error(
-        "❌ ClassService.getAllClassesWithSchedules - Error:",
-        error
-      );
       throw error;
     }
   }
 
-  // Tự động cập nhật trạng thái lớp học
-  static async autoUpdateClassStatus() {
+  async getAllClasses() {
     try {
-      console.log("🏫 ClassService.autoUpdateClassStatus - Starting...");
-
-      const result = await ClassModel.autoUpdateStatus();
-      console.log("✅ ClassService.autoUpdateClassStatus - Result:", result);
-
-      return {
-        success: true,
-        message: "Tự động cập nhật trạng thái lớp học thành công",
-        data: result,
-      };
+      const classes = await classRepository.findAll();
+      return classes;
     } catch (error) {
-      console.error("❌ ClassService.autoUpdateClassStatus - Error:", error);
-      return {
-        success: false,
-        message: "Lỗi khi tự động cập nhật trạng thái lớp học",
-        error: error.message,
-      };
+      throw error;
+    }
+  }
+
+  async getClassById(id) {
+    try {
+      if (!id) {
+        throw new Error("Class ID is required");
+      }
+
+      const classData = await classRepository.findById(id);
+      if (!classData) {
+        console.log(`Class with ID ${id} not found`);
+        return null; // Return null instead of throwing error
+      }
+      return classData;
+    } catch (error) {
+      console.error("Error in getClassById:", error);
+      throw error;
+    }
+  }
+
+  async updateClass(id, data) {
+    try {
+      // Check if class exists
+      const existingClass = await classRepository.findById(id);
+      if (!existingClass) {
+        throw new Error("Class not found");
+      }
+
+      // Update class
+      const updatedClass = await classRepository.update(id, data);
+      return updatedClass;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async deleteClass(id) {
+    try {
+      // Check if class exists
+      const existingClass = await classRepository.findById(id);
+      if (!existingClass) {
+        throw new Error("Class not found");
+      }
+
+      // Get all sessions for this class
+      const sessions = await sessionRepository.findByClassId(id);
+
+      // Delete related records in correct order (cascade delete)
+      // 1. Delete payments first (they reference enrollment)
+      await paymentRepository.deleteByClassId(id);
+
+      // 2. Delete enrollments (they reference class)
+      await enrollmentRepository.deleteByClassId(id);
+
+      // 3. Delete sessions and related records
+      for (const session of sessions) {
+        // Delete attendance records first (they reference sessiontimeslot)
+        await attendanceRepository.deleteBySessionId(session.SessionID);
+
+        // Delete sessiontimeslots
+        await sessiontimeslotRepository.deleteBySessionId(session.SessionID);
+
+        // Delete session
+        await sessionRepository.delete(session.SessionID);
+      }
+
+      // 4. Finally delete the class
+      const deleted = await classRepository.delete(id);
+      return deleted;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getClassesByCourseId(courseId) {
+    try {
+      const classes = await classRepository.findByCourseId(courseId);
+      return classes;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getClassesByInstructorId(instructorId) {
+    try {
+      const classes = await classRepository.findByInstructorId(instructorId);
+      return classes;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async updateStudentCount(classId) {
+    try {
+      const updated = await classRepository.updateStudentCount(classId);
+      return updated;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async autoUpdateClassStatus() {
+    try {
+      // Logic để auto update status của classes dựa trên schedule
+      const classes = await classRepository.findAll();
+
+      // Có thể implement logic phức tạp hơn ở đây
+      // Hiện tại chỉ return classes
+      return classes;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // ========== ClassService APIs theo API_TIME_MANAGEMENT_GUIDE.md ==========
+
+  async createClassSession(classId, sessionData) {
+    try {
+      const { title, description, timeslots, options = {} } = sessionData;
+
+      // Lấy thông tin class để lấy InstructorID
+      const classInfo = await classRepository.findById(classId);
+      if (!classInfo) {
+        throw new Error("Class not found");
+      }
+
+      console.log(
+        `Creating session for class ${classId}, instructor ${classInfo.InstructorID}`
+      );
+
+      // Kiểm tra conflict timeslot trước khi tạo với options
+      await this.checkTimeslotConflicts(classInfo.InstructorID, timeslots, options);
+
+      // Tạo session
+      const session = await sessionRepository.create({
+        Title: title,
+        Description: description,
+        ClassID: classId,
+        InstructorID: classInfo.InstructorID,
+      });
+
+      // Tạo timeslots cho session
+      for (const timeslotData of timeslots) {
+        const timeslot = await timeslotRepository.create({
+          StartTime: timeslotData.startTime,
+          EndTime: timeslotData.endTime,
+          Date: timeslotData.date,
+        });
+
+        // Liên kết session với timeslot
+        await sessiontimeslotRepository.create({
+          SessionID: session.SessionID,
+          TimeslotID: timeslot.TimeslotID,
+        });
+      }
+
+      // Lấy lại session với timeslots
+      const createdSession = await this.getClassSessions(classId);
+      return createdSession;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Kiểm tra conflict timeslot cho instructor với options
+  async checkTimeslotConflicts(instructorId, newTimeslots, options = {}) {
+    try {
+      const { allowOverlap = false, maxOverlapMinutes = 0 } = options;
+
+      for (const newTimeslot of newTimeslots) {
+        // Kiểm tra trùng ca học của instructor ở các lớp khác
+        const conflictQuery = `
+          SELECT DISTINCT
+            s.SessionID,
+            s.Title as sessionTitle,
+            c.ClassName,
+            c.ClassID,
+            t.Date,
+            t.StartTime,
+            t.EndTime
+          FROM session s
+          INNER JOIN sessiontimeslot st ON s.SessionID = st.SessionID
+          INNER JOIN timeslot t ON st.TimeslotID = t.TimeslotID
+          INNER JOIN \`class\` c ON s.ClassID = c.ClassID
+          WHERE s.InstructorID = ?
+            AND t.Date = ?
+            AND (
+              (t.StartTime <= ? AND t.EndTime > ?) OR
+              (t.StartTime < ? AND t.EndTime >= ?) OR
+              (t.StartTime >= ? AND t.EndTime <= ?)
+            )
+        `;
+
+        const [conflicts] = await pool.execute(conflictQuery, [
+          instructorId,
+          newTimeslot.date,
+          newTimeslot.startTime,
+          newTimeslot.startTime,
+          newTimeslot.endTime,
+          newTimeslot.endTime,
+          newTimeslot.startTime,
+          newTimeslot.endTime,
+        ]);
+
+        if (conflicts.length > 0) {
+          if (allowOverlap && maxOverlapMinutes > 0) {
+            // Check if overlap is within allowed limit
+            const overlapMinutes = this.calculateOverlapMinutes(
+              conflicts[0],
+              newTimeslot
+            );
+            if (overlapMinutes <= maxOverlapMinutes) {
+              console.log(
+                `Overlap allowed: ${overlapMinutes} minutes <= ${maxOverlapMinutes} minutes`
+              );
+              continue; // Allow small overlap
+            }
+          }
+
+          const conflict = conflicts[0];
+          throw new Error(
+            `Instructor đã có ca học trùng thời gian: ${conflict.ClassName} - ${conflict.sessionTitle} ` +
+              `(${conflict.Date} ${conflict.StartTime}-${conflict.EndTime})`
+          );
+        }
+      }
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Tính toán số phút overlap giữa 2 timeslots
+  calculateOverlapMinutes(existingTimeslot, newTimeslot) {
+    const existingStart = this.timeToMinutes(existingTimeslot.StartTime);
+    const existingEnd = this.timeToMinutes(existingTimeslot.EndTime);
+    const newStart = this.timeToMinutes(newTimeslot.startTime);
+    const newEnd = this.timeToMinutes(newTimeslot.endTime);
+
+    const overlapStart = Math.max(existingStart, newStart);
+    const overlapEnd = Math.min(existingEnd, newEnd);
+
+    if (overlapStart < overlapEnd) {
+      return overlapEnd - overlapStart;
+    }
+
+    return 0;
+  }
+
+  // Chuyển đổi time string thành minutes
+  timeToMinutes(timeString) {
+    const [hours, minutes] = timeString.split(":").map(Number);
+    return hours * 60 + minutes;
+  }
+
+  async getClassSessions(classId) {
+    try {
+      // Sử dụng method đã có trong timeslotRepository
+      const timeslotService = require("./timeslotService");
+      const sessions = await timeslotService.getClassSessionsForFrontend(
+        classId
+      );
+      return sessions;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async updateClassSession(sessionId, sessionData) {
+    try {
+      const { title, description, timeslots } = sessionData;
+
+      // Cập nhật session
+      const updatedSession = await sessionRepository.update(sessionId, {
+        Title: title,
+        Description: description,
+      });
+
+      // Xóa timeslots cũ
+      await sessiontimeslotRepository.deleteBySessionId(sessionId);
+
+      // Tạo timeslots mới
+      for (const timeslotData of timeslots) {
+        const timeslot = await timeslotRepository.create({
+          StartTime: timeslotData.startTime,
+          EndTime: timeslotData.endTime,
+          Date: timeslotData.date,
+        });
+
+        // Liên kết session với timeslot
+        await sessiontimeslotRepository.create({
+          SessionID: sessionId,
+          TimeslotID: timeslot.TimeslotID,
+        });
+      }
+
+      return updatedSession;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async deleteClassSession(sessionId) {
+    try {
+      // Xóa sessiontimeslot trước
+      await sessiontimeslotRepository.deleteBySessionId(sessionId);
+
+      // Xóa session
+      const deleted = await sessionRepository.delete(sessionId);
+      return deleted;
+    } catch (error) {
+      throw error;
     }
   }
 }
 
-module.exports = ClassService;
+module.exports = new ClassService();

@@ -36,21 +36,160 @@ const enrollmentController = {
     }
   },
 
-  // Học viên tự enroll vào lớp (Learner API)
-  selfEnroll: async (req, res) => {
+  // Hủy đăng ký lớp học (Admin API)
+  cancelEnrollment: async (req, res) => {
     try {
-      const { classId } = req.body;
-      const { learnerId } = req.params; // Lấy từ URL params
+      const { enrollmentId } = req.params;
 
-      // Validation
-      if (!classId || !learnerId) {
-        return res.status(400).json({
+      const deleted = await Enrollment.delete(enrollmentId);
+
+      if (!deleted) {
+        return res.status(404).json({
           success: false,
-          message: "ClassID và LearnerID là bắt buộc",
+          message: "Không tìm thấy đăng ký",
         });
       }
 
-      // Kiểm tra xem học viên đã enroll chưa
+      res.status(200).json({
+        success: true,
+        message: "Hủy đăng ký thành công",
+      });
+    } catch (error) {
+      console.error("Error canceling enrollment:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi hủy đăng ký",
+        error: error.message,
+      });
+    }
+  },
+
+  // Lấy danh sách đăng ký của lớp học
+  getClassEnrollments: async (req, res) => {
+    try {
+      const { classId } = req.params;
+
+      const enrollments = await Enrollment.findByClassId(classId);
+
+      res.status(200).json({
+        success: true,
+        message: "Lấy danh sách đăng ký lớp học thành công",
+        data: enrollments,
+      });
+    } catch (error) {
+      console.error("Error getting class enrollments:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách đăng ký lớp học",
+        error: error.message,
+      });
+    }
+  },
+
+  // Lấy danh sách đăng ký của học viên
+  getLearnerEnrollments: async (req, res) => {
+    try {
+      const { learnerId } = req.params;
+
+      const enrollments = await Enrollment.findByLearnerId(learnerId);
+
+      res.status(200).json({
+        success: true,
+        message: "Lấy danh sách đăng ký của học viên thành công",
+        data: enrollments,
+      });
+    } catch (error) {
+      console.error("Error getting learner enrollments:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách đăng ký của học viên",
+        error: error.message,
+      });
+    }
+  },
+
+  // Cập nhật trạng thái đăng ký
+  updateEnrollmentStatus: async (req, res) => {
+    try {
+      const { enrollmentId } = req.params;
+      const { Status } = req.body;
+
+      if (!Status) {
+        return res.status(400).json({
+          success: false,
+          message: "Status là bắt buộc",
+        });
+      }
+
+      const updatedEnrollment = await Enrollment.update(enrollmentId, {
+        Status,
+      });
+
+      if (!updatedEnrollment) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy đăng ký",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Cập nhật trạng thái đăng ký thành công",
+        data: updatedEnrollment,
+      });
+    } catch (error) {
+      console.error("Error updating enrollment status:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi cập nhật trạng thái đăng ký",
+        error: error.message,
+      });
+    }
+  },
+
+  // Lấy thống kê đăng ký
+  getEnrollmentStatistics: async (req, res) => {
+    try {
+      const { classId, learnerId } = req.query;
+
+      let statistics;
+      if (classId) {
+        statistics = await Enrollment.getStatisticsByClass(classId);
+      } else if (learnerId) {
+        statistics = await Enrollment.getStatisticsByLearner(learnerId);
+      } else {
+        statistics = await Enrollment.getOverallStatistics();
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Lấy thống kê đăng ký thành công",
+        data: statistics,
+      });
+    } catch (error) {
+      console.error("Error getting enrollment statistics:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy thống kê đăng ký",
+        error: error.message,
+      });
+    }
+  },
+
+  // Học viên tự đăng ký lớp học
+  selfEnroll: async (req, res) => {
+    try {
+      const { classId } = req.params;
+      const { learnerId } = req.body;
+
+      if (!learnerId) {
+        return res.status(400).json({
+          success: false,
+          message: "LearnerID là bắt buộc",
+        });
+      }
+
+      // Kiểm tra xem học viên đã đăng ký lớp này chưa
       const existingEnrollment = await Enrollment.findByLearnerAndClass(
         learnerId,
         classId
@@ -65,12 +204,12 @@ const enrollmentController = {
       const enrollment = await Enrollment.create({
         LearnerID: learnerId,
         ClassID: classId,
-        Status: "Pending", // Trạng thái chờ thanh toán
+        Status: "Paid",
       });
 
       res.status(201).json({
         success: true,
-        message: "Đăng ký lớp học thành công. Vui lòng thanh toán để hoàn tất.",
+        message: "Đăng ký lớp học thành công",
         data: enrollment,
       });
     } catch (error) {
@@ -83,136 +222,8 @@ const enrollmentController = {
     }
   },
 
-  // Lấy enrollment theo ID
-  getEnrollmentById: async (req, res) => {
-    try {
-      const { enrollmentId } = req.params;
-
-      const enrollment = await Enrollment.findById(enrollmentId);
-
-      if (!enrollment) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy đăng ký",
-        });
-      }
-
-      res.json({
-        success: true,
-        message: "Lấy thông tin đăng ký thành công",
-        data: enrollment,
-      });
-    } catch (error) {
-      console.error("Error getting enrollment:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy thông tin đăng ký",
-        error: error.message,
-      });
-    }
-  },
-
-  // Hủy đăng ký khóa học
-  cancelEnrollment: async (req, res) => {
-    try {
-      const { enrollmentId } = req.params;
-
-      const deleted = await Enrollment.delete(enrollmentId);
-
-      if (!deleted) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy đăng ký",
-        });
-      }
-
-      res.json({
-        success: true,
-        message: "Hủy đăng ký thành công",
-      });
-    } catch (error) {
-      console.error("Error canceling enrollment:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi hủy đăng ký",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy danh sách khóa học có thể enroll
-  getAvailableCourses: async (req, res) => {
-    try {
-      const courses = await Course.getAvailableCourses();
-
-      res.json({
-        success: true,
-        message: "Lấy danh sách khóa học có thể đăng ký thành công",
-        data: courses,
-      });
-    } catch (error) {
-      console.error("Error getting available courses:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy danh sách khóa học có thể đăng ký",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy danh sách lớp học đã enroll
-  getEnrolledClasses: async (req, res) => {
-    try {
-      const { learnerId } = req.query;
-
-      if (!learnerId) {
-        return res.status(400).json({
-          success: false,
-          message: "LearnerID là bắt buộc",
-        });
-      }
-
-      const enrollments = await Enrollment.findByLearnerId(learnerId);
-
-      res.json({
-        success: true,
-        message: "Lấy danh sách lớp học đã đăng ký thành công",
-        data: enrollments,
-      });
-    } catch (error) {
-      console.error("Error getting enrolled classes:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy danh sách lớp học đã đăng ký",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy danh sách đăng ký của học viên
-  getLearnerEnrollments: async (req, res) => {
-    try {
-      const { learnerId } = req.params;
-
-      const enrollments = await Enrollment.findByLearnerId(learnerId);
-
-      res.json({
-        success: true,
-        message: "Lấy danh sách đăng ký học viên thành công",
-        data: enrollments,
-      });
-    } catch (error) {
-      console.error("Error getting learner enrollments:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy danh sách đăng ký học viên",
-        error: error.message,
-      });
-    }
-  },
-
-  // Tham gia lớp học cụ thể
-  joinClass: async (req, res) => {
+  // Học viên hủy đăng ký lớp học
+  selfCancelEnrollment: async (req, res) => {
     try {
       const { classId } = req.params;
       const { learnerId } = req.body;
@@ -224,54 +235,24 @@ const enrollmentController = {
         });
       }
 
-      // Tạo enrollment cho lớp học
-      const enrollment = await Enrollment.create({
-        LearnerID: learnerId,
-        ClassID: classId,
-        Status: "Paid",
-      });
+      const canceled = await Enrollment.cancelEnrollment(learnerId, classId);
 
-      res.status(201).json({
-        success: true,
-        message: "Tham gia lớp học thành công",
-        data: enrollment,
-      });
-    } catch (error) {
-      console.error("Error joining class:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi tham gia lớp học",
-        error: error.message,
-      });
-    }
-  },
-
-  // Rời khỏi lớp học
-  leaveClass: async (req, res) => {
-    try {
-      const { classId } = req.params;
-      const { learnerId } = req.body;
-
-      if (!learnerId) {
-        return res.status(400).json({
+      if (!canceled) {
+        return res.status(404).json({
           success: false,
-          message: "LearnerID là bắt buộc",
+          message: "Không tìm thấy đăng ký hoặc đã hủy rồi",
         });
       }
 
-      // Hủy enrollment
-      const result = await Enrollment.cancelEnrollment(learnerId, classId);
-
-      res.json({
+      res.status(200).json({
         success: true,
-        message: "Rời khỏi lớp học thành công",
-        data: { result },
+        message: "Hủy đăng ký lớp học thành công",
       });
     } catch (error) {
-      console.error("Error leaving class:", error);
+      console.error("Error self canceling enrollment:", error);
       res.status(500).json({
         success: false,
-        message: "Lỗi khi rời khỏi lớp học",
+        message: "Lỗi khi hủy đăng ký lớp học",
         error: error.message,
       });
     }

@@ -1,30 +1,46 @@
-const { Account, initializeDB } = require("../models/account");
+const authService = require("../services/authService");
+
+const login = async (req, res) => {
+  try {
+    const { email, password, provider = "local" } = req.body;
+    const result = await authService.loginService(email, password, provider);
+    res.json({
+      message: "Login successful",
+      token: result.token,
+      user: {
+        id: result.user.AccID,
+        username: result.user.Username,
+        email: result.user.Email,
+        status: result.user.Status,
+      },
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(error.status || 500).json({ message: error.message });
+  }
+};
 
 const register = async (req, res) => {
   try {
-    const { username, email, phone, password, status } = req.body;
-    if (!username || !email || !phone || !password) {
-      return res.status(400).json({ error: "All fields are required" });
-    }
-
-    const accountData = { username, email, phone, password, status };
-    const newAccount = await Account.create(accountData);
-    res
-      .status(201)
-      .json({ message: "Account created successfully", account: newAccount });
+    const { username, email, phone, password, provider = "local" } = req.body;
+    const result = await authService.registerService({
+      username,
+      email,
+      phone,
+      password,
+      provider,
+    });
+    res.status(201).json({
+      message: "Account created successfully",
+      id: result.id,
+    });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Register error:", error);
+    res.status(error.status || 500).json({ message: error.message });
   }
 };
 
-const getAccounts = async (req, res) => {
-  try {
-    const connection = await initializeDB();
-    const [rows] = await connection.query("SELECT * FROM atps.account");
-    res.json(rows);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+module.exports = {
+  login,
+  register,
 };
-
-module.exports = { register, getAccounts };

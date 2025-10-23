@@ -1,21 +1,13 @@
-const pool = require("../config/db");
+class Account {
+  constructor({ AccID, Username, Email, Phone, Password, Status, Provider }) {
+    this.AccID = AccID;
+    this.Username = Username;
+    this.Email = Email;
+    this.Phone = Phone;
+    this.Password = Password;
+    this.Status = Status;
+    this.Provider = Provider || "local";
+  }
+}
 
-const Account = {
-  create: async (accountData) => {
-    const { username, email, phone, password, status } = accountData;
-    const query = `
-      INSERT INTO atps.account (username, email, phone, password, status)
-      VALUES (?, ?, ?, ?, ?)
-    `;
-    const [result] = await pool.execute(query, [
-      username,
-      email,
-      phone,
-      password,
-      status || "active",
-    ]);
-    return { id: result.insertId, ...accountData };
-  },
-};
-
-module.exports = { Account };
+module.exports = Account;

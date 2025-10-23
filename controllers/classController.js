@@ -1,15 +1,60 @@
-const ClassService = require("../services/ClassService");
-const Class = require("../models/class");
-const Timeslot = require("../models/timeslot");
-const Enrollment = require("../models/enrollment");
-const Session = require("../models/session");
-const SessionTimeslot = require("../models/sessiontimeslot");
+const classService = require("../services/classService");
+const courseService = require("../services/courseService");
+const instructorService = require("../services/instructorService");
+const enrollmentService = require("../services/enrollmentService");
+
+// Helper function để validate session data
+function validateSessionData(data) {
+  const errors = [];
+
+  if (!data.title) errors.push("Title is required");
+  if (!data.timeslots || !Array.isArray(data.timeslots)) {
+    errors.push("Timeslots must be an array");
+  }
+
+  if (data.timeslots && Array.isArray(data.timeslots)) {
+    data.timeslots.forEach((timeslot, index) => {
+      if (!timeslot.startTime)
+        errors.push(`Timeslot ${index + 1}: startTime is required`);
+      if (!timeslot.endTime)
+        errors.push(`Timeslot ${index + 1}: endTime is required`);
+      if (!timeslot.date)
+        errors.push(`Timeslot ${index + 1}: date is required`);
+
+      // Validate time format
+      if (
+        timeslot.startTime &&
+        !/^\d{2}:\d{2}:\d{2}$/.test(timeslot.startTime)
+      ) {
+        errors.push(`Timeslot ${index + 1}: startTime format must be HH:MM:SS`);
+      }
+      if (timeslot.endTime && !/^\d{2}:\d{2}:\d{2}$/.test(timeslot.endTime)) {
+        errors.push(`Timeslot ${index + 1}: endTime format must be HH:MM:SS`);
+      }
+
+      // Validate date format
+      if (timeslot.date && !/^\d{4}-\d{2}-\d{2}$/.test(timeslot.date)) {
+        errors.push(`Timeslot ${index + 1}: date format must be YYYY-MM-DD`);
+      }
+
+      // Validate time logic
+      if (
+        timeslot.startTime &&
+        timeslot.endTime &&
+        timeslot.startTime >= timeslot.endTime
+      ) {
+        errors.push(`Timeslot ${index + 1}: startTime must be before endTime`);
+      }
+    });
+  }
+
+  return errors.length === 0 ? null : errors;
+}
 
 const classController = {
-  // Lấy danh sách lớp học với thông tin đầy đủ (Admin API)
+  // Lấy danh sách lớp học
   getClassesDetails: async (req, res) => {
     try {
-      console.log(" Getting classes details with query:", req.query);
       const {
         page = 1,
         limit = 10,
@@ -17,41 +62,17 @@ const classController = {
         instructorId = "",
       } = req.query;
 
-      console.log(" Calling Class.findAll with options:", {
-        page,
-        limit,
-        status,
-        instructorId,
-      });
-      const result = await ClassService.getAllClasses({
-        page,
-        limit,
-        status,
-        instructorId,
-      });
-      console.log(" Class.findAll result:", result);
-
-      // Thêm StartDate và EndDate cho mỗi class
-      for (let classItem of result.data) {
-        try {
-          const dateRange = await Class.getClassDateRange(classItem.ClassID);
-          classItem.StartDate = dateRange.StartDate;
-          classItem.EndDate = dateRange.EndDate;
-        } catch (error) {
-          console.warn(
-            `Warning: Could not get date range for class ${classItem.ClassID}:`,
-            error.message
-          );
-          classItem.StartDate = null;
-          classItem.EndDate = null;
-        }
-      }
+      const classes = await classService.getAllClasses();
 
       res.json({
         success: true,
         message: "Lấy danh sách lớp học thành công",
-        data: result.data,
-        pagination: result.pagination,
+        data: classes,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: classes.length,
+        },
       });
     } catch (error) {
       console.error("Error getting classes:", error);
@@ -63,68 +84,27 @@ const classController = {
     }
   },
 
-  // Lấy danh sách lớp học có sẵn để đăng ký (Learner API)
-  getAvailableClasses: async (req, res) => {
-    try {
-      const {
-        page = 1,
-        limit = 10,
-        courseId = "",
-        instructorId = "",
-      } = req.query;
-
-      const result = await Class.findAll({
-        page,
-        limit,
-        status: "Sắp khai giảng", // Chỉ lấy lớp sắp khai giảng
-        instructorId,
-        courseId,
-      });
-
-      // Thêm StartDate và EndDate cho mỗi class
-      for (let classItem of result.data) {
-        try {
-          const dateRange = await Class.getClassDateRange(classItem.ClassID);
-          classItem.StartDate = dateRange.StartDate;
-          classItem.EndDate = dateRange.EndDate;
-        } catch (error) {
-          console.warn(
-            `Warning: Could not get date range for class ${classItem.ClassID}:`,
-            error.message
-          );
-          classItem.StartDate = null;
-          classItem.EndDate = null;
-        }
-      }
-
-      res.json({
-        success: true,
-        message: "Lấy danh sách lớp học có sẵn thành công",
-        data: result.data,
-        pagination: result.pagination,
-      });
-    } catch (error) {
-      console.error("Error getting available classes:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy danh sách lớp học có sẵn",
-        error: error.message,
-      });
-    }
-  },
-
   // Tạo lớp học mới
   createClass: async (req, res) => {
     try {
+      const classData = req.body;
 
-      const result = await ClassService.createClass(req.body);
-
-      if (!result.success) {
-        return res.status(400).json(result);
+      if (!classData.ClassName || !classData.InstructorID) {
+        return res.status(400).json({
+          success: false,
+          message: "ClassName và InstructorID là bắt buộc",
+        });
       }
 
-      res.status(201).json(result);
+      const newClass = await classService.createClass(classData);
+
+      res.status(201).json({
+        success: true,
+        message: "Tạo lớp học thành công",
+        data: newClass,
+      });
     } catch (error) {
+      console.error("Error creating class:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi tạo lớp học",
@@ -133,22 +113,37 @@ const classController = {
     }
   },
 
-  // Lấy chi tiết lớp học theo ID
+  // Lấy thông tin lớp học theo ID
   getClassById: async (req, res) => {
     try {
-     
+      const classId = req.params.classId || req.params.id;
 
-      const result = await ClassService.getClassById(req.params.classId);
-
-      if (!result.success) {
-        return res.status(404).json(result);
+      if (!classId) {
+        return res.status(400).json({
+          success: false,
+          message: "Class ID là bắt buộc",
+        });
       }
 
-      res.json(result);
+      const classData = await classService.getClassById(classId);
+
+      if (!classData) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy lớp học",
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Lấy thông tin lớp học thành công",
+        data: classData,
+      });
     } catch (error) {
+      console.error("Error getting class:", error);
       res.status(500).json({
         success: false,
-        message: "Lỗi khi lấy chi tiết lớp học",
+        message: "Lỗi khi lấy thông tin lớp học",
         error: error.message,
       });
     }
@@ -157,24 +152,32 @@ const classController = {
   // Cập nhật lớp học
   updateClass: async (req, res) => {
     try {
-      console.log(
-        "🏫 ClassController.updateClass - ClassID:",
-        req.params.classId,
-        "Data:",
-        req.body
-      );
+      const classId = req.params.classId || req.params.id;
+      const updateData = req.body;
 
-      const result = await ClassService.updateClass(
-        req.params.classId,
-        req.body
-      );
-
-      if (!result.success) {
-        return res.status(400).json(result);
+      if (!classId) {
+        return res.status(400).json({
+          success: false,
+          message: "ClassID là bắt buộc",
+        });
       }
 
-      res.json(result);
+      const updatedClass = await classService.updateClass(classId, updateData);
+
+      if (!updatedClass) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy lớp học",
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Cập nhật lớp học thành công",
+        data: updatedClass,
+      });
     } catch (error) {
+      console.error("Error updating class:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi cập nhật lớp học",
@@ -186,16 +189,23 @@ const classController = {
   // Xóa lớp học
   deleteClass: async (req, res) => {
     try {
-  
+      const classId = req.params.classId || req.params.id;
 
-      const result = await ClassService.deleteClass(req.params.classId);
+      const deleted = await classService.deleteClass(classId);
 
-      if (!result.success) {
-        return res.status(404).json(result);
+      if (!deleted) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy lớp học",
+        });
       }
 
-      res.json(result);
+      res.json({
+        success: true,
+        message: "Xóa lớp học thành công",
+      });
     } catch (error) {
+      console.error("Error deleting class:", error);
       res.status(500).json({
         success: false,
         message: "Lỗi khi xóa lớp học",
@@ -204,411 +214,214 @@ const classController = {
     }
   },
 
-  // Lấy thống kê lớp học
-  getClassStatistics: async (req, res) => {
+  // Lấy lớp học theo khóa học
+  getClassesByCourseId: async (req, res) => {
     try {
-    
+      const courseId = req.params.courseId;
+      const classes = await classService.getClassesByCourseId(courseId);
 
-      const result = await ClassService.getClassStatistics(req.params.classId);
-
-      if (!result.success) {
-        return res.status(404).json(result);
-      }
-
-      res.json(result);
+      res.json({
+        success: true,
+        message: "Lấy danh sách lớp học theo khóa học thành công",
+        data: classes,
+      });
     } catch (error) {
+      console.error("Error getting classes by course:", error);
       res.status(500).json({
         success: false,
-        message: "Lỗi khi lấy thống kê lớp học",
+        message: "Lỗi khi lấy danh sách lớp học theo khóa học",
         error: error.message,
       });
     }
   },
 
-  // Tự động cập nhật trạng thái lớp học
+  // Lấy lớp học theo giảng viên
+  getClassesByInstructorId: async (req, res) => {
+    try {
+      const instructorId = req.params.instructorId;
+      const classes = await classService.getClassesByInstructorId(instructorId);
+
+      res.json({
+        success: true,
+        message: "Lấy danh sách lớp học theo giảng viên thành công",
+        data: classes,
+      });
+    } catch (error) {
+      console.error("Error getting classes by instructor:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách lớp học theo giảng viên",
+        error: error.message,
+      });
+    }
+  },
+
+  // Auto update class status
   autoUpdateClassStatus: async (req, res) => {
     try {
+      // Logic để auto update status của classes dựa trên schedule
+      const classes = await classService.getAllClasses();
 
-      const classes = await ClassService.getAllClassesWithSchedules();
-      let updatedCount = 0;
-
-      for (const classItem of classes) {
-        const correctStatus = calculateClassStatusFromSessions(classItem);
-
-        if (correctStatus !== classItem.Status) {
-          await ClassService.updateClass(classItem.ClassID, {
-            Status: correctStatus,
-          });
-          updatedCount++;
-          
-        }
-      }
+      // Update status logic (có thể implement sau)
+      const updatedClasses = await classService.autoUpdateClassStatus();
 
       res.json({
         success: true,
-        message: "Tự động cập nhật trạng thái lớp học thành công",
-        data: updatedCount,
+        message: "Auto update class status thành công",
+        data: updatedClasses,
       });
     } catch (error) {
+      console.error("Error auto updating class status:", error);
       res.status(500).json({
         success: false,
-        message: "Lỗi khi tự động cập nhật trạng thái lớp học",
+        message: "Lỗi khi auto update class status",
         error: error.message,
       });
     }
   },
 
-  // Lấy lịch học của lớp (Instructor API)
-  getClassSchedule: async (req, res) => {
+  // Lấy tất cả instructors (cho dropdown)
+  getAllInstructors: async (req, res) => {
     try {
-      const { classId } = req.params;
-
-      // Lấy thông tin lớp học
-      const classInfo = await Class.findByIdDetailed(classId);
-      if (!classInfo) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy lớp học",
-        });
-      }
-
-      // Lấy sessions của lớp
-      const sessions = await Session.findByClassId(classId);
-
-      // Lấy timeslots cho mỗi session
-      const sessionsWithTimeslots = [];
-      for (let session of sessions) {
-        const sessionTimeslots = await SessionTimeslot.findBySessionId(
-          session.SessionID
-        );
-        const timeslots = [];
-
-        for (let st of sessionTimeslots) {
-          const timeslot = await Timeslot.findById(st.TimeslotID);
-          timeslots.push({
-            SessionTimeslotID: st.SessionTimeslotID,
-            Date: timeslot.Date,
-            StartTime: timeslot.StartTime,
-            EndTime: timeslot.EndTime,
-            Location: timeslot.Location,
-          });
-        }
-
-        sessionsWithTimeslots.push({
-          SessionID: session.SessionID,
-          Title: session.Title,
-          Description: session.Description,
-          Timeslots: timeslots,
-        });
-      }
-
-      // Tính StartDate và EndDate
-      const dateRange = await Class.getClassDateRange(classId);
+      const instructors = await instructorService.getAllInstructors();
 
       res.json({
         success: true,
-        message: "Lấy lịch học lớp thành công",
-        data: {
-          ClassID: classInfo.ClassID,
-          StartDate: dateRange.StartDate,
-          EndDate: dateRange.EndDate,
-          Sessions: sessionsWithTimeslots,
-        },
+        message: "Lấy danh sách instructors thành công",
+        data: instructors,
       });
     } catch (error) {
-      console.error("Error getting class schedule:", error);
+      console.error("Error getting instructors:", error);
       res.status(500).json({
         success: false,
-        message: "Lỗi khi lấy lịch học lớp",
+        message: "Lỗi khi lấy danh sách instructors",
         error: error.message,
       });
     }
   },
 
-  // Đăng ký học viên vào lớp (Admin API)
-  enrollLearnerInClass: async (req, res) => {
+  // Lấy tất cả courses (cho dropdown)
+  getAllCourses: async (req, res) => {
+    try {
+      const courses = await courseService.getAllCourses();
+
+      res.json({
+        success: true,
+        message: "Lấy danh sách courses thành công",
+        data: courses,
+      });
+    } catch (error) {
+      console.error("Error getting courses:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách courses",
+        error: error.message,
+      });
+    }
+  },
+
+  // ========== ClassService APIs theo API_TIME_MANAGEMENT_GUIDE.md ==========
+
+  // Tạo session mới cho class
+  createClassSession: async (req, res) => {
     try {
       const { classId } = req.params;
-      const { learnerId } = req.body;
+      const { title, description, timeslots, allowOverlap, maxOverlapMinutes } =
+        req.body;
 
-      if (!learnerId) {
+      // Validate required fields
+      if (!classId) {
         return res.status(400).json({
           success: false,
-          message: "LearnerID là bắt buộc",
+          message: "ClassId is required",
+          type: "validation_error",
         });
       }
 
-      const enrollment = await Enrollment.create({
-        LearnerID: learnerId,
-        ClassID: classId,
-        Status: "Paid",
-      });
-
-      res.status(201).json({
-        success: true,
-        message: "Đăng ký học viên vào lớp thành công",
-        data: enrollment,
-      });
-    } catch (error) {
-      console.error("Error enrolling learner in class:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi đăng ký học viên vào lớp",
-        error: error.message,
-      });
-    }
-  },
-
-  // Hủy đăng ký học viên khỏi lớp (Admin API)
-  unenrollLearnerFromClass: async (req, res) => {
-    try {
-      const { enrollmentId } = req.params;
-
-      const deleted = await Enrollment.delete(enrollmentId);
-
-      if (!deleted) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy đăng ký",
-        });
-      }
-
-      res.json({
-        success: true,
-        message: "Hủy đăng ký thành công",
-      });
-    } catch (error) {
-      console.error("Error unenrolling learner:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi hủy đăng ký",
-        error: error.message,
-      });
-    }
-  },
-
-  // Tham gia lớp học (Learner API)
-  joinClass: async (req, res) => {
-    try {
-      const { classId } = req.params;
-      const { learnerId } = req.body;
-
-      if (!learnerId) {
+      // Validate session data
+      const validationErrors = validateSessionData({ title, timeslots });
+      if (validationErrors) {
         return res.status(400).json({
           success: false,
-          message: "LearnerID là bắt buộc",
+          message: "Validation failed",
+          errors: validationErrors,
+          type: "validation_error",
         });
       }
 
-      const enrollment = await Enrollment.create({
-        LearnerID: learnerId,
-        ClassID: classId,
-        Status: "Paid",
-      });
-
-      res.status(201).json({
-        success: true,
-        message: "Tham gia lớp học thành công",
-        data: enrollment,
-      });
-    } catch (error) {
-      console.error("Error joining class:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi tham gia lớp học",
-        error: error.message,
-      });
-    }
-  },
-
-  // Rời khỏi lớp học (Learner API)
-  leaveClass: async (req, res) => {
-    try {
-      const { classId } = req.params;
-      const { learnerId } = req.body;
-
-      if (!learnerId) {
-        return res.status(400).json({
-          success: false,
-          message: "LearnerID là bắt buộc",
-        });
-      }
-
-      const canceled = await Enrollment.cancelEnrollment(learnerId, classId);
-
-      if (!canceled) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy đăng ký hoặc đã hủy rồi",
-        });
-      }
-
-      res.json({
-        success: true,
-        message: "Rời khỏi lớp học thành công",
-      });
-    } catch (error) {
-      console.error("Error leaving class:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi rời khỏi lớp học",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy danh sách đăng ký của lớp (Admin API)
-  getClassEnrollments: async (req, res) => {
-    try {
-      const { classId } = req.params;
-
-      const enrollments = await Enrollment.findByClassId(classId);
-
-      res.json({
-        success: true,
-        message: "Lấy danh sách đăng ký thành công",
-        data: enrollments,
-      });
-    } catch (error) {
-      console.error("Error getting class enrollments:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy danh sách đăng ký",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy nội dung khóa học cho học viên (Learner API)
-  getClassContent: async (req, res) => {
-    try {
-      const { classId } = req.params;
-      const { learnerId } = req.query;
-
-      if (!learnerId) {
-        return res.status(400).json({
-          success: false,
-          message: "LearnerID là bắt buộc",
-        });
-      }
-
-      // Kiểm tra học viên có đăng ký lớp này không
-      const enrollments = await Enrollment.findByLearnerId(learnerId);
-      const isEnrolled = enrollments.some(
-        (enrollment) => enrollment.ClassID == classId
+      console.log(
+        `Creating session for class ${classId}, title: ${title}, timeslots: ${timeslots.length}`
       );
 
-      if (!isEnrolled) {
-        return res.status(403).json({
-          success: false,
-          message: "Bạn chưa đăng ký lớp học này",
-        });
-      }
-
-      // Lấy thông tin lớp học
-      const classInfo = await Class.findByIdDetailed(classId);
-      if (!classInfo) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy lớp học",
-        });
-      }
-
-      // Lấy sessions của lớp
-      const sessions = await Session.findByClassId(classId);
-
-      // Lấy timeslots cho mỗi session
-      const sessionsWithTimeslots = [];
-      for (let session of sessions) {
-        const sessionTimeslots = await SessionTimeslot.findBySessionId(
-          session.SessionID
-        );
-        const timeslots = [];
-
-        for (let st of sessionTimeslots) {
-          const timeslot = await Timeslot.findById(st.TimeslotID);
-          timeslots.push({
-            SessionTimeslotID: st.SessionTimeslotID,
-            Date: timeslot.Date,
-            StartTime: timeslot.StartTime,
-            EndTime: timeslot.EndTime,
-            Location: timeslot.Location,
-          });
-        }
-
-        sessionsWithTimeslots.push({
-          SessionID: session.SessionID,
-          Title: session.Title,
-          Description: session.Description,
-          Timeslots: timeslots,
-        });
-      }
-
-      // Tính StartDate và EndDate
-      const dateRange = await Class.getClassDateRange(classId);
-
-      res.json({
-        success: true,
-        message: "Lấy nội dung khóa học thành công",
-        data: {
-          ClassID: classInfo.ClassID,
-          Course: classInfo.Course,
-          Instructor: classInfo.Instructor,
-          StartDate: dateRange.StartDate,
-          EndDate: dateRange.EndDate,
-          Sessions: sessionsWithTimeslots,
+      const sessionData = await classService.createClassSession(classId, {
+        title,
+        description,
+        timeslots,
+        options: {
+          allowOverlap: allowOverlap || false,
+          maxOverlapMinutes: maxOverlapMinutes || 0,
         },
       });
-    } catch (error) {
-      console.error("Error getting class content:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy nội dung khóa học",
-        error: error.message,
+
+      res.status(201).json({
+        success: true,
+        message: "Tạo session thành công",
+        data: sessionData,
       });
+    } catch (error) {
+      console.error("Error creating class session:", error);
+
+      // Handle specific error types
+      if (error.message.includes("trùng thời gian")) {
+        return res.status(409).json({
+          success: false,
+          message: error.message, // Sử dụng error message chi tiết thay vì "Conflict detected"
+          error: error.message,
+          type: "timeslot_conflict",
+        });
+      } else if (error.message.includes("Class not found")) {
+        return res.status(404).json({
+          success: false,
+          message: "Class not found",
+          error: error.message,
+          type: "class_not_found",
+        });
+      } else if (error.message.includes("Instructor not found")) {
+        return res.status(404).json({
+          success: false,
+          message: "Instructor not found",
+          error: error.message,
+          type: "instructor_not_found",
+        });
+      } else {
+        return res.status(500).json({
+          success: false,
+          message: "Lỗi khi tạo session",
+          error: error.message,
+          type: "server_error",
+        });
+      }
     }
   },
 
-  // Lấy sessions của class (Admin API)
+  // Lấy sessions của class
   getClassSessions: async (req, res) => {
     try {
       const { classId } = req.params;
 
-      // Lấy sessions của lớp
-      const sessions = await Session.findByClassId(classId);
-
-      // Lấy timeslots cho mỗi session
-      const sessionsWithTimeslots = [];
-      for (let session of sessions) {
-        const sessionTimeslots = await SessionTimeslot.findBySessionId(
-          session.SessionID
-        );
-        const timeslots = [];
-
-        for (let st of sessionTimeslots) {
-          const timeslot = await Timeslot.findById(st.TimeslotID);
-          timeslots.push({
-            SessionTimeslotID: st.SessionTimeslotID,
-            TimeslotID: timeslot.TimeslotID,
-            Date: timeslot.Date,
-            StartTime: timeslot.StartTime,
-            EndTime: timeslot.EndTime,
-            Location: timeslot.Location,
-          });
-        }
-
-        sessionsWithTimeslots.push({
-          SessionID: session.SessionID,
-          Title: session.Title,
-          Description: session.Description,
-          Timeslots: timeslots,
+      if (!classId) {
+        return res.status(400).json({
+          success: false,
+          message: "ClassId là bắt buộc",
         });
       }
+
+      const sessions = await classService.getClassSessions(classId);
 
       res.json({
         success: true,
         message: "Lấy danh sách sessions thành công",
-        data: sessionsWithTimeslots,
+        data: sessions,
       });
     } catch (error) {
       console.error("Error getting class sessions:", error);
@@ -620,110 +433,97 @@ const classController = {
     }
   },
 
-  // Tạo session cho class (Admin API)
-  createClassSession: async (req, res) => {
+  // Cập nhật session
+  updateClassSession: async (req, res) => {
     try {
-      const { classId } = req.params;
+      const { sessionId } = req.params;
       const { title, description, timeslots } = req.body;
 
-      if (!title || !timeslots || timeslots.length === 0) {
+      if (!sessionId || !title || !timeslots || !Array.isArray(timeslots)) {
         return res.status(400).json({
           success: false,
-          message: "Title và timeslots là bắt buộc",
+          message: "SessionId, title và timeslots là bắt buộc",
         });
       }
 
-      // Lấy thông tin class để lấy InstructorID
-      const classInfo = await Class.findById(classId);
-      if (!classInfo) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy lớp học",
-        });
-      }
+      const sessionData = await classService.updateClassSession(sessionId, {
+        title,
+        description,
+        timeslots,
+      });
 
-      // Tạo session
-      const sessionData = {
-        ClassID: classId,
-        Title: title,
-        Description: description || "",
-        InstructorID: req.body.instructorId || classInfo.InstructorID,
-      };
-
-      const newSession = await Session.create(sessionData);
-
-      // Tạo timeslots và gán cho session
-      const createdTimeslots = [];
-      for (let timeslotData of timeslots) {
-        // Tạo timeslot
-        const timeslot = await Timeslot.create({
-          Date: timeslotData.date,
-          StartTime: timeslotData.startTime,
-          EndTime: timeslotData.endTime,
-          Location: timeslotData.location || null,
-        });
-
-        // Gán timeslot cho session
-        await SessionTimeslot.create({
-          SessionID: newSession.SessionID,
-          TimeslotID: timeslot.TimeslotID,
-        });
-
-        createdTimeslots.push({
-          TimeslotID: timeslot.TimeslotID,
-          Date: timeslot.Date,
-          StartTime: timeslot.StartTime,
-          EndTime: timeslot.EndTime,
-          Location: timeslot.Location,
-        });
-      }
-
-      res.status(201).json({
+      res.json({
         success: true,
-        message: "Tạo session thành công",
-        data: {
-          SessionID: newSession.SessionID,
-          Title: newSession.Title,
-          Description: newSession.Description,
-          Timeslots: createdTimeslots,
-        },
+        message: "Cập nhật session thành công",
+        data: sessionData,
       });
     } catch (error) {
-      console.error("Error creating class session:", error);
+      console.error("Error updating class session:", error);
       res.status(500).json({
         success: false,
-        message: "Lỗi khi tạo session",
+        message: "Lỗi khi cập nhật session",
         error: error.message,
       });
     }
   },
-};
 
-// Helper function để tính trạng thái lớp học dựa trên sessions
-const calculateClassStatusFromSessions = (classItem) => {
-  if (!classItem.schedule || classItem.schedule.length === 0) {
-    return classItem.Status || "Sắp khai giảng";
-  }
+  // Xóa session
+  deleteClassSession: async (req, res) => {
+    try {
+      const { sessionId } = req.params;
 
-  const now = new Date();
-  now.setHours(0, 0, 0, 0); // Reset to start of day
+      if (!sessionId) {
+        return res.status(400).json({
+          success: false,
+          message: "SessionId là bắt buộc",
+        });
+      }
 
-  const hasFuture = classItem.schedule.some((session) => {
-    const sessionDate = new Date(session.Date);
-    sessionDate.setHours(0, 0, 0, 0);
-    return sessionDate >= now;
-  });
+      const deleted = await classService.deleteClassSession(sessionId);
 
-  const hasPast = classItem.schedule.some((session) => {
-    const sessionDate = new Date(session.Date);
-    sessionDate.setHours(23, 59, 59, 999); // End of day
-    return sessionDate < now;
-  });
+      res.json({
+        success: true,
+        message: "Xóa session thành công",
+        data: deleted,
+      });
+    } catch (error) {
+      console.error("Error deleting class session:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi xóa session",
+        error: error.message,
+      });
+    }
+  },
 
-  if (hasFuture && hasPast) return "Đang hoạt động";
-  if (hasFuture && !hasPast) return "Sắp khai giảng";
-  if (!hasFuture && hasPast) return "Đã kết thúc";
-  return "Sắp khai giảng";
+  // Lấy enrolled students của class
+  getClassEnrollments: async (req, res) => {
+    try {
+      const { classId } = req.params;
+
+      if (!classId) {
+        return res.status(400).json({
+          success: false,
+          message: "ClassId là bắt buộc",
+        });
+      }
+
+      const enrollments = await enrollmentService.getClassEnrollments(classId);
+
+      res.json({
+        success: true,
+        message: "Lấy danh sách enrollments thành công",
+        data: enrollments,
+      });
+    } catch (error) {
+      console.error("Error getting class enrollments:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách enrollments",
+        error: error.message,
+      });
+    }
+  },
 };
 
 module.exports = classController;
