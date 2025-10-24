@@ -32,7 +32,54 @@ class CourseRepository {
       throw error;
     }
   }
+      async getEnrolledCoursesByLearnerId(learnerId) {
+    try {
+      const db = await connectDB();
+      
+      const [rows] = await db.query(`
+        SELECT 
+          c.CourseID,
+          c.Title,
+          c.Description,
+          c.Duration,
+          c.TuitionFee,
+          c.Status as CourseStatus,
+          e.EnrollmentID,
+          e.EnrollmentDate,
+          e.Status as EnrollmentStatus,
+          i.InstructorID,
+          i.FullName as InstructorName,
+          i.ProfilePicture as InstructorAvatar,
+          i.Major as InstructorMajor,
+          (SELECT COUNT(*) FROM unit u WHERE u.CourseID = c.CourseID) as UnitCount,
+          (SELECT COUNT(*) FROM enrollment e2 WHERE e2.CourseID = c.CourseID) as TotalEnrollments
+        FROM enrollment e
+        INNER JOIN course c ON e.CourseID = c.CourseID
+        INNER JOIN instructor i ON c.InstructorID = i.InstructorID
+        WHERE e.LearnerID = ?
+        ORDER BY e.EnrollmentDate DESC
+      `, [learnerId]);
 
+      return rows;
+    } catch (error) {
+      console.error("Database error in getEnrolledCoursesByLearnerId:", error);
+      throw error;
+    }
+  }
+
+  async getLearnerIdByAccountId(accountId) {
+    try {
+      const db = await connectDB();
+      const [rows] = await db.query(
+        "SELECT LearnerID FROM learner WHERE AccID = ?",
+        [accountId]
+      );
+      return rows[0]?.LearnerID || null;
+    } catch (error) {
+      console.error("Database error in getLearnerIdByAccountId:", error);
+      throw error;
+    }
+  }
   async getCourseWithDetails(courseId) {
     try {
       const db = await connectDB();

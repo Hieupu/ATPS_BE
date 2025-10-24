@@ -1,5 +1,5 @@
 const courseRepository = require("../repositories/courseRepository");
-
+const profileService = require("../services/profileService");
 const getAllCourses = async (req, res) => {
   try {
     const courses = await courseRepository.getAllCoursesWithDetails();
@@ -12,6 +12,35 @@ const getAllCourses = async (req, res) => {
     });
   }
 };
+
+// controllers/courseController.js
+const getMyCourses = async (req, res) => {
+  try {
+    const accountId = req.user.id; // Lấy từ JWT token
+    
+    // Lấy LearnerID từ AccountID
+    const learnerId = await courseRepository.getLearnerIdByAccountId(accountId);
+    
+    if (!learnerId) {
+      return res.status(404).json({ message: "Learner profile not found" });
+    }
+
+    // Lấy danh sách khóa học đã đăng ký
+    const enrolledCourses = await courseRepository.getEnrolledCoursesByLearnerId(learnerId);
+
+    res.json({
+      success: true,
+      data: enrolledCourses
+    });
+  } catch (error) {
+    console.error("Get my courses error:", error);
+    res.status(500).json({ 
+      message: "Failed to fetch enrolled courses",
+      error: error.message 
+    });
+  }
+};
+
 
 const getCourseById = async (req, res) => {
   try {
@@ -85,5 +114,6 @@ module.exports = {
   getCourseById,
   enrollInCourse,
   getPopularCourses,
-  getAllCoursesAdmin
+  getAllCoursesAdmin,
+  getMyCourses
 };

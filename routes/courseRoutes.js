@@ -4,7 +4,8 @@ const {
   getCourseById,
   enrollInCourse,
   getPopularCourses,
-  getAllCoursesAdmin
+  getAllCoursesAdmin,
+  getMyCourses
 } = require("../controllers/courseController");
 const { verifyToken } = require("../middlewares/middware");
 
@@ -15,5 +16,7 @@ router.get("/popular", getPopularCourses);
 router.get("/:id", getCourseById);
 router.post("/enroll", verifyToken, enrollInCourse);
 router.get("/admin/all", getAllCoursesAdmin); // Admin route to see all courses
+
+router.get("/my-courses/enrolled", verifyToken, getMyCourses);
 
 module.exports = router;

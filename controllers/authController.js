@@ -13,16 +13,22 @@ const connectDB = require("../config/db");
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
 
+// controllers/authController.js
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
     const { token, user } = await loginService(email, password);
-    const { Username, Email } = user;
+    const { Username, Email, role } = user; // Thêm role
+    
     res.json({
       message: "Login successful",
       token,
-      user: { Username, Email },
+      user: { 
+        Username, 
+        Email, 
+        role // Thêm role vào response
+      },
     });
   } catch (error) {
     console.error("Login error:", error);
