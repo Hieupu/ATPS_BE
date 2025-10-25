@@ -1,6 +1,6 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-
+const connectDB = require("../config/db");
 const accountRepository = require("../repositories/accountRepository");
 require("dotenv").config();
 
@@ -11,6 +11,7 @@ class ServiceError extends Error {
   }
 }
 
+// services/loginService.js
 const loginService = async (email, password, provider = "local") => {
   console.log("Login attempt for email:", email);
 
@@ -33,6 +34,9 @@ const loginService = async (email, password, provider = "local") => {
   }
 
   const featureNames = await accountRepository.getFeaturesByAccountId(user.AccID);
+  
+  // Xác định role
+  const role = await determineUserRole(user.AccID);
 
   const token = jwt.sign(
     {
@@ -40,12 +44,38 @@ const loginService = async (email, password, provider = "local") => {
       email: user.Email,
       username: user.Username,
       features: featureNames,
+      role: role // Thêm role vào token
     },
     process.env.JWT_SECRET,
     { expiresIn: "1h" }
   );
 
-  return { token, user };
+  return { 
+    token, 
+    user: {
+      ...user,
+      role: role // Thêm role vào user object
+    } 
+  };
+};
+
+// Hàm xác định role
+const determineUserRole = async (accountId) => {
+  const db = await connectDB();
+  
+  // Kiểm tra instructor
+  const [instructors] = await db.query("SELECT InstructorID FROM instructor WHERE AccID = ?", [accountId]);
+  if (instructors.length > 0) return 'instructor';
+  
+  // Kiểm tra learner
+  const [learners] = await db.query("SELECT LearnerID FROM learner WHERE AccID = ?", [accountId]);
+  if (learners.length > 0) return 'learner';
+  
+  // Kiểm tra parent
+  const [parents] = await db.query("SELECT ParentID FROM parent WHERE AccID = ?", [accountId]);
+  if (parents.length > 0) return 'parent';
+  
+  return 'unknown';
 };
 
 const registerService = async ({ username, email, phone, password, provider = "local" }) => {
