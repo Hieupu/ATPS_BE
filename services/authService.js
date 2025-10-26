@@ -23,7 +23,10 @@ const loginService = async (email, password, provider = "local") => {
 
   if (user.Provider !== "local") {
     if (provider !== user.Provider) {
-      throw new ServiceError(`This account can only login via ${user.Provider}`, 401);
+      throw new ServiceError(
+        `This account can only login via ${user.Provider}`,
+        401
+      );
     }
   } else {
     if (!password) {
@@ -33,8 +36,10 @@ const loginService = async (email, password, provider = "local") => {
     if (!match) throw new ServiceError("Invalid credentials", 401);
   }
 
-  const featureNames = await accountRepository.getFeaturesByAccountId(user.AccID);
-  
+  const featureNames = await accountRepository.getFeaturesByAccountId(
+    user.AccID
+  );
+
   // Xác định role
   const role = await determineUserRole(user.AccID);
 
@@ -44,43 +49,61 @@ const loginService = async (email, password, provider = "local") => {
       email: user.Email,
       username: user.Username,
       features: featureNames,
-      role: role // Thêm role vào token
+      role: role, // Thêm role vào token
     },
     process.env.JWT_SECRET,
     { expiresIn: "1h" }
   );
 
-  return { 
-    token, 
+  return {
+    token,
     user: {
       ...user,
-      role: role // Thêm role vào user object
-    } 
+      role: role, // Thêm role vào user object
+    },
   };
 };
 
 // Hàm xác định role
 const determineUserRole = async (accountId) => {
   const db = await connectDB();
-  
+
   // Kiểm tra instructor
-  const [instructors] = await db.query("SELECT InstructorID FROM instructor WHERE AccID = ?", [accountId]);
-  if (instructors.length > 0) return 'instructor';
-  
+  const [instructors] = await db.query(
+    "SELECT InstructorID FROM instructor WHERE AccID = ?",
+    [accountId]
+  );
+  if (instructors.length > 0) return "instructor";
+
   // Kiểm tra learner
-  const [learners] = await db.query("SELECT LearnerID FROM learner WHERE AccID = ?", [accountId]);
-  if (learners.length > 0) return 'learner';
-  
+  const [learners] = await db.query(
+    "SELECT LearnerID FROM learner WHERE AccID = ?",
+    [accountId]
+  );
+  if (learners.length > 0) return "learner";
+
   // Kiểm tra parent
-  const [parents] = await db.query("SELECT ParentID FROM parent WHERE AccID = ?", [accountId]);
-  if (parents.length > 0) return 'parent';
-  
-  return 'unknown';
+  const [parents] = await db.query(
+    "SELECT ParentID FROM parent WHERE AccID = ?",
+    [accountId]
+  );
+  if (parents.length > 0) return "parent";
+
+  return "unknown";
 };
 
-const registerService = async ({ username, email, phone, password, provider = "local" }) => {
+const registerService = async ({
+  username,
+  email,
+  phone,
+  password,
+  provider = "local",
+}) => {
   if (!username || !email || !password) {
-    throw new ServiceError("Please enter complete information: username, email, password!", 400);
+    throw new ServiceError(
+      "Please enter complete information: username, email, password!",
+      400
+    );
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -99,7 +122,6 @@ const registerService = async ({ username, email, phone, password, provider = "l
   if (phone && !/^\d{9,11}$/.test(phone)) {
     throw new ServiceError("Invalid phone number (9–11 digits only)!", 400);
   }
-
 
   const existing = await accountRepository.findAccountByEmail(email);
   if (existing) {

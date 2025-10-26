@@ -7,6 +7,7 @@ const courseRoutes = require("./routes/courseRoutes");
 const passport = require("passport");
 const cors = require("cors");
 // const paymentRoutes = require("./routes/paymentRoutes");
+const instructorCourseRouter = require("./routes/instructorCourseRouter");
 
 dotenv.config();
 const app = express();
@@ -28,6 +29,7 @@ app.use("/api", router);
 app.use("/api/profile", profileRoutes);
 app.use("/api/courses", courseRoutes);
 // app.use("/api/payment", paymentRoutes);
+app.use("/api/instructor/courses", instructorCourseRouter);
 
 const PORT = process.env.PORT || 9999;
 connectDB().then(() => {
