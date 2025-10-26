@@ -1,39 +1,3 @@
-// const { PayOS } = require("@payos/node");
-// const connectDB = require("../config/db");
-
-// const payos = new PayOS({
-//   clientId: process.env.PAYOS_CLIENT_ID,
-//   apiKey: process.env.PAYOS_API_KEY,
-//   checksumKey: process.env.PAYOS_CHECKSUM_KEY,
-// });
-
-// const createPaymentLink = async (req, res) => {
-//   try {
-//     console.log("Account info from JWT:", req.user);
-//     const { courseId } = req.body;
-//     const accId = req.user.id;
-
-//     if (!courseId) {
-//       return res.status(400).json({ message: "Course ID is required" });
-//     }
-
-//     const db = await connectDB();
-
-//     // Tìm learner dựa trên AccID
-//     const [learners] = await db.query("SELECT * FROM learner WHERE AccID = ?", [accId]);
-//     if (!learners.length) {
-//       return res.status(404).json({ message: "Learner not found for this account" });
-//     }
-
-//     const learner = learners[0];
-//     const learnerId = learner.LearnerID;
-
-//     // Kiểm tra khóa học
-//     const [course] = await db.query("SELECT * FROM course WHERE CourseID = ?", [courseId]);
-//     if (!course.length) return res.status(404).json({ message: "Course not found" });
-
-//     const courseData = course[0];
-
 //     // Generate order code
 //     const orderCode = Math.floor(Math.random() * 900000000) + 100000000;
 
