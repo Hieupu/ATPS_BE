@@ -21,9 +21,23 @@ const {
   deleteMaterialService,
   updateTimeslotService,
   deleteTimeslotService,
+  listInstructorCoursesService,
 } = require("../services/instructorCourseService");
 
 // ======================= COURSE =======================
+const listInstructorCourses = async (req, res) => {
+  try {
+    const instructorId = req.user.id;
+    const courses = await listInstructorCoursesService(instructorId);
+    res.json(courses);
+  } catch (err) {
+    console.error(err);
+    res.status(err.status || 500).json({
+      message: err.message || "Lỗi khi lấy danh sách khóa học",
+    });
+  }
+};
+
 const createCourse = async (req, res) => {
   try {
     const course = await createCourseService(req.body);
@@ -351,4 +365,5 @@ module.exports = {
   approveCourse,
   publishCourse,
   getCourseDetail,
+  listInstructorCourses,
 };

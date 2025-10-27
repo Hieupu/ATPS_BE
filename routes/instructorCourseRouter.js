@@ -22,6 +22,7 @@ const {
   deleteMaterial,
   updateTimeslot,
   deleteTimeslot,
+  listInstructorCourses,
 } = require("../controllers/instructorCourseController");
 const { verifyToken, authorizeRole } = require("../middlewares/middware");
 
@@ -30,6 +31,13 @@ const router = express.Router();
 /* ============================
     COURSE instructor
   ============================ */
+router.get(
+  "/",
+  verifyToken,
+  authorizeRole("instructor"),
+  listInstructorCourses
+);
+
 router.post("/", verifyToken, authorizeRole("instructor"), createCourse);
 
 router.get(

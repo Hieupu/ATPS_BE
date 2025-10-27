@@ -25,6 +25,14 @@ const ensureSessionBelongsToCourse = async (courseId, session) => {
 };
 
 // ======================= COURSE =======================
+const listInstructorCoursesService = async (instructorId) => {
+  const courses = await courseRepository.findByInstructor(instructorId);
+  if (!courses || courses.length === 0) {
+    throw new ServiceError("Không tìm thấy khóa học nào", 404);
+  }
+  return courses;
+};
+
 const createCourseService = async (data) => {
   const { Title, Description, Duration, TuitionFee } = data;
 
@@ -468,4 +476,5 @@ module.exports = {
   deleteTimeslotService,
   getInstructorCoursesService,
   getInstructorSessionsService,
+  listInstructorCoursesService,
 };
