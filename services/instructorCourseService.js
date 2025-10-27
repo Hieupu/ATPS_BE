@@ -2,9 +2,10 @@ const connectDB = require("../config/db");
 const courseRepository = require("../repositories/instructorCourseRepository");
 const unitRepository = require("../repositories/instructorUnitRepository");
 const sessionRepository = require("../repositories/instructorSessionRepository");
-const lessionRepository = require("../repositories/instructorLessionRepository");
+const lessonRepository = require("../repositories/instructorLessionRepository");
 const materialRepository = require("../repositories/InstructorMaterialRepository");
 const timeslotRepository = require("../repositories/InstructorTimeslotRepository");
+const classRepository = require("../repositories/classRepository");
 
 class ServiceError extends Error {
   constructor(message, status = 400) {
@@ -13,14 +14,25 @@ class ServiceError extends Error {
   }
 }
 
+const ensureSessionBelongsToCourse = async (courseId, session) => {
+  const klass = await classRepository.findById(session.ClassID);
+  if (!klass) throw new ServiceError("Class của session không tồn tại", 404);
+  if (Number(klass.CourseID) !== Number(courseId)) {
+    console.log(klass.CourseID, courseId);
+
+    throw new ServiceError("Session không thuộc về course này", 403);
+  }
+};
+
 // ======================= COURSE =======================
 const createCourseService = async (data) => {
-  const { InstructorID, Title, Description, Duration, TuitionFee } = data;
-  if (!InstructorID || !Title)
-    throw new ServiceError("InstructorID và Title là bắt buộc", 400);
+  const { Title, Description, Duration, TuitionFee } = data;
+
+  if (!Title) {
+    throw new ServiceError("Title là bắt buộc", 400);
+  }
 
   return await courseRepository.create({
-    InstructorID,
     Title,
     Description,
     Duration,
@@ -33,24 +45,28 @@ const updateCourseService = async (courseId, data) => {
   const course = await courseRepository.findById(courseId);
   if (!course) throw new ServiceError("Course không tồn tại", 404);
 
-  if (!["draft", "rejected"].includes(course.Status))
+  if (!["draft", "rejected"].includes(course.Status)) {
     throw new ServiceError(
       "Chỉ có thể chỉnh sửa khi course ở trạng thái draft hoặc rejected",
       400
     );
+  }
 
-  return await courseRepository.update(courseId, data);
+  const { InstructorID, ...safeData } = data || {};
+  await courseRepository.update(courseId, safeData);
+  return await courseRepository.findById(courseId);
 };
 
 const deleteCourseService = async (courseId) => {
   const course = await courseRepository.findById(courseId);
   if (!course) throw new ServiceError("Course không tồn tại", 404);
 
-  if (!["draft", "rejected"].includes(course.Status))
+  if (!["draft", "rejected"].includes(course.Status)) {
     throw new ServiceError(
       "Chỉ có thể xóa khi course ở trạng thái draft hoặc rejected",
       400
     );
+  }
 
   await courseRepository.delete(courseId);
   return { message: "Đã xóa khóa học thành công" };
@@ -61,91 +77,219 @@ const addUnitService = async (courseId, data) => {
   const course = await courseRepository.findById(courseId);
   if (!course) throw new ServiceError("Course không tồn tại", 404);
 
-  if (course.Status !== "draft")
+  if (course.Status !== "draft") {
     throw new ServiceError(
       "Chỉ có thể thêm Unit khi Course ở trạng thái draft",
       400
     );
+  }
 
-  return await unitRepository.create(courseId, data);
+  // Không cho đổi CourseID qua body
+  const { CourseID, ...safe } = data || {};
+  return await unitRepository.create(courseId, safe);
 };
 
-const updateUnitService = async (unitId, data) => {
+const updateUnitService = async (courseId, unitId, data) => {
+  const course = await courseRepository.findById(courseId);
+  if (!course) throw new ServiceError("Course không tồn tại", 404);
+
   const unit = await unitRepository.findById(unitId);
   if (!unit) throw new ServiceError("Unit không tồn tại", 404);
 
-  const course = await courseRepository.findById(unit.CourseID);
-  if (!["draft", "rejected"].includes(course.Status))
+  if (Number(unit.CourseID) !== Number(courseId)) {
+    throw new ServiceError("Unit không thuộc về course này", 403);
+  }
+
+  if (!["draft", "rejected"].includes(course.Status)) {
     throw new ServiceError(
       "Không thể sửa Unit khi course đã được duyệt hoặc publish",
       400
     );
+  }
 
-  return await unitRepository.update(unitId, data);
+  const { CourseID, ...safe } = data || {};
+  await unitRepository.update(unitId, safe);
+
+  // trả lại dữ liệu mới nhất
+  return await unitRepository.findById(unitId);
 };
 
-const deleteUnitService = async (unitId) => {
+const deleteUnitService = async (courseId, unitId) => {
+  const course = await courseRepository.findById(courseId);
+  if (!course) throw new ServiceError("Course không tồn tại", 404);
+
   const unit = await unitRepository.findById(unitId);
   if (!unit) throw new ServiceError("Unit không tồn tại", 404);
 
-  const course = await courseRepository.findById(unit.CourseID);
-  if (!["draft", "rejected"].includes(course.Status))
+  if (Number(unit.CourseID) !== Number(courseId)) {
+    throw new ServiceError("Unit không thuộc về course này", 403);
+  }
+
+  if (!["draft", "rejected"].includes(course.Status)) {
     throw new ServiceError(
       "Không thể xóa Unit khi course đã được duyệt hoặc publish",
       400
     );
+  }
 
   await unitRepository.delete(unitId);
   return { message: "Đã xóa Unit thành công" };
 };
 
 // ======================= SESSION =======================
-const createSessionService = async (data) => {
-  const { Title, Description, InstructorID } = data;
-  if (!InstructorID || !Title)
-    throw new ServiceError("InstructorID và Title là bắt buộc", 400);
+const createSessionService = async (courseId, data) => {
+  const course = await courseRepository.findById(courseId);
+  if (!course) throw new ServiceError("Course không tồn tại", 404);
 
-  return await sessionRepository.create({ Title, Description, InstructorID });
+  const { Title, Description, InstructorID, ClassID, TimeslotID } = data || {};
+  if (!Title || !Description || !InstructorID || !ClassID || !TimeslotID) {
+    throw new ServiceError(
+      "Title, Description, InstructorID, ClassID, TimeslotID là bắt buộc",
+      400
+    );
+  }
+
+  const klass = await classRepository.findById(ClassID);
+  if (!klass) throw new ServiceError("Class không tồn tại", 404);
+  if (Number(klass.CourseID) !== Number(courseId)) {
+    throw new ServiceError("Class không thuộc về course này", 403);
+  }
+
+  if (Number(klass.InstructorID) !== Number(InstructorID)) {
+    throw new ServiceError(
+      "InstructorID không khớp với giảng viên của class",
+      400
+    );
+  }
+
+  return await sessionRepository.create({
+    Title,
+    Description,
+    InstructorID,
+    ClassID,
+    TimeslotID,
+  });
 };
 
-const updateSessionService = async (sessionId, data) => {
+const updateSessionService = async (courseId, sessionId, data) => {
+  const course = await courseRepository.findById(courseId);
+  if (!course) throw new ServiceError("Course không tồn tại", 404);
+
   const session = await sessionRepository.findById(sessionId);
   if (!session) throw new ServiceError("Session không tồn tại", 404);
 
-  return await sessionRepository.update(sessionId, data);
+  const currentClass = await classRepository.findById(session.ClassID);
+  if (!currentClass)
+    throw new ServiceError("Class của session không tồn tại", 404);
+  if (Number(currentClass.CourseID) !== Number(courseId)) {
+    throw new ServiceError("Session không thuộc về course này", 403);
+  }
+
+  if (data && data.ClassID !== undefined) {
+    const newClass = await classRepository.findById(data.ClassID);
+    if (!newClass) throw new ServiceError("ClassID mới không tồn tại", 404);
+    if (Number(newClass.CourseID) !== Number(courseId)) {
+      throw new ServiceError("ClassID mới không thuộc về course này", 403);
+    }
+
+    if (Number(newClass.InstructorID) !== Number(session.InstructorID)) {
+      throw new ServiceError(
+        "ClassID mới có giảng viên khác với session hiện tại",
+        400
+      );
+    }
+  }
+
+  // Không cho đổi InstructorID ở đây (đổi qua quản lý class)
+  if (data && data.InstructorID !== undefined) {
+    throw new ServiceError(
+      "Không được phép thay đổi InstructorID trong cập nhật session",
+      400
+    );
+  }
+
+  await sessionRepository.update(sessionId, {
+    Title: data?.Title,
+    Description: data?.Description,
+    ClassID: data?.ClassID,
+    TimeslotID: data?.TimeslotID,
+  });
+
+  return await sessionRepository.findById(sessionId);
 };
 
-const deleteSessionService = async (sessionId) => {
+const deleteSessionService = async (courseId, sessionId) => {
+  const course = await courseRepository.findById(courseId);
+  if (!course) throw new ServiceError("Course không tồn tại", 404);
+
   const session = await sessionRepository.findById(sessionId);
   if (!session) throw new ServiceError("Session không tồn tại", 404);
+
+  const klass = await classRepository.findById(session.ClassID);
+  if (!klass) throw new ServiceError("Class của session không tồn tại", 404);
+  if (Number(klass.CourseID) !== Number(courseId)) {
+    throw new ServiceError("Session không thuộc về course này", 403);
+  }
 
   await sessionRepository.delete(sessionId);
   return { message: "Đã xóa session thành công" };
 };
 
-// ======================= LESSION =======================
-const addLessionService = async (unitId, sessionId, data) => {
+// ======================= LESSON =======================
+const addLessonService = async (courseId, unitId, data) => {
+  const course = await courseRepository.findById(courseId);
+  if (!course) throw new ServiceError("Course không tồn tại", 404);
+
   const unit = await unitRepository.findById(unitId);
-  const session = await sessionRepository.findById(sessionId);
   if (!unit) throw new ServiceError("Unit không tồn tại", 404);
-  if (!session) throw new ServiceError("Session không tồn tại", 404);
 
-  return await lessionRepository.create(unitId, sessionId, data);
+  if (Number(unit.CourseID) !== Number(courseId)) {
+    throw new ServiceError("Unit không thuộc về course này", 403);
+  }
+
+  return await lessonRepository.create(unitId, data);
 };
 
-const updateLessionService = async (lessionId, data) => {
-  const lession = await lessionRepository.findById(lessionId);
-  if (!lession) throw new ServiceError("Lession không tồn tại", 404);
+const updateLessonService = async (courseId, unitId, lessonId, data) => {
+  const course = await courseRepository.findById(courseId);
+  if (!course) throw new ServiceError("Course không tồn tại", 404);
 
-  return await lessionRepository.update(lessionId, data);
+  const unit = await unitRepository.findById(unitId);
+  if (!unit) throw new ServiceError("Unit không tồn tại", 404);
+
+  if (Number(unit.CourseID) !== Number(courseId)) {
+    throw new ServiceError("Unit không thuộc về course này", 403);
+  }
+
+  const lesson = await lessonRepository.findById(lessonId);
+  if (!lesson) throw new ServiceError("Lesson không tồn tại", 404);
+  if (Number(lesson.UnitID) !== Number(unitId)) {
+    throw new ServiceError("Lesson không thuộc về unit này", 403);
+  }
+
+  await lessonRepository.update(lessonId, unitId, data);
+  return await lessonRepository.findById(lessonId);
 };
 
-const deleteLessionService = async (lessionId) => {
-  const lession = await lessionRepository.findById(lessionId);
-  if (!lession) throw new ServiceError("Lession không tồn tại", 404);
+const deleteLessonService = async (courseId, unitId, lessonId) => {
+  const course = await courseRepository.findById(courseId);
+  if (!course) throw new ServiceError("Course không tồn tại", 404);
 
-  await lessionRepository.delete(lessionId);
-  return { message: "Đã xóa lession thành công" };
+  const unit = await unitRepository.findById(unitId);
+  if (!unit) throw new ServiceError("Unit không tồn tại", 404);
+
+  if (Number(unit.CourseID) !== Number(courseId)) {
+    throw new ServiceError("Unit không thuộc về course này", 403);
+  }
+
+  const lesson = await lessonRepository.findById(lessonId);
+  if (!lesson) throw new ServiceError("Lesson không tồn tại", 404);
+  if (Number(lesson.UnitID) !== Number(unitId)) {
+    throw new ServiceError("Lesson không thuộc về unit này", 403);
+  }
+
+  await lessonRepository.delete(lessonId, unitId);
+  return { message: "Đã xóa lesson thành công" };
 };
 
 // ======================= MATERIAL =======================
@@ -153,19 +297,42 @@ const addMaterialService = async (courseId, data) => {
   const course = await courseRepository.findById(courseId);
   if (!course) throw new ServiceError("Course không tồn tại", 404);
 
-  return await materialRepository.create(courseId, data);
+  if (!data?.Title || !data?.FileURL)
+    throw new ServiceError("Title và FileURL là bắt buộc", 400);
+
+  // không cho đổi CourseID qua body
+  const { CourseID, ...safe } = data || {};
+  return await materialRepository.create(courseId, safe);
 };
 
-const updateMaterialService = async (materialId, data) => {
+const updateMaterialService = async (courseId, materialId, data) => {
+  const course = await courseRepository.findById(courseId);
+  if (!course) throw new ServiceError("Course không tồn tại", 404);
+
   const material = await materialRepository.findById(materialId);
   if (!material) throw new ServiceError("Material không tồn tại", 404);
 
-  return await materialRepository.update(materialId, data);
+  if (Number(material.CourseID) !== Number(courseId)) {
+    throw new ServiceError("Material không thuộc về course này", 403);
+  }
+
+  // không cho đổi CourseID qua body
+  const { CourseID, ...safe } = data || {};
+
+  await materialRepository.update(materialId, safe);
+  return await materialRepository.findById(materialId);
 };
 
-const deleteMaterialService = async (materialId) => {
+const deleteMaterialService = async (courseId, materialId) => {
+  const course = await courseRepository.findById(courseId);
+  if (!course) throw new ServiceError("Course không tồn tại", 404);
+
   const material = await materialRepository.findById(materialId);
   if (!material) throw new ServiceError("Material không tồn tại", 404);
+
+  if (Number(material.CourseID) !== Number(courseId)) {
+    throw new ServiceError("Material không thuộc về course này", 403);
+  }
 
   await materialRepository.delete(materialId);
   return { message: "Đã xóa material thành công" };
@@ -173,24 +340,47 @@ const deleteMaterialService = async (materialId) => {
 
 // ======================= TIMESLOT =======================
 const addTimeslotService = async (courseId, sessionId, data) => {
-  const course = await courseRepository.findById(courseId);
   const session = await sessionRepository.findById(sessionId);
-  if (!course) throw new ServiceError("Course không tồn tại", 404);
   if (!session) throw new ServiceError("Session không tồn tại", 404);
 
-  return await timeslotRepository.create(courseId, sessionId, data);
+  // Đảm bảo session thuộc về đúng course
+  await ensureSessionBelongsToCourse(courseId, session);
+
+  if (session.TimeslotID) {
+    throw new ServiceError(
+      "Session đã có timeslot, hãy cập nhật thay vì tạo mới",
+      400
+    );
+  }
+
+  return await timeslotRepository.create(sessionId, data);
 };
 
-const updateTimeslotService = async (timeslotId, data) => {
-  const timeslot = await timeslotRepository.findById(timeslotId);
-  if (!timeslot) throw new ServiceError("Timeslot không tồn tại", 404);
+const updateTimeslotService = async (courseId, sessionId, timeslotId, data) => {
+  const session = await sessionRepository.findById(sessionId);
+  if (!session) throw new ServiceError("Session không tồn tại", 404);
 
-  return await timeslotRepository.update(timeslotId, data);
+  // Đảm bảo session thuộc về đúng course
+  await ensureSessionBelongsToCourse(courseId, session);
+
+  if (Number(session.TimeslotID) !== Number(timeslotId)) {
+    throw new ServiceError("Timeslot không thuộc về session này", 403);
+  }
+
+  await timeslotRepository.update(timeslotId, data);
+  return await timeslotRepository.getBySession(sessionId);
 };
 
-const deleteTimeslotService = async (timeslotId) => {
-  const timeslot = await timeslotRepository.findById(timeslotId);
-  if (!timeslot) throw new ServiceError("Timeslot không tồn tại", 404);
+const deleteTimeslotService = async (courseId, sessionId, timeslotId) => {
+  const session = await sessionRepository.findById(sessionId);
+  if (!session) throw new ServiceError("Session không tồn tại", 404);
+
+  // Đảm bảo session thuộc về đúng course
+  await ensureSessionBelongsToCourse(courseId, session);
+
+  if (Number(session.TimeslotID) !== Number(timeslotId)) {
+    throw new ServiceError("Timeslot không thuộc về session này", 403);
+  }
 
   await timeslotRepository.delete(timeslotId);
   return { message: "Đã xóa timeslot thành công" };
@@ -236,7 +426,7 @@ const getCourseDetailService = async (courseId) => {
   const materials = await materialRepository.listByCourse(courseId);
 
   for (const u of units) {
-    const lessions = await lessionRepository.listByUnit(u.UnitID);
+    const lessions = await lessonRepository.listByUnit(u.UnitID);
     u.Lessions = lessions;
   }
 
@@ -259,7 +449,7 @@ module.exports = {
   deleteCourseService,
   addUnitService,
   createSessionService,
-  addLessionService,
+  addLessonService,
   addMaterialService,
   submitCourseService,
   approveCourseService,
@@ -270,8 +460,8 @@ module.exports = {
   deleteUnitService,
   updateSessionService,
   deleteSessionService,
-  updateLessionService,
-  deleteLessionService,
+  updateLessonService,
+  deleteLessonService,
   updateMaterialService,
   deleteMaterialService,
   updateTimeslotService,

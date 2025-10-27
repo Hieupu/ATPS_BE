@@ -3,7 +3,7 @@ const {
   createCourse,
   addUnit,
   createSession,
-  addLession,
+  addLesson,
   addMaterial,
   submitCourse,
   approveCourse,
@@ -16,8 +16,8 @@ const {
   deleteUnit,
   updateSession,
   deleteSession,
-  updateLession,
-  deleteLession,
+  updateLesson,
+  deleteLesson,
   updateMaterial,
   deleteMaterial,
   updateTimeslot,
@@ -26,40 +26,12 @@ const {
 const { verifyToken, authorizeRole } = require("../middlewares/middware");
 
 const router = express.Router();
+
 /* ============================
-   COURSE
-============================ */
+    COURSE instructor
+  ============================ */
 router.post("/", verifyToken, authorizeRole("instructor"), createCourse);
-router.put(
-  "/:courseId",
-  verifyToken,
-  authorizeRole("instructor"),
-  updateCourse
-);
-router.delete(
-  "/:courseId",
-  verifyToken,
-  authorizeRole("instructor", "admin"),
-  deleteCourse
-);
-router.put(
-  "/:courseId/submit",
-  verifyToken,
-  authorizeRole("instructor"),
-  submitCourse
-);
-router.put(
-  "/:courseId/approve",
-  verifyToken,
-  authorizeRole("admin"),
-  approveCourse
-);
-router.put(
-  "/:courseId/publish",
-  verifyToken,
-  authorizeRole("admin"),
-  publishCourse
-);
+
 router.get(
   "/:courseId/detail",
   verifyToken,
@@ -67,111 +39,154 @@ router.get(
   getCourseDetail
 );
 
+router.put(
+  "/:courseId",
+  verifyToken,
+  authorizeRole("instructor"),
+  updateCourse
+);
+
+router.delete(
+  "/:courseId",
+  verifyToken,
+  authorizeRole("instructor", "admin"),
+  deleteCourse
+);
+
+router.put(
+  "/:courseId/submit",
+  verifyToken,
+  authorizeRole("instructor"),
+  submitCourse
+);
+
+router.put(
+  "/:courseId/approve",
+  verifyToken,
+  authorizeRole("admin"),
+  approveCourse
+);
+
+router.put(
+  "/:courseId/publish",
+  verifyToken,
+  authorizeRole("admin"),
+  publishCourse
+);
+
 /* ============================
-   UNIT
-============================ */
+    UNIT MANAGEMENT
+  ============================ */
 router.post(
   "/:courseId/units",
   verifyToken,
   authorizeRole("instructor"),
   addUnit
 );
+
 router.put(
-  "/units/:unitId",
+  "/:courseId/units/:unitId",
   verifyToken,
   authorizeRole("instructor"),
   updateUnit
 );
+
 router.delete(
-  "/units/:unitId",
+  "/:courseId/units/:unitId",
   verifyToken,
   authorizeRole("instructor"),
   deleteUnit
 );
 
 /* ============================
-   SESSION
-============================ */
+    SESSION MANAGEMENT
+  ============================ */
 router.post(
-  "/sessions",
+  "/:courseId/sessions",
   verifyToken,
   authorizeRole("instructor"),
   createSession
 );
+
 router.put(
-  "/sessions/:sessionId",
+  "/:courseId/sessions/:sessionId",
   verifyToken,
   authorizeRole("instructor"),
   updateSession
 );
+
 router.delete(
-  "/sessions/:sessionId",
+  "/:courseId/sessions/:sessionId",
   verifyToken,
   authorizeRole("instructor"),
   deleteSession
 );
 
 /* ============================
-   LESSION
-============================ */
+    LESSION MANAGEMENT
+  ============================ */
 router.post(
-  "/units/:unitId/sessions/:sessionId/lessions",
+  "/:courseId/units/:unitId/lessons",
   verifyToken,
   authorizeRole("instructor"),
-  addLession
+  addLesson
 );
 router.put(
-  "/lessions/:lessionId",
+  "/:courseId/units/:unitId/lessons/:lessonId",
   verifyToken,
   authorizeRole("instructor"),
-  updateLession
+  updateLesson
 );
 router.delete(
-  "/lessions/:lessionId",
+  "/:courseId/units/:unitId/lessons/:lessonId",
   verifyToken,
   authorizeRole("instructor"),
-  deleteLession
+  deleteLesson
 );
 
 /* ============================
-   MATERIAL
-============================ */
+    MATERIAL MANAGEMENT
+  ============================ */
 router.post(
   "/:courseId/materials",
   verifyToken,
   authorizeRole("instructor"),
   addMaterial
 );
+
 router.put(
-  "/materials/:materialId",
+  "/:courseId/materials/:materialId",
   verifyToken,
   authorizeRole("instructor"),
   updateMaterial
 );
+
 router.delete(
-  "/materials/:materialId",
+  "/:courseId/materials/:materialId",
   verifyToken,
   authorizeRole("instructor"),
   deleteMaterial
 );
 
 /* ============================
-   TIMESLOT
-============================ */
+    TIMESLOT MANAGEMENT
+  ============================ */
 router.post(
-  "/:courseId/sessions/:sessionId/timeslots",
+  "/courses/:courseId/sessions/:sessionId/timeslots",
   verifyToken,
   authorizeRole("instructor", "admin"),
   addTimeslot
 );
+
 router.put(
-  "/timeslots/:timeslotId",
+  "/courses/:courseId/sessions/:sessionId/timeslots/:timeslotId",
   verifyToken,
   authorizeRole("instructor", "admin"),
   updateTimeslot
 );
+
 router.delete(
-  "/timeslots/:timeslotId",
+  "/courses/:courseId/sessions/:sessionId/timeslots/:timeslotId",
   verifyToken,
   authorizeRole("instructor", "admin"),
   deleteTimeslot

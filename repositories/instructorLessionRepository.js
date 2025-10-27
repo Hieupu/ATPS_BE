@@ -1,49 +1,68 @@
 const connectDB = require("../config/db");
-const Lession = require("../models/lession");
+const Lesson = require("../models/lesson");
 
-class InstructorLessionRepository {
+class InstructorLessonRepository {
+  async findById(lessonId) {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      `SELECT LessonID, Title, Description, Type, FileURL, UnitID, CreatedDate, UpdatedDate
+     FROM lesson
+     WHERE LessonID = ?`,
+      [lessonId]
+    );
+    return rows.length ? new Lesson(rows[0]) : null;
+  }
   async listByUnit(unitId) {
     const db = await connectDB();
-    const [rows] = await db.query("SELECT * FROM lession WHERE UnitID = ?", [
-      unitId,
-    ]);
-    return rows.map((r) => new Lession(r));
+    const [rows] = await db.query(
+      `SELECT LessonID, Title, Description, Type, FileURL, UnitID, CreatedDate, UpdatedDate
+       FROM lesson
+       WHERE UnitID = ?`,
+      [unitId]
+    );
+    return rows.map((r) => new Lesson(r));
   }
 
-  async create(unitId, sessionId, data) {
+  async create(unitId, data) {
     const db = await connectDB();
     const { Title, Description, Type, FileURL } = data;
+
     const [result] = await db.query(
-      "INSERT INTO lession (Title, Description, Type, FileURL, SessionID, UnitID) VALUES (?, ?, ?, ?, ?, ?)",
-      [Title, Description, Type, FileURL, sessionId, unitId]
+      `INSERT INTO lesson (Title, Description, Type, FileURL, UnitID)
+       VALUES (?, ?, ?, ?, ?)`,
+      [Title, Description, Type, FileURL, unitId]
     );
-    return new Lession({
-      LessionID: result.insertId,
-      Title,
-      Description,
-      Type,
-      FileURL,
-      SessionID: sessionId,
-      UnitID: unitId,
-    });
+
+    const [rows] = await db.query(
+      `SELECT LessonID, Title, Description, Type, FileURL, UnitID, CreatedDate, UpdatedDate
+       FROM lesson
+       WHERE LessonID = ?`,
+      [result.insertId]
+    );
+
+    return new Lesson(rows[0]);
   }
 
-  async update(lessionId, sessionId, unitId, data) {
+  async update(lessonId, unitId, data) {
     const db = await connectDB();
     const { Title, Description, Type, FileURL } = data;
+
     await db.query(
-      "UPDATE lession SET Title=?, Description=?, Type=?, FileURL=? WHERE LessionID=? AND SessionID=? AND UnitID=?",
-      [Title, Description, Type, FileURL, lessionId, sessionId, unitId]
+      `UPDATE lesson
+       SET Title=?, Description=?, Type=?, FileURL=?
+       WHERE LessonID=? AND UnitID=?`,
+      [Title, Description, Type, FileURL, lessonId, unitId]
     );
   }
 
-  async delete(lessionId, sessionId, unitId) {
+  async delete(lessonId, unitId) {
     const db = await connectDB();
     await db.query(
-      "DELETE FROM lession WHERE LessionID=? AND SessionID=? AND UnitID=?",
-      [lessionId, sessionId, unitId]
+      `DELETE FROM lesson
+       WHERE LessonID=? AND UnitID=?`,
+      [lessonId, unitId]
     );
   }
 }
 
-module.exports = new InstructorLessionRepository();
+module.exports = new InstructorLessonRepository();

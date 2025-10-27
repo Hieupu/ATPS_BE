@@ -4,9 +4,11 @@ const Course = require("../models/course");
 class InstructorCourseRepository {
   async findById(courseId) {
     const db = await connectDB();
-    const [rows] = await db.query("SELECT * FROM course WHERE CourseID = ?", [
-      courseId,
-    ]);
+    const [rows] = await db.query(
+      `SELECT CourseID, Title, Description, Duration, TuitionFee, Status, CreatedDate, UpdatedDate
+       FROM course WHERE CourseID = ?`,
+      [courseId]
+    );
     if (!rows.length) return null;
     return new Course(rows[0]);
   }
@@ -14,54 +16,66 @@ class InstructorCourseRepository {
   async findByInstructor(instructorId) {
     const db = await connectDB();
     const [rows] = await db.query(
-      "SELECT * FROM course WHERE InstructorID = ? ORDER BY CourseID DESC",
+      `SELECT DISTINCT c.CourseID, c.Title, c.Description, c.Duration, c.TuitionFee,
+              c.Status, c.CreatedDate, c.UpdatedDate
+       FROM course c
+       JOIN class cl ON cl.CourseID = c.CourseID
+       WHERE cl.InstructorID = ?
+       ORDER BY c.CourseID DESC`,
       [instructorId]
     );
     return rows.map((r) => new Course(r));
   }
 
-  async create(courseData) {
+  async create({ Title, Description, Duration, TuitionFee, Status = "draft" }) {
     const db = await connectDB();
-    const {
-      InstructorID,
-      Title,
-      Description,
-      Duration,
-      TuitionFee,
-      Status = "draft",
-    } = courseData;
-
     const [result] = await db.query(
-      "INSERT INTO course (InstructorID, Title, Description, Duration, TuitionFee, Status) VALUES (?, ?, ?, ?, ?, ?)",
-      [InstructorID, Title, Description, Duration, TuitionFee, Status]
+      `INSERT INTO course (Title, Description, Duration, TuitionFee, Status)
+       VALUES (?, ?, ?, ?, ?)`,
+      [Title, Description, Duration, TuitionFee, Status]
     );
 
-    return new Course({
-      CourseID: result.insertId,
-      InstructorID,
-      Title,
-      Description,
-      Duration,
-      TuitionFee,
-      Status,
-    });
+    const [rows] = await db.query(
+      `SELECT CourseID, Title, Description, Duration, TuitionFee, Status, CreatedDate, UpdatedDate
+       FROM course WHERE CourseID = ?`,
+      [result.insertId]
+    );
+    return new Course(rows[0]);
   }
 
   async update(courseId, data) {
     const db = await connectDB();
-    const { Title, Description, Duration, TuitionFee } = data;
-    await db.query(
-      "UPDATE course SET Title=?, Description=?, Duration=?, TuitionFee=? WHERE CourseID=?",
-      [Title, Description, Duration, TuitionFee, courseId]
-    );
-  }
+    const fields = [];
+    const values = [];
 
-  async updateStatus(courseId, status) {
-    const db = await connectDB();
-    await db.query("UPDATE course SET Status=? WHERE CourseID=?", [
-      status,
-      courseId,
-    ]);
+    if (data.Title !== undefined) {
+      fields.push("Title=?");
+      values.push(data.Title);
+    }
+    if (data.Description !== undefined) {
+      fields.push("Description=?");
+      values.push(data.Description);
+    }
+    if (data.Duration !== undefined) {
+      fields.push("Duration=?");
+      values.push(data.Duration);
+    }
+    if (data.TuitionFee !== undefined) {
+      fields.push("TuitionFee=?");
+      values.push(data.TuitionFee);
+    }
+    if (data.Status !== undefined) {
+      fields.push("Status=?");
+      values.push(data.Status);
+    }
+
+    if (!fields.length) return;
+
+    values.push(courseId);
+    await db.query(
+      `UPDATE course SET ${fields.join(", ")} WHERE CourseID=?`,
+      values
+    );
   }
 
   async delete(courseId) {

@@ -1,21 +1,24 @@
-class Lession {
+// models/lesson.js
+class Lesson {
   constructor({
-    LessionID,
+    LessonID,
     Title,
     Description,
     Type,
     FileURL,
-    SessionID,
     UnitID,
+    CreatedDate,
+    UpdatedDate,
   }) {
-    this.LessionID = LessionID;
+    this.LessonID = LessonID;
     this.Title = Title;
     this.Description = Description;
     this.Type = Type;
     this.FileURL = FileURL;
-    this.SessionID = SessionID;
     this.UnitID = UnitID;
+    this.CreatedDate = CreatedDate;
+    this.UpdatedDate = UpdatedDate;
   }
 }
 
-module.exports = Lession;
+module.exports = Lesson;

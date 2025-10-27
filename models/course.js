@@ -1,20 +1,22 @@
 class Course {
   constructor({
     CourseID,
-    InstructorID,
     Title,
     Description,
     Duration,
     TuitionFee,
     Status,
+    CreatedDate,
+    UpdatedDate,
   }) {
     this.CourseID = CourseID;
-    this.InstructorID = InstructorID;
     this.Title = Title;
     this.Description = Description;
     this.Duration = Duration;
     this.TuitionFee = TuitionFee;
     this.Status = Status || "draft";
+    this.CreatedDate = CreatedDate;
+    this.UpdatedDate = UpdatedDate;
   }
 }
 
