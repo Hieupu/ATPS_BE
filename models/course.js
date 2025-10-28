@@ -5,7 +5,7 @@ class Course {
     Title,
     Description,
     Duration,
-    TuitionFee,
+    Fee,
     Status,
   }) {
     this.CourseID = CourseID;
@@ -13,9 +13,8 @@ class Course {
     this.Title = Title;
     this.Description = Description;
     this.Duration = Duration;
-    this.TuitionFee = TuitionFee;
+    this.Fee = Fee;
     this.Status = Status || "draft";
   }
 }
-
 module.exports = Course;

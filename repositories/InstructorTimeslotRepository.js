@@ -2,37 +2,28 @@ const connectDB = require("../config/db");
 const Timeslot = require("../models/timeslot");
 
 class InstructorTimeslotRepository {
-  async getBySession(sessionId) {
+  async listByCourse(courseId) {
     const db = await connectDB();
-    const [rows] = await db.query(
-      `SELECT t.TimeslotID, t.StartTime, t.EndTime, t.Date
-       FROM timeslot t
-       JOIN session s ON s.TimeslotID = t.TimeslotID
-       WHERE s.SessionID = ?`,
-      [sessionId]
-    );
-    return rows.length ? new Timeslot(rows[0]) : null;
+    const [rows] = await db.query("SELECT * FROM timeslot WHERE CourseID=?", [
+      courseId,
+    ]);
+    return rows.map((r) => new Timeslot(r));
   }
 
-  async create(sessionId, data) {
+  async create(courseId, sessionId, data) {
     const db = await connectDB();
     const { Date, StartTime, EndTime } = data;
-
     const [result] = await db.query(
-      `INSERT INTO timeslot (StartTime, EndTime, Date) VALUES (?, ?, ?)`,
-      [StartTime, EndTime, Date]
+      "INSERT INTO timeslot (CourseID, LessonID, Date, StartTime, EndTime) VALUES (?, ?, ?, ?, ?)",
+      [courseId, sessionId, Date, StartTime, EndTime]
     );
-
-    await db.query(`UPDATE session SET TimeslotID = ? WHERE SessionID = ?`, [
-      result.insertId,
-      sessionId,
-    ]);
-
     return new Timeslot({
       TimeslotID: result.insertId,
+      CourseID: courseId,
+      LessonID: sessionId,
+      Date,
       StartTime,
       EndTime,
-      Date,
     });
   }
 
@@ -40,20 +31,14 @@ class InstructorTimeslotRepository {
     const db = await connectDB();
     const { Date, StartTime, EndTime } = data;
     await db.query(
-      `UPDATE timeslot SET Date = ?, StartTime = ?, EndTime = ? WHERE TimeslotID = ?`,
+      "UPDATE timeslot SET Date=?, StartTime=?, EndTime=? WHERE TimeslotID=?",
       [Date, StartTime, EndTime, timeslotId]
     );
   }
 
   async delete(timeslotId) {
     const db = await connectDB();
-
-    await db.query(
-      `UPDATE session SET TimeslotID = NULL WHERE TimeslotID = ?`,
-      [timeslotId]
-    );
-
-    await db.query(`DELETE FROM timeslot WHERE TimeslotID = ?`, [timeslotId]);
+    await db.query("DELETE FROM timeslot WHERE TimeslotID=?", [timeslotId]);
   }
 }
 

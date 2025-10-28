@@ -1,37 +1,41 @@
+// controllers/instructorCourseController.js
 const {
+  // COURSE
   createCourseService,
-  addUnitService,
-  createSessionService,
-  addLessonService,
-  addMaterialService,
+  updateCourseService,
+  deleteCourseService,
+  listInstructorCoursesService,
   submitCourseService,
   approveCourseService,
   publishCourseService,
-  addTimeslotService,
-  getCourseDetailService,
-  updateCourseService,
-  deleteCourseService,
+
+  // UNIT
+  addUnitService,
   updateUnitService,
   deleteUnitService,
-  updateSessionService,
-  deleteSessionService,
+
+  // LESSON
+  addLessonService,
   updateLessonService,
   deleteLessonService,
+
+  // MATERIAL
+  addMaterialService,
   updateMaterialService,
   deleteMaterialService,
-  updateTimeslotService,
-  deleteTimeslotService,
-  listInstructorCoursesService,
+
+  // DETAIL
+  getCourseDetailService,
 } = require("../services/instructorCourseService");
 
-// ======================= COURSE =======================
+/* ======================= COURSE ======================= */
 const listInstructorCourses = async (req, res) => {
   try {
-    const instructorId = req.user.id;
+    const instructorId = Number(req.user.id); // id = InstructorID ở middleware
     const courses = await listInstructorCoursesService(instructorId);
     res.json(courses);
   } catch (err) {
-    console.error(err);
+    console.error("listInstructorCourses error:", err);
     res.status(err.status || 500).json({
       message: err.message || "Lỗi khi lấy danh sách khóa học",
     });
@@ -40,6 +44,7 @@ const listInstructorCourses = async (req, res) => {
 
 const createCourse = async (req, res) => {
   try {
+    // body phải dùng Fee thay vì TuitionFee theo DB
     const course = await createCourseService(req.body);
     res.status(201).json({ message: "Course created", course });
   } catch (error) {
@@ -50,8 +55,8 @@ const createCourse = async (req, res) => {
 
 const updateCourse = async (req, res) => {
   try {
-    const { courseId } = req.params;
-    const course = await updateCourseService(Number(courseId), req.body);
+    const courseId = Number(req.params.courseId);
+    const course = await updateCourseService(courseId, req.body);
     res.json({ message: "Course updated", course });
   } catch (error) {
     console.error("updateCourse error:", error);
@@ -61,8 +66,8 @@ const updateCourse = async (req, res) => {
 
 const deleteCourse = async (req, res) => {
   try {
-    const { courseId } = req.params;
-    const result = await deleteCourseService(Number(courseId));
+    const courseId = Number(req.params.courseId);
+    const result = await deleteCourseService(courseId);
     res.json(result);
   } catch (error) {
     console.error("deleteCourse error:", error);
@@ -70,11 +75,11 @@ const deleteCourse = async (req, res) => {
   }
 };
 
-// ======================= UNIT =======================
+/* ======================= UNIT ======================= */
 const addUnit = async (req, res) => {
   try {
-    const { courseId } = req.params;
-    const unit = await addUnitService(Number(courseId), req.body);
+    const courseId = Number(req.params.courseId);
+    const unit = await addUnitService(courseId, req.body);
     res.status(201).json({ message: "Unit added to course", unit });
   } catch (error) {
     console.error("addUnit error:", error);
@@ -84,12 +89,8 @@ const addUnit = async (req, res) => {
 
 const updateUnit = async (req, res) => {
   try {
-    const { courseId, unitId } = req.params;
-    const unit = await updateUnitService(
-      Number(courseId),
-      Number(unitId),
-      req.body
-    );
+    const unitId = Number(req.params.unitId);
+    const unit = await updateUnitService(unitId, req.body);
     res.json({ message: "Unit updated", unit });
   } catch (error) {
     console.error("updateUnit error:", error);
@@ -99,8 +100,8 @@ const updateUnit = async (req, res) => {
 
 const deleteUnit = async (req, res) => {
   try {
-    const { courseId, unitId } = req.params;
-    const result = await deleteUnitService(Number(courseId), Number(unitId));
+    const unitId = Number(req.params.unitId);
+    const result = await deleteUnitService(unitId);
     res.json(result);
   } catch (error) {
     console.error("deleteUnit error:", error);
@@ -108,105 +109,48 @@ const deleteUnit = async (req, res) => {
   }
 };
 
-// ======================= SESSION =======================
-const createSession = async (req, res) => {
-  try {
-    const { courseId } = req.params;
-    const session = await createSessionService(Number(courseId), req.body);
-    res.status(201).json({ message: "Session created", session });
-  } catch (error) {
-    console.error("createSession error:", error);
-    res.status(error.status || 400).json({ message: error.message });
-  }
-};
-
-const updateSession = async (req, res) => {
-  try {
-    const { courseId, sessionId } = req.params;
-    const session = await updateSessionService(
-      Number(courseId),
-      Number(sessionId),
-      req.body
-    );
-    res.json({ message: "Session updated", session });
-  } catch (error) {
-    console.error("updateSession error:", error);
-    res.status(error.status || 400).json({ message: error.message });
-  }
-};
-
-const deleteSession = async (req, res) => {
-  try {
-    const { courseId, sessionId } = req.params;
-    const result = await deleteSessionService(
-      Number(courseId),
-      Number(sessionId)
-    );
-    res.json(result);
-  } catch (error) {
-    console.error("deleteSession error:", error);
-    res.status(error.status || 400).json({ message: error.message });
-  }
-};
-
-// ======================= LESSION =======================
+/* ======================= LESSON ======================= */
+// KHÁC TRƯỚC: không còn sessionId, thêm Time; update/delete cần kèm unitId
 const addLesson = async (req, res) => {
   try {
-    const { courseId, unitId } = req.params;
-    const lesson = await addLessonService(
-      Number(courseId),
-      Number(unitId),
-      req.body
-    );
+    const unitId = Number(req.params.unitId);
+    const lesson = await addLessonService(unitId, req.body);
     res.status(201).json({ message: "Lesson added", lesson });
   } catch (error) {
     console.error("addLesson error:", error);
-    res
-      .status(error.status || 400)
-      .json({ message: error.message || "Add lesson failed" });
+    res.status(error.status || 400).json({ message: error.message });
   }
 };
 
 const updateLesson = async (req, res) => {
   try {
-    const { courseId, unitId, lessonId } = req.params;
-    const lesson = await updateLessonService(
-      Number(courseId),
-      Number(unitId),
-      Number(lessonId),
-      req.body
-    );
-    res.json({ message: "Lesson updated", lesson });
+    const unitId = Number(req.params.unitId);
+    const lessonId = Number(req.params.lessonId);
+    const result = await updateLessonService(lessonId, unitId, req.body);
+    res.json({ message: "Lesson updated", ...result });
   } catch (error) {
     console.error("updateLesson error:", error);
-    res
-      .status(error.status || 400)
-      .json({ message: error.message || "Update lesson failed" });
+    res.status(error.status || 400).json({ message: error.message });
   }
 };
 
 const deleteLesson = async (req, res) => {
   try {
-    const { courseId, unitId, lessonId } = req.params;
-    const result = await deleteLessonService(
-      Number(courseId),
-      Number(unitId),
-      Number(lessonId)
-    );
-    res.json(result); // { message: "Đã xóa lesson thành công" }
+    const unitId = Number(req.params.unitId);
+    const lessonId = Number(req.params.lessonId);
+    const result = await deleteLessonService(lessonId, unitId);
+    res.json(result);
   } catch (error) {
     console.error("deleteLesson error:", error);
-    res
-      .status(error.status || 400)
-      .json({ message: error.message || "Delete lesson failed" });
+    res.status(error.status || 400).json({ message: error.message });
   }
 };
 
-// ======================= MATERIAL =======================
+/* ======================= MATERIAL ======================= */
 const addMaterial = async (req, res) => {
   try {
-    const { courseId } = req.params;
-    const material = await addMaterialService(Number(courseId), req.body);
+    const courseId = Number(req.params.courseId);
+    const material = await addMaterialService(courseId, req.body);
     res.status(201).json({ message: "Material added", material });
   } catch (error) {
     console.error("addMaterial error:", error);
@@ -216,13 +160,9 @@ const addMaterial = async (req, res) => {
 
 const updateMaterial = async (req, res) => {
   try {
-    const { courseId, materialId } = req.params;
-    const material = await updateMaterialService(
-      Number(courseId),
-      Number(materialId),
-      req.body
-    );
-    res.json({ message: "Material updated", material });
+    const materialId = Number(req.params.materialId);
+    const result = await updateMaterialService(materialId, req.body);
+    res.json(result);
   } catch (error) {
     console.error("updateMaterial error:", error);
     res.status(error.status || 400).json({ message: error.message });
@@ -231,11 +171,8 @@ const updateMaterial = async (req, res) => {
 
 const deleteMaterial = async (req, res) => {
   try {
-    const { courseId, materialId } = req.params;
-    const result = await deleteMaterialService(
-      Number(courseId),
-      Number(materialId)
-    );
+    const materialId = Number(req.params.materialId);
+    const result = await deleteMaterialService(materialId);
     res.json(result);
   } catch (error) {
     console.error("deleteMaterial error:", error);
@@ -243,65 +180,11 @@ const deleteMaterial = async (req, res) => {
   }
 };
 
-// ======================= TIMESLOT =======================
-const addTimeslot = async (req, res) => {
-  try {
-    const courseId = Number(req.params.courseId);
-    const sessionId = Number(req.params.sessionId);
-    console.log("Params:", req.params);
-
-    const timeslot = await addTimeslotService(courseId, sessionId, req.body);
-    res.status(201).json({ message: "Timeslot added", timeslot });
-  } catch (error) {
-    console.error("addTimeslot error:", error);
-    res
-      .status(error.status || 400)
-      .json({ message: error.message || "Add timeslot failed" });
-  }
-};
-
-const updateTimeslot = async (req, res) => {
-  try {
-    const courseId = Number(req.params.courseId);
-    const sessionId = Number(req.params.sessionId);
-    const timeslotId = Number(req.params.timeslotId);
-
-    const timeslot = await updateTimeslotService(
-      courseId,
-      sessionId,
-      timeslotId,
-      req.body
-    );
-    res.json({ message: "Timeslot updated", timeslot });
-  } catch (error) {
-    console.error("updateTimeslot error:", error);
-    res
-      .status(error.status || 400)
-      .json({ message: error.message || "Update timeslot failed" });
-  }
-};
-
-const deleteTimeslot = async (req, res) => {
-  try {
-    const courseId = Number(req.params.courseId);
-    const sessionId = Number(req.params.sessionId);
-    const timeslotId = Number(req.params.timeslotId);
-
-    const result = await deleteTimeslotService(courseId, sessionId, timeslotId);
-    res.json(result);
-  } catch (error) {
-    console.error("deleteTimeslot error:", error);
-    res
-      .status(error.status || 400)
-      .json({ message: error.message || "Delete timeslot failed" });
-  }
-};
-
-// ======================= WORKFLOW & DETAIL =======================
+/* ======================= WORKFLOW & DETAIL ======================= */
 const submitCourse = async (req, res) => {
   try {
-    const { courseId } = req.params;
-    const result = await submitCourseService(Number(courseId));
+    const courseId = Number(req.params.courseId);
+    const result = await submitCourseService(courseId);
     res.json(result);
   } catch (error) {
     console.error("submitCourse error:", error);
@@ -311,8 +194,8 @@ const submitCourse = async (req, res) => {
 
 const approveCourse = async (req, res) => {
   try {
-    const { courseId } = req.params;
-    const result = await approveCourseService(Number(courseId));
+    const courseId = Number(req.params.courseId);
+    const result = await approveCourseService(courseId);
     res.json(result);
   } catch (error) {
     console.error("approveCourse error:", error);
@@ -322,8 +205,8 @@ const approveCourse = async (req, res) => {
 
 const publishCourse = async (req, res) => {
   try {
-    const { courseId } = req.params;
-    const result = await publishCourseService(Number(courseId));
+    const courseId = Number(req.params.courseId);
+    const result = await publishCourseService(courseId);
     res.json(result);
   } catch (error) {
     console.error("publishCourse error:", error);
@@ -333,8 +216,8 @@ const publishCourse = async (req, res) => {
 
 const getCourseDetail = async (req, res) => {
   try {
-    const { courseId } = req.params;
-    const detail = await getCourseDetailService(Number(courseId));
+    const courseId = Number(req.params.courseId);
+    const detail = await getCourseDetailService(courseId);
     res.json({ message: "Course detail", course: detail });
   } catch (error) {
     console.error("getCourseDetail error:", error);
@@ -343,27 +226,25 @@ const getCourseDetail = async (req, res) => {
 };
 
 module.exports = {
+  listInstructorCourses,
   createCourse,
   updateCourse,
   deleteCourse,
-  addUnit,
-  updateUnit,
-  deleteUnit,
-  createSession,
-  updateSession,
-  deleteSession,
-  addLesson,
-  updateLesson,
-  deleteLesson,
-  addMaterial,
-  updateMaterial,
-  deleteMaterial,
-  addTimeslot,
-  updateTimeslot,
-  deleteTimeslot,
   submitCourse,
   approveCourse,
   publishCourse,
+
+  addUnit,
+  updateUnit,
+  deleteUnit,
+
+  addLesson,
+  updateLesson,
+  deleteLesson,
+
+  addMaterial,
+  updateMaterial,
+  deleteMaterial,
+
   getCourseDetail,
-  listInstructorCourses,
 };

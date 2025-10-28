@@ -5,74 +5,41 @@ class InstructorSessionRepository {
   async listByInstructor(instructorId) {
     const db = await connectDB();
     const [rows] = await db.query(
-      `SELECT SessionID, Title, Description, InstructorID, ClassID, TimeslotID, CreatedDate, UpdatedDate
-       FROM session
-       WHERE InstructorID = ?`,
+      "SELECT * FROM session WHERE InstructorID = ?",
       [instructorId]
     );
     return rows.map((r) => new Session(r));
   }
-
   async findById(sessionId) {
     const db = await connectDB();
-    const [rows] = await db.query(
-      `SELECT SessionID, Title, Description, InstructorID, ClassID, TimeslotID, CreatedDate, UpdatedDate
-       FROM session
-       WHERE SessionID = ?`,
-      [sessionId]
-    );
+    const [rows] = await db.query("SELECT * FROM session WHERE SessionID = ?", [
+      sessionId,
+    ]);
     if (!rows.length) return null;
     return new Session(rows[0]);
   }
-
+  
   async create(data) {
     const db = await connectDB();
-    const { Title, Description, InstructorID, ClassID, TimeslotID } = data;
+    const { Title, Description, InstructorID } = data;
     const [result] = await db.query(
-      `INSERT INTO session (Title, Description, InstructorID, ClassID, TimeslotID)
-       VALUES (?, ?, ?, ?, ?)`,
-      [Title, Description, InstructorID, ClassID, TimeslotID]
+      "INSERT INTO session (Title, Description, InstructorID) VALUES (?, ?, ?)",
+      [Title, Description, InstructorID]
     );
-
-    const [rows] = await db.query(
-      `SELECT SessionID, Title, Description, InstructorID, ClassID, TimeslotID, CreatedDate, UpdatedDate
-       FROM session
-       WHERE SessionID = ?`,
-      [result.insertId]
-    );
-    return new Session(rows[0]);
+    return new Session({
+      SessionID: result.insertId,
+      Title,
+      Description,
+      InstructorID,
+    });
   }
 
   async update(sessionId, data) {
     const db = await connectDB();
-
-    const fields = [];
-    const values = [];
-
-    if (data.Title !== undefined) {
-      fields.push("Title=?");
-      values.push(data.Title);
-    }
-    if (data.Description !== undefined) {
-      fields.push("Description=?");
-      values.push(data.Description);
-    }
-    if (data.ClassID !== undefined) {
-      fields.push("ClassID=?");
-      values.push(data.ClassID);
-    }
-    if (data.TimeslotID !== undefined) {
-      fields.push("TimeslotID=?");
-      values.push(data.TimeslotID);
-    }
-
-    if (!fields.length) return;
-
-    values.push(sessionId);
-
+    const { Title, Description } = data;
     await db.query(
-      `UPDATE session SET ${fields.join(", ")} WHERE SessionID=?`,
-      values
+      "UPDATE session SET Title=?, Description=? WHERE SessionID=?",
+      [Title, Description, sessionId]
     );
   }
 
