@@ -152,12 +152,18 @@ const googleAuthCallback = (req, res, next) => {
       }
 
       try {
-        const { token } = await loginService(user.Email, null, "google");
+        // ✅ Sửa: Lấy cả token và user từ loginService
+        const { token, user: userWithRole } = await loginService(user.Email, null, "google");
+        
         const safeUser = {
-          Username: user.Username,
-          Email: user.Email,
+          Username: userWithRole.Username,
+          Email: userWithRole.Email,
           Provider: "google",
+          role: userWithRole.role // ✅ Thêm role vào response
         };
+        
+        console.log("Google login - User with role:", safeUser); // Debug
+        
         return res.redirect(buildOAuthRedirect("google", token, safeUser));
       } catch (e) {
         console.error("Error in Google callback:", e);
@@ -254,12 +260,18 @@ const facebookAuthCallback = (req, res, next) => {
       }
 
       try {
-        const { token } = await loginService(user.Email, null, "facebook");
+        // ✅ Sửa: Lấy cả token và user từ loginService
+        const { token, user: userWithRole } = await loginService(user.Email, null, "facebook");
+        
         const safeUser = {
-          Username: user.Username,
-          Email: user.Email,
+          Username: userWithRole.Username,
+          Email: userWithRole.Email,
           Provider: "facebook",
+          role: userWithRole.role // ✅ Thêm role vào response
         };
+        
+        console.log("Facebook login - User with role:", safeUser); // Debug
+        
         return res.redirect(buildOAuthRedirect("facebook", token, safeUser));
       } catch (e) {
         console.error("Error in Facebook callback:", e);
