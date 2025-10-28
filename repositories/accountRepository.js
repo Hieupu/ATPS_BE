@@ -43,10 +43,14 @@ class AccountRepository {
 async createLearner(accId) {
   const db = await connectDB();
   await db.query(
-    "INSERT INTO learner (AccID, FullName, DateOfBirth, ProfilePicture, Job, Address) VALUES (?, ?, ?, ?, ?, ?)",
-    [accId, null, null, null, null, null]
+    `INSERT INTO learner (AccID, FullName, DateOfBirth, ProfilePicture, Job, Address)
+     SELECT AccID, Username, NULL, NULL, NULL, NULL
+     FROM account
+     WHERE AccID = ?`,
+    [accId]
   );
 }
+
 
   async getFeaturesByAccountId(accountId) {
     const db = await connectDB();
