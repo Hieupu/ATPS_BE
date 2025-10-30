@@ -11,7 +11,8 @@ class ServiceError extends Error {
   }
 }
 
-// services/loginService.js
+// services/authService.js
+// services/authService.js
 const loginService = async (email, password, provider = "local") => {
   console.log("Login attempt for email:", email, "with provider:", provider);
 
@@ -21,9 +22,13 @@ const loginService = async (email, password, provider = "local") => {
     throw new ServiceError("User not found", 401);
   }
 
+  // Normalize provider case for comparison
+  const userProvider = user.Provider.toLowerCase();
+  const loginProvider = provider.toLowerCase();
+
   // Kiểm tra provider consistency
-  if (user.Provider !== provider) {
-    if (user.Provider === "local") {
+  if (userProvider !== loginProvider) {
+    if (userProvider === "local") {
       throw new ServiceError("This account requires password login", 401);
     } else {
       throw new ServiceError(`This account can only login via ${user.Provider}`, 401);
@@ -31,10 +36,11 @@ const loginService = async (email, password, provider = "local") => {
   }
 
   // Xác thực mật khẩu chỉ cho local
-  if (provider === "local") {
+  if (loginProvider === "local") {
     if (!password) {
       throw new ServiceError("Password is required for local login", 400);
     }
+
     const match = await bcrypt.compare(password, user.Password);
     if (!match) throw new ServiceError("Invalid credentials", 401);
   }
@@ -57,8 +63,8 @@ const loginService = async (email, password, provider = "local") => {
     { expiresIn: "1h" }
   );
 
-  return { 
-    token, 
+  return {
+    token,
     user: {
       ...user,
       role: role // Đảm bảo role được thêm vào user object
@@ -69,25 +75,43 @@ const loginService = async (email, password, provider = "local") => {
 // Hàm xác định role
 const determineUserRole = async (accountId) => {
   const db = await connectDB();
-  
+
   // Kiểm tra instructor
-  const [instructors] = await db.query("SELECT InstructorID FROM instructor WHERE AccID = ?", [accountId]);
-  if (instructors.length > 0) return 'instructor';
-  
+  const [instructors] = await db.query(
+    "SELECT InstructorID FROM instructor WHERE AccID = ?",
+    [accountId]
+  );
+  if (instructors.length > 0) return "instructor";
+
   // Kiểm tra learner
-  const [learners] = await db.query("SELECT LearnerID FROM learner WHERE AccID = ?", [accountId]);
-  if (learners.length > 0) return 'learner';
-  
+  const [learners] = await db.query(
+    "SELECT LearnerID FROM learner WHERE AccID = ?",
+    [accountId]
+  );
+  if (learners.length > 0) return "learner";
+
   // Kiểm tra parent
-  const [parents] = await db.query("SELECT ParentID FROM parent WHERE AccID = ?", [accountId]);
-  if (parents.length > 0) return 'parent';
-  
-  return 'unknown';
+  const [parents] = await db.query(
+    "SELECT ParentID FROM parent WHERE AccID = ?",
+    [accountId]
+  );
+  if (parents.length > 0) return "parent";
+
+  return "unknown";
 };
 
-const registerService = async ({ username, email, phone, password, provider = "local" }) => {
+const registerService = async ({
+  username,
+  email,
+  phone,
+  password,
+  provider = "local",
+}) => {
   if (!username || !email || !password) {
-    throw new ServiceError("Please enter complete information: username, email, password!", 400);
+    throw new ServiceError(
+      "Please enter complete information: username, email, password!",
+      400
+    );
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -106,7 +130,6 @@ const registerService = async ({ username, email, phone, password, provider = "l
   if (phone && !/^\d{9,11}$/.test(phone)) {
     throw new ServiceError("Invalid phone number (9–11 digits only)!", 400);
   }
-
 
   const existing = await accountRepository.findAccountByEmail(email);
   if (existing) {
