@@ -40,12 +40,24 @@ class ExamService {
     const total = questions.length || 1;
     const score = Number(((correct / total) * 100).toFixed(2));
     const feedback = `Đúng ${correct}/${total} câu.`;
-    return await examRepository.createExamResult({
+    const created = await examRepository.upsertExamResult({
       learnerId,
       examId,
       score,
       feedback,
     });
+    return created;
+  }
+
+  async getLatestResult(accId, examId) {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      "SELECT LearnerID FROM learner WHERE AccID = ?",
+      [accId]
+    );
+    const learnerId = rows?.[0]?.LearnerID;
+    if (!learnerId) throw new Error("Learner not found for this account");
+    return await examRepository.getLatestResultByLearnerExam(learnerId, examId);
   }
 }
 
