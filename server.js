@@ -4,10 +4,17 @@ const connectDB = require("./config/db");
 const router = require("./routes/routerAuth");
 const profileRoutes = require("./routes/profileRoutes");
 const courseRoutes = require("./routes/courseRoutes");
+const instructorRoutes = require("./routes/instructorRoutes");
+const scheduleRoutes = require("./routes/scheduleRoutes");
+const attendanceRoutes = require("./routes/attendanceRoutes");
+const progressRoutes = require("./routes/progressRoutes");
+const materialRoutes = require("./routes/materialRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
+const examRoutes = require("./routes/examRoutes");
 const passport = require("passport");
 const cors = require("cors");
-// const paymentRoutes = require("./routes/paymentRoutes");
-const instructorCourseRouter = require("./routes/instructorCourseRouter");
+const paymentRoutes = require("./routes/paymentRoutes");
+const instructorCourseRoutes = require("./routes/instructorCourseRouter");
 
 dotenv.config();
 const app = express();
@@ -28,8 +35,15 @@ app.use(passport.initialize());
 app.use("/api", router);
 app.use("/api/profile", profileRoutes);
 app.use("/api/courses", courseRoutes);
-// app.use("/api/payment", paymentRoutes);
-app.use("/api/instructor/courses", instructorCourseRouter);
+app.use("/api/instructors", instructorRoutes);
+app.use("/api/instructor/courses", instructorCourseRoutes);
+app.use("/api/schedule", scheduleRoutes);
+app.use("/api/attendance", attendanceRoutes);
+app.use("/api/progress", progressRoutes);
+app.use("/api/materials", materialRoutes);
+app.use("/api/payment", paymentRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/exams", examRoutes);
 
 const PORT = process.env.PORT || 9999;
 connectDB().then(() => {

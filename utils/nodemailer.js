@@ -30,7 +30,20 @@ const sendVerificationEmail = (userEmail, verificationCode) => {
   });
 };
 
+const sendEmail = async ({ to, subject, text, html, from }) => {
+  const mailOptions = {
+    from: from || process.env.USERNAME_GMAIL,
+    to,
+    subject,
+    text,
+    html,
+  };
+
+  return transporter.sendMail(mailOptions);
+};
+
 module.exports = {
   generateVerificationCode,
   sendVerificationEmail,
+  sendEmail,
 };

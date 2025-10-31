@@ -12,21 +12,21 @@ class ServiceError extends Error {
   }
 }
 
-async function resolveInstructorIdByAccId(accId) {
-  if (!accId) throw new ServiceError("Thiếu AccID từ token", 403);
-  const ins = await instructorRepository.findByAccountId(accId);
-  if (!ins) {
-    throw new ServiceError(
-      "Tài khoản chưa có hồ sơ giảng viên đã được duyệt",
-      403
-    );
-  }
-  return Number(ins.InstructorID);
-}
+// async function resolveInstructorIdByAccId(accId) {
+//   if (!accId) throw new ServiceError("Thiếu AccID từ token", 403);
+//   const ins = await instructorRepository.findByAccountId(accId);
+//   if (!ins) {
+//     throw new ServiceError(
+//       "Tài khoản chưa có hồ sơ giảng viên đã được duyệt",
+//       403
+//     );
+//   }
+//   return Number(ins.InstructorID);
+// }
 
 // ======================= COURSE =======================
 const listInstructorCoursesService = async (instructorId) => {
-  const courses = await courseRepository.findByInstructor(instructorId);
+  const courses = await courseRepository.listByInstructor(instructorId);
   if (!courses || courses.length === 0) {
     throw new ServiceError("Không tìm thấy khóa học nào", 404);
   }
@@ -77,11 +77,19 @@ const deleteCourseService = async (courseId) => {
       400
     );
 
-  await courseRepository.delete(courseId);
-  return { message: "Đã xóa khóa học thành công" };
+  await courseRepository.markAsDeleted(courseId);
+  return { message: "Khóa học đã được chuyển sang trạng thái deleted" };
 };
 
 // ======================= UNIT =======================
+const listUnitsByCourseService = async (courseId) => {
+  const course = await courseRepository.findById(courseId);
+  if (!course) throw new ServiceError("Course không tồn tại", 404);
+
+  const units = await unitRepository.listByCourse(courseId);
+  return { message: "Danh sách unit theo course", units };
+};
+
 const addUnitService = async (courseId, data) => {
   const course = await courseRepository.findById(courseId);
   if (!course) throw new ServiceError("Course không tồn tại", 404);
@@ -125,6 +133,13 @@ const deleteUnitService = async (unitId) => {
 };
 
 // ======================= LESSON =======================
+const listLessonsByUnitService = async (unitId) => {
+  const unit = await unitRepository.findById(unitId);
+  if (!unit) throw new ServiceError("Unit không tồn tại", 404);
+
+  const lessons = await lessonRepository.listByUnit(unitId);
+  return { message: "Danh sách lesson theo unit", lessons };
+};
 
 const addLessonService = async (unitId, data) => {
   const unit = await unitRepository.findById(unitId);
@@ -180,6 +195,14 @@ const deleteLessonService = async (lessonId, unitId) => {
 };
 
 // ======================= MATERIAL =======================
+const listMaterialsByCourseService = async (courseId) => {
+  const course = await courseRepository.findById(courseId);
+  if (!course) throw new ServiceError("Course không tồn tại", 404);
+
+  const materials = await materialRepository.listByCourse(courseId);
+  return { message: "Danh sách material theo course", materials };
+};
+
 const addMaterialService = async (courseId, data) => {
   const course = await courseRepository.findById(courseId);
   if (!course) throw new ServiceError("Course không tồn tại", 404);
@@ -261,14 +284,17 @@ module.exports = {
   approveCourseService,
   publishCourseService,
 
+  listUnitsByCourseService,
   addUnitService,
   updateUnitService,
   deleteUnitService,
 
+  listLessonsByUnitService,
   addLessonService,
   updateLessonService,
   deleteLessonService,
 
+  listMaterialsByCourseService,
   addMaterialService,
   updateMaterialService,
   deleteMaterialService,

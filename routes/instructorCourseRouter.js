@@ -8,6 +8,9 @@ const {
   approveCourse,
   publishCourse,
   getCourseDetail,
+  listUnitsByCourse,
+  listLessonsByUnit,
+  listMaterialsByCourse,
   addUnit,
   updateUnit,
   deleteUnit,
@@ -67,6 +70,12 @@ router.get(
 );
 
 // UNIT
+router.get(
+  "/courses/:courseId/units",
+  verifyToken,
+  authorizeRole("instructor", "admin"),
+  listUnitsByCourse
+);
 router.post(
   "/courses/:courseId/units",
   verifyToken,
@@ -86,7 +95,13 @@ router.delete(
   deleteUnit
 );
 
-// LESSON (không còn sessionId)
+// LESSON
+router.get(
+  "/units/:unitId/lessons",
+  verifyToken,
+  authorizeRole("instructor", "admin"),
+  listLessonsByUnit
+);
 router.post(
   "/units/:unitId/lessons",
   verifyToken,
@@ -107,6 +122,12 @@ router.delete(
 );
 
 // MATERIAL
+router.get(
+  "/courses/:courseId/materials",
+  verifyToken,
+  authorizeRole("instructor", "admin"),
+  listMaterialsByCourse
+);
 router.post(
   "/courses/:courseId/materials",
   verifyToken,

@@ -3,15 +3,17 @@ const crypto = require("crypto");
 const bcrypt = require("bcryptjs");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const FacebookStrategy = require("passport-facebook").Strategy;
-const { loginService,registerService  } = require("../services/authService");
+const { loginService, registerService } = require("../services/authService");
 const accountRepository = require("../repositories/accountRepository");
 
-const { sendVerificationEmail, generateVerificationCode } = require("../utils/nodemailer");
+const {
+  sendVerificationEmail,
+  generateVerificationCode,
+} = require("../utils/nodemailer");
 const jwt = require("jsonwebtoken");
 const connectDB = require("../config/db");
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
-
 
 // controllers/authController.js
 const login = async (req, res) => {
@@ -19,15 +21,17 @@ const login = async (req, res) => {
     const { email, password } = req.body;
 
     const { token, user } = await loginService(email, password);
-    const { Username, Email, role } = user; // Thêm role
-    
+    const { AccID, Username, Email, Phone, role } = user;
+
     res.json({
       message: "Login successful",
       token,
-      user: { 
-        Username, 
-        Email, 
-        role // Thêm role vào response
+      user: {
+        AccID, // Thêm AccID
+        Username,
+        Email,
+        Phone,
+        role,
       },
     });
   } catch (error) {
@@ -61,7 +65,10 @@ const register = async (req, res) => {
   } catch (error) {
     console.error("Register error:", error);
 
-    if (error.code === "ER_DUP_ENTRY" || /duplicate/i.test(error.message || "")) {
+    if (
+      error.code === "ER_DUP_ENTRY" ||
+      /duplicate/i.test(error.message || "")
+    ) {
       return res.status(400).json({ message: "Email has been registered!" });
     }
 
@@ -110,7 +117,7 @@ passport.use(
             password: hashedPassword,
             provider: "google",
           });
-          
+
           const newUser = await accountRepository.findAccountByEmail(email);
           console.log("Created new Google user:", {
             email,
@@ -152,12 +159,18 @@ const googleAuthCallback = (req, res, next) => {
       }
 
       try {
-        const { token } = await loginService(user.Email, null, "google");
+        // ✅ Sửa: Lấy cả token và user từ loginService
+        const { token, user: userWithRole } = await loginService(user.Email, null, "google");
+        
         const safeUser = {
-          Username: user.Username,
-          Email: user.Email,
+          Username: userWithRole.Username,
+          Email: userWithRole.Email,
           Provider: "google",
+          role: userWithRole.role // ✅ Thêm role vào response
         };
+        
+        console.log("Google login - User with role:", safeUser); // Debug
+        
         return res.redirect(buildOAuthRedirect("google", token, safeUser));
       } catch (e) {
         console.error("Error in Google callback:", e);
@@ -254,12 +267,18 @@ const facebookAuthCallback = (req, res, next) => {
       }
 
       try {
-        const { token } = await loginService(user.Email, null, "facebook");
+        // ✅ Sửa: Lấy cả token và user từ loginService
+        const { token, user: userWithRole } = await loginService(user.Email, null, "facebook");
+        
         const safeUser = {
-          Username: user.Username,
-          Email: user.Email,
+          Username: userWithRole.Username,
+          Email: userWithRole.Email,
           Provider: "facebook",
+          role: userWithRole.role // ✅ Thêm role vào response
         };
+        
+        console.log("Facebook login - User with role:", safeUser); // Debug
+        
         return res.redirect(buildOAuthRedirect("facebook", token, safeUser));
       } catch (e) {
         console.error("Error in Facebook callback:", e);
@@ -268,7 +287,6 @@ const facebookAuthCallback = (req, res, next) => {
     }
   )(req, res, next);
 };
-
 
 const verificationCodes = new Map();
 const forgotPassword = async (req, res) => {
@@ -282,7 +300,9 @@ const forgotPassword = async (req, res) => {
     const user = await accountRepository.findAccountByEmail(email);
 
     if (!user) {
-      return res.status(404).json({ message: "Email không tồn tại trong hệ thống!" });
+      return res
+        .status(404)
+        .json({ message: "Email không tồn tại trong hệ thống!" });
     }
 
     const verificationCode = generateVerificationCode();
@@ -290,14 +310,14 @@ const forgotPassword = async (req, res) => {
     verificationCodes.set(email, {
       code: verificationCode,
       expiresAt: Date.now() + 15 * 60 * 1000,
-      userId: user.AccID
+      userId: user.AccID,
     });
     setTimeout(() => verificationCodes.delete(email), 15 * 60 * 1000);
     sendVerificationEmail(email, verificationCode);
 
     res.json({
       message: "Mã xác thực đã được gửi đến email của bạn!",
-      email: email
+      email: email,
     });
   } catch (error) {
     console.error("Forgot password error:", error);
@@ -310,13 +330,17 @@ const verifyResetCode = async (req, res) => {
     const { email, code } = req.body;
 
     if (!email || !code) {
-      return res.status(400).json({ message: "Vui lòng nhập email và mã xác thực!" });
+      return res
+        .status(400)
+        .json({ message: "Vui lòng nhập email và mã xác thực!" });
     }
 
     const storedData = verificationCodes.get(email);
 
     if (!storedData) {
-      return res.status(400).json({ message: "Mã xác thực không tồn tại hoặc đã hết hạn!" });
+      return res
+        .status(400)
+        .json({ message: "Mã xác thực không tồn tại hoặc đã hết hạn!" });
     }
 
     if (Date.now() > storedData.expiresAt) {
@@ -338,7 +362,7 @@ const verifyResetCode = async (req, res) => {
 
     res.json({
       message: "Xác thực thành công!",
-      resetToken: resetToken
+      resetToken: resetToken,
     });
   } catch (error) {
     console.error("Verify code error:", error);
@@ -351,7 +375,9 @@ const resetPassword = async (req, res) => {
     const { resetToken, newPassword } = req.body;
 
     if (!resetToken || !newPassword) {
-      return res.status(400).json({ message: "Vui lòng nhập token và mật khẩu mới!" });
+      return res
+        .status(400)
+        .json({ message: "Vui lòng nhập token và mật khẩu mới!" });
     }
 
     const decoded = jwt.verify(resetToken, process.env.JWT_SECRET + "_reset");
@@ -366,13 +392,11 @@ const resetPassword = async (req, res) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     const db = await connectDB();
-    
 
     const [result] = await db.query(
-      "UPDATE account SET Password = ? WHERE AccID = ?", 
+      "UPDATE account SET Password = ? WHERE AccID = ?",
       [hashedPassword, decoded.userId]
     );
-
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Không tìm thấy người dùng!" });
@@ -383,7 +407,9 @@ const resetPassword = async (req, res) => {
     });
   } catch (error) {
     if (error.name === "TokenExpiredError") {
-      return res.status(400).json({ message: "Token đã hết hạn! Vui lòng thực hiện lại quy trình." });
+      return res.status(400).json({
+        message: "Token đã hết hạn! Vui lòng thực hiện lại quy trình.",
+      });
     }
     if (error.name === "JsonWebTokenError") {
       return res.status(400).json({ message: "Token không hợp lệ!" });

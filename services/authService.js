@@ -11,9 +11,10 @@ class ServiceError extends Error {
   }
 }
 
-// services/loginService.js
+// services/authService.js
+// services/authService.js
 const loginService = async (email, password, provider = "local") => {
-  console.log("Login attempt for email:", email);
+  console.log("Login attempt for email:", email, "with provider:", provider);
 
   const user = await accountRepository.findAccountByEmail(email);
   console.log("User found:", user);
@@ -21,35 +22,42 @@ const loginService = async (email, password, provider = "local") => {
     throw new ServiceError("User not found", 401);
   }
 
-  if (user.Provider !== "local") {
-    if (provider !== user.Provider) {
-      throw new ServiceError(
-        `This account can only login via ${user.Provider}`,
-        401
-      );
+  // Normalize provider case for comparison
+  const userProvider = user.Provider.toLowerCase();
+  const loginProvider = provider.toLowerCase();
+
+  // Kiểm tra provider consistency
+  if (userProvider !== loginProvider) {
+    if (userProvider === "local") {
+      throw new ServiceError("This account requires password login", 401);
+    } else {
+      throw new ServiceError(`This account can only login via ${user.Provider}`, 401);
     }
-  } else {
+  }
+
+  // Xác thực mật khẩu chỉ cho local
+  if (loginProvider === "local") {
     if (!password) {
       throw new ServiceError("Password is required for local login", 400);
     }
+
     const match = await bcrypt.compare(password, user.Password);
     if (!match) throw new ServiceError("Invalid credentials", 401);
   }
 
-  const featureNames = await accountRepository.getFeaturesByAccountId(
-    user.AccID
-  );
-
-  // Xác định role
+  // LUÔN xác định role cho cả local và social
   const role = await determineUserRole(user.AccID);
+  console.log("Determined role for user:", role); // Debug log
 
+  const featureNames = await accountRepository.getFeaturesByAccountId(user.AccID);
+  
   const token = jwt.sign(
     {
       id: user.AccID,
       email: user.Email,
       username: user.Username,
       features: featureNames,
-      role: role, // Thêm role vào token
+      role: role // Đảm bảo role được thêm vào token
     },
     process.env.JWT_SECRET,
     { expiresIn: "1h" }
@@ -59,8 +67,8 @@ const loginService = async (email, password, provider = "local") => {
     token,
     user: {
       ...user,
-      role: role, // Thêm role vào user object
-    },
+      role: role // Đảm bảo role được thêm vào user object
+    } 
   };
 };
 

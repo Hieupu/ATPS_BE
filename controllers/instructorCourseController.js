@@ -10,16 +10,19 @@ const {
   publishCourseService,
 
   // UNIT
+  listUnitsByCourseService,
   addUnitService,
   updateUnitService,
   deleteUnitService,
 
   // LESSON
+  listLessonsByUnitService,
   addLessonService,
   updateLessonService,
   deleteLessonService,
 
   // MATERIAL
+  listMaterialsByCourseService,
   addMaterialService,
   updateMaterialService,
   deleteMaterialService,
@@ -31,7 +34,7 @@ const {
 /* ======================= COURSE ======================= */
 const listInstructorCourses = async (req, res) => {
   try {
-    const instructorId = Number(req.user.id); // id = InstructorID ở middleware
+    const instructorId = Number(req.user.id);
     const courses = await listInstructorCoursesService(instructorId);
     res.json(courses);
   } catch (err) {
@@ -76,6 +79,17 @@ const deleteCourse = async (req, res) => {
 };
 
 /* ======================= UNIT ======================= */
+const listUnitsByCourse = async (req, res) => {
+  try {
+    const courseId = Number(req.params.courseId);
+    const result = await listUnitsByCourseService(courseId);
+    res.json(result);
+  } catch (error) {
+    console.error("listUnitsByCourse error:", error);
+    res.status(error.status || 400).json({ message: error.message });
+  }
+};
+
 const addUnit = async (req, res) => {
   try {
     const courseId = Number(req.params.courseId);
@@ -110,7 +124,16 @@ const deleteUnit = async (req, res) => {
 };
 
 /* ======================= LESSON ======================= */
-// KHÁC TRƯỚC: không còn sessionId, thêm Time; update/delete cần kèm unitId
+const listLessonsByUnit = async (req, res) => {
+  try {
+    const unitId = Number(req.params.unitId);
+    const result = await listLessonsByUnitService(unitId);
+    res.json(result);
+  } catch (error) {
+    console.error("listLessonsByUnit error:", error);
+    res.status(error.status || 400).json({ message: error.message });
+  }
+};
 const addLesson = async (req, res) => {
   try {
     const unitId = Number(req.params.unitId);
@@ -147,6 +170,16 @@ const deleteLesson = async (req, res) => {
 };
 
 /* ======================= MATERIAL ======================= */
+const listMaterialsByCourse = async (req, res) => {
+  try {
+    const courseId = Number(req.params.courseId);
+    const result = await listMaterialsByCourseService(courseId);
+    res.json(result);
+  } catch (error) {
+    console.error("listMaterialsByCourse error:", error);
+    res.status(error.status || 400).json({ message: error.message });
+  }
+};
 const addMaterial = async (req, res) => {
   try {
     const courseId = Number(req.params.courseId);
@@ -234,14 +267,17 @@ module.exports = {
   approveCourse,
   publishCourse,
 
+  listUnitsByCourse,
   addUnit,
   updateUnit,
   deleteUnit,
 
+  listLessonsByUnit,
   addLesson,
   updateLesson,
   deleteLesson,
 
+  listMaterialsByCourse,
   addMaterial,
   updateMaterial,
   deleteMaterial,

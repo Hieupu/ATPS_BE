@@ -11,10 +11,13 @@ class InstructorCourseRepository {
     return new Course(rows[0]);
   }
 
-  async findByInstructor(instructorId) {
+  async listByInstructor(instructorId) {
     const db = await connectDB();
     const [rows] = await db.query(
-      "SELECT * FROM course WHERE InstructorID = ? ORDER BY CourseID DESC",
+      `SELECT * 
+       FROM course 
+       WHERE InstructorID = ? AND Status <> 'deleted'
+       ORDER BY CourseID DESC`,
       [instructorId]
     );
     return rows.map((r) => new Course(r));
@@ -27,7 +30,7 @@ class InstructorCourseRepository {
       Title,
       Description,
       Duration,
-      Fee, // đổi từ TuitionFee -> Fee
+      Fee,
       Status = "draft",
     } = courseData;
 
@@ -64,9 +67,11 @@ class InstructorCourseRepository {
     ]);
   }
 
-  async delete(courseId) {
+  async markAsDeleted(courseId) {
     const db = await connectDB();
-    await db.query("DELETE FROM course WHERE CourseID=?", [courseId]);
+    await db.query("UPDATE course SET Status = 'deleted' WHERE CourseID = ?", [
+      courseId,
+    ]);
   }
 }
 
