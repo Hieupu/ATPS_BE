@@ -37,6 +37,18 @@ class ExamController {
       return res.status(400).json({ message: e.message || "Bad request" });
     }
   }
+
+  async getLatestResult(req, res) {
+    try {
+      const accId = req.user?.id;
+      const { examId } = req.params;
+      if (!accId) return res.status(401).json({ message: "Unauthorized" });
+      const result = await examService.getLatestResult(accId, examId);
+      return res.json({ result });
+    } catch (e) {
+      return res.status(400).json({ message: e.message || "Bad request" });
+    }
+  }
 }
 
 module.exports = new ExamController();

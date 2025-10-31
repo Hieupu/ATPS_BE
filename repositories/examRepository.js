@@ -37,6 +37,40 @@ class ExamRepository {
       LearnerID: learnerId,
     };
   }
+
+  async getLatestResultByLearnerExam(learnerId, examId) {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      `SELECT ResultID, Score, Feedback, SubmissionDate, LearnerID, ExamID
+       FROM examresult
+       WHERE LearnerID = ? AND ExamID = ?
+       ORDER BY SubmissionDate DESC, ResultID DESC
+       LIMIT 1`,
+      [learnerId, examId]
+    );
+    return rows?.[0] || null;
+  }
+
+  async upsertExamResult({ learnerId, examId, score, feedback }) {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      `SELECT ResultID FROM examresult WHERE LearnerID = ? AND ExamID = ? LIMIT 1`,
+      [learnerId, examId]
+    );
+    if (rows && rows.length > 0) {
+      const resultId = rows[0].ResultID;
+      await db.query(
+        `UPDATE examresult SET Score = ?, Feedback = ?, SubmissionDate = NOW() WHERE ResultID = ?`,
+        [score, feedback || null, resultId]
+      );
+      const [updated] = await db.query(
+        `SELECT ResultID, Score, Feedback, SubmissionDate, LearnerID, ExamID FROM examresult WHERE ResultID = ?`,
+        [resultId]
+      );
+      return updated?.[0] || null;
+    }
+    return await this.createExamResult({ learnerId, examId, score, feedback });
+  }
 }
 
 module.exports = new ExamRepository();
