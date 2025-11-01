@@ -11,10 +11,10 @@ const progressRoutes = require("./routes/progressRoutes");
 const materialRoutes = require("./routes/materialRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const examRoutes = require("./routes/examRoutes");
+const assignmentRoutes = require("./routes/assignmentRoutes");
 const passport = require("passport");
 const cors = require("cors");
-const paymentRoutes = require("./routes/paymentRoutes");
-const instructorCourseRoutes = require("./routes/instructorCourseRouter");
+// const paymentRoutes = require("./routes/paymentRoutes");
 
 dotenv.config();
 const app = express();
@@ -41,9 +41,10 @@ app.use("/api/schedule", scheduleRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/progress", progressRoutes);
 app.use("/api/materials", materialRoutes);
-app.use("/api/payment", paymentRoutes);
+// app.use("/api/payment", paymentRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/exams", examRoutes);
+app.use("/api/instructor", assignmentRoutes);
 
 const PORT = process.env.PORT || 9999;
 connectDB().then(() => {

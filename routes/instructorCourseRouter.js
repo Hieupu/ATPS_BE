@@ -22,6 +22,7 @@ const {
   deleteMaterial,
 } = require("../controllers/instructorCourseController");
 const { verifyToken, authorizeRole } = require("../middlewares/middware");
+const uploadFile = require("../middlewares/uploadFile");
 
 const router = express.Router();
 // COURSE
@@ -106,12 +107,14 @@ router.post(
   "/units/:unitId/lessons",
   verifyToken,
   authorizeRole("instructor"),
+  uploadFile,
   addLesson
 );
 router.put(
   "/units/:unitId/lessons/:lessonId",
   verifyToken,
   authorizeRole("instructor"),
+  uploadFile,
   updateLesson
 );
 router.delete(

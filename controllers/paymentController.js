@@ -116,10 +116,10 @@ const createPaymentLink = async (req, res) => {
     // Kiểm tra lớp học và lấy thông tin thanh toán
     // Logic giá tiền: Nếu class có Fee thì lấy từ class, nếu không thì lấy từ course
     const [classData] = await db.query(
-      `SELECT cl.*, c.Title as CourseTitle, 
+      `SELECT cl.*, c.Title as CourseTitle,
        CASE WHEN cl.Fee IS NOT NULL THEN cl.Fee ELSE COALESCE(c.Fee, 0) END as TuitionFee
-       FROM class cl 
-       LEFT JOIN course c ON cl.CourseID = c.CourseID 
+       FROM class cl
+       LEFT JOIN course c ON cl.CourseID = c.CourseID
        WHERE cl.ClassID = ? AND cl.Status = 'active'`,
       [classID]
     );
@@ -261,22 +261,22 @@ const updatePaymentStatus = async (req, res) => {
     // Tìm enrollment theo OrderCode trước, fallback theo EnrollmentID nếu orderCode là số
     let enrollments = [];
     const [rowsByCode] = await db.query(
-      `SELECT e.*, 
-       CASE WHEN cl.Fee IS NOT NULL THEN cl.Fee ELSE COALESCE(c.Fee, 0) END as TuitionFee 
-       FROM enrollment e 
-       LEFT JOIN class cl ON e.ClassID = cl.ClassID 
-       LEFT JOIN course c ON cl.CourseID = c.CourseID 
+      `SELECT e.*,
+       CASE WHEN cl.Fee IS NOT NULL THEN cl.Fee ELSE COALESCE(c.Fee, 0) END as TuitionFee
+       FROM enrollment e
+       LEFT JOIN class cl ON e.ClassID = cl.ClassID
+       LEFT JOIN course c ON cl.CourseID = c.CourseID
        WHERE e.OrderCode = ?`,
       [orderCode]
     );
     enrollments = rowsByCode;
     if (!enrollments.length && /^\d+$/.test(String(orderCode))) {
       const [rowsById] = await db.query(
-        `SELECT e.*, 
-         CASE WHEN cl.Fee IS NOT NULL THEN cl.Fee ELSE COALESCE(c.Fee, 0) END as TuitionFee 
-         FROM enrollment e 
-         LEFT JOIN class cl ON e.ClassID = cl.ClassID 
-         LEFT JOIN course c ON cl.CourseID = c.CourseID 
+        `SELECT e.*,
+         CASE WHEN cl.Fee IS NOT NULL THEN cl.Fee ELSE COALESCE(c.Fee, 0) END as TuitionFee
+         FROM enrollment e
+         LEFT JOIN class cl ON e.ClassID = cl.ClassID
+         LEFT JOIN course c ON cl.CourseID = c.CourseID
          WHERE e.EnrollmentID = ?`,
         [orderCode]
       );
@@ -302,8 +302,8 @@ const updatePaymentStatus = async (req, res) => {
 
     // KIỂM TRA KỸ HƠN: Tìm payment theo EnrollmentID
     const [existingPayments] = await db.query(
-      `SELECT p.* FROM payment p 
-       JOIN enrollment e ON p.EnrollmentID = e.EnrollmentID 
+      `SELECT p.* FROM payment p
+       JOIN enrollment e ON p.EnrollmentID = e.EnrollmentID
        WHERE e.EnrollmentID = ?`,
       [enrollmentId]
     );
@@ -335,7 +335,7 @@ const updatePaymentStatus = async (req, res) => {
 
       // THANH TOÁN THÀNH CÔNG: Ghi nhận payment trước
       await db.query(
-        `INSERT INTO payment (Amount, PaymentMethod, PaymentDate, EnrollmentID) 
+        `INSERT INTO payment (Amount, PaymentMethod, PaymentDate, EnrollmentID)
          VALUES (?, ?, NOW(), ?)`,
         [paymentAmount, "PayOS", enrollmentId]
       );

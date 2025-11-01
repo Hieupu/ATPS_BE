@@ -3,7 +3,7 @@ const unitRepository = require("../repositories/instructorUnitRepository");
 const lessonRepository = require("../repositories/instructorLessonRepository"); // renamed
 const materialRepository = require("../repositories/InstructorMaterialRepository");
 const instructorRepository = require("../repositories/instructorRepository");
-
+const uploadToCloudinary = require("../utils/uploadCloudinary");
 // ====================== Common ======================
 class ServiceError extends Error {
   constructor(message, status = 400) {
@@ -43,7 +43,7 @@ const createCourseService = async (data) => {
     Title,
     Description,
     Duration,
-    Fee, // Fee!
+    Fee,
     Status: "draft",
   });
 };
@@ -52,7 +52,7 @@ const updateCourseService = async (courseId, data) => {
   const course = await courseRepository.findById(courseId);
   if (!course) throw new ServiceError("Course không tồn tại", 404);
 
-  if (!["draft", "rejected"].includes(course.Status))
+  if (!["draft", "rejected", "pending"].includes(course.Status))
     throw new ServiceError(
       "Chỉ có thể chỉnh sửa khi course ở trạng thái draft hoặc rejected",
       400
@@ -108,7 +108,7 @@ const updateUnitService = async (unitId, data) => {
   if (!unit) throw new ServiceError("Unit không tồn tại", 404);
 
   const course = await courseRepository.findById(unit.CourseID);
-  if (!["draft", "rejected"].includes(course.Status))
+  if (!["draft", "rejected", "pending"].includes(course.Status))
     throw new ServiceError(
       "Không thể sửa Unit khi course đã được duyệt hoặc publish",
       400
@@ -141,39 +141,50 @@ const listLessonsByUnitService = async (unitId) => {
   return { message: "Danh sách lesson theo unit", lessons };
 };
 
-const addLessonService = async (unitId, data) => {
+const addLessonService = async (unitId, data, file) => {
   const unit = await unitRepository.findById(unitId);
   if (!unit) throw new ServiceError("Unit không tồn tại", 404);
 
   const course = await courseRepository.findById(unit.CourseID);
-  if (!["draft", "rejected"].includes(course.Status))
+  if (!["draft", "rejected", "pending"].includes(course.Status))
     throw new ServiceError(
       "Không thể thêm Lesson khi course đã được duyệt hoặc publish",
       400
     );
 
-  const { Title, Time, Type, FileURL } = data || {};
+  const { Title, Time, Type } = data || {};
   if (!Title) throw new ServiceError("Title là bắt buộc", 400);
 
-  return await lessonRepository.create(unitId, { Title, Time, Type, FileURL });
+  let fileURL = data.FileURL;
+  if (file) fileURL = await uploadToCloudinary(file.buffer, "lessons");
+
+  return await lessonRepository.create(unitId, {
+    Title,
+    Time,
+    Type,
+    FileURL: fileURL,
+  });
 };
 
-const updateLessonService = async (lessonId, unitId, data) => {
+const updateLessonService = async (lessonId, unitId, data, file) => {
   const unit = await unitRepository.findById(unitId);
   if (!unit) throw new ServiceError("Unit không tồn tại", 404);
 
   const course = await courseRepository.findById(unit.CourseID);
-  if (!["draft", "rejected"].includes(course.Status))
+  if (!["draft", "rejected", "pending"].includes(course.Status))
     throw new ServiceError(
       "Không thể sửa Lesson khi course đã được duyệt hoặc publish",
       400
     );
 
+  let fileURL = data.FileURL;
+  if (file) fileURL = await uploadToCloudinary(file.buffer, "lessons");
+
   const patch = {
     Title: data.Title,
     Time: data.Time,
     Type: data.Type,
-    FileURL: data.FileURL,
+    FileURL: fileURL,
   };
   await lessonRepository.update(lessonId, unitId, patch);
   return { message: "Đã cập nhật lesson" };

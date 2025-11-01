@@ -137,7 +137,7 @@ const listLessonsByUnit = async (req, res) => {
 const addLesson = async (req, res) => {
   try {
     const unitId = Number(req.params.unitId);
-    const lesson = await addLessonService(unitId, req.body);
+    const lesson = await addLessonService(unitId, req.body, req.file);
     res.status(201).json({ message: "Lesson added", lesson });
   } catch (error) {
     console.error("addLesson error:", error);
@@ -149,7 +149,12 @@ const updateLesson = async (req, res) => {
   try {
     const unitId = Number(req.params.unitId);
     const lessonId = Number(req.params.lessonId);
-    const result = await updateLessonService(lessonId, unitId, req.body);
+    const result = await updateLessonService(
+      lessonId,
+      unitId,
+      req.body,
+      req.file
+    );
     res.json({ message: "Lesson updated", ...result });
   } catch (error) {
     console.error("updateLesson error:", error);
