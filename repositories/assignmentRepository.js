@@ -1,14 +1,14 @@
 const connectDB = require("../config/db");
 
 class AssignmentRepository {
+  // Kiểm tra quyền với Unit
   async canInstructorAccessUnit(instructorAccId, unitId) {
     const db = await connectDB();
     const query = `
       SELECT 1
       FROM unit u
       JOIN course co ON u.CourseID = co.CourseID
-      JOIN class cl ON co.CourseID = cl.CourseID
-      JOIN instructor i ON cl.InstructorID = i.InstructorID
+      JOIN instructor i ON co.InstructorID = i.InstructorID
       WHERE i.AccID = ? AND u.UnitID = ?
       LIMIT 1
     `;
@@ -16,16 +16,13 @@ class AssignmentRepository {
     return rows.length > 0;
   }
 
-  // Giảng viên có quyền với Assignment này không?
+  // Kiểm tra quyền với Assignment
   async canInstructorAccessAssignment(instructorAccId, assignmentId) {
     const db = await connectDB();
     const query = `
       SELECT 1
       FROM assignment a
-      JOIN unit u ON a.UnitID = u.UnitID
-      JOIN course co ON u.CourseID = co.CourseID
-      JOIN class cl ON co.CourseID = cl.CourseID
-      JOIN instructor i ON cl.InstructorID = i.InstructorID
+      JOIN instructor i ON a.InstructorID = i.InstructorID
       WHERE i.AccID = ? AND a.AssignmentID = ?
       LIMIT 1
     `;
@@ -33,97 +30,172 @@ class AssignmentRepository {
     return rows.length > 0;
   }
 
-  // Tạo bài tập theo schema mới (có Status NOT NULL)
-  async createAssignment({ title, description, deadline, type, unitId, status }) {
+  // Tìm UnitID theo Title (của giảng viên hiện tại)
+  async findUnitIdByTitleForInstructor(instructorAccId, unitTitle) {
+    const db = await connectDB();
+    const query = `
+      SELECT u.UnitID
+      FROM unit u
+      JOIN course co ON u.CourseID = co.CourseID
+      JOIN instructor i ON co.InstructorID = i.InstructorID
+      WHERE i.AccID = ? AND u.Title = ?
+      LIMIT 1
+    `;
+    const [rows] = await db.query(query, [instructorAccId, unitTitle]);
+    return rows[0]?.UnitID ?? null;
+  }
+
+  // Tạo assignment (draft hoặc active)
+  async createAssignment({ instructorId, title, description, deadline, type, unitId, status, fileURL }) {
     const db = await connectDB();
     const insert = `
       INSERT INTO assignment
-      (Title, Description, Deadline, Type, UnitID, Status)
-      VALUES (?, ?, ?, ?, ?, ?)
+      (InstructorID, UnitID, Title, Description, Deadline, Type, Status, FileURL)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
     const [result] = await db.query(insert, [
+      instructorId,
+      unitId ?? null,
       title,
       description,
-      deadline,
+      deadline ?? null,
       type,
-      unitId ?? null,
-      status, // "active" mặc định
+      status,
+      fileURL ?? null,
     ]);
 
-    return {
-      AssignmentID: result.insertId,
-      Title: title,
-      Description: description,
-      Deadline: deadline,
-      Type: type,
-      UnitID: unitId ?? null,
-      Status: status,
-    };
+    return this.getAssignmentById(result.insertId);
   }
 
-  // Cập nhật (partial update — chỉ cột được truyền)
-  async updateAssignment(assignmentId, { title, description, deadline, type, unitId, status }) {
+  // Cập nhật assignment (partial update)
+  async updateAssignment(assignmentId, updates) {
     const db = await connectDB();
+    if (Object.prototype.hasOwnProperty.call(updates, "unitId")) {
+      updates.UnitID = updates.unitId;
+      delete updates.unitId;
+    }
+
+    const allowed = new Set([
+      "Title", "Description", "Deadline", "Type", "Status",
+      "FileURL", "UnitID"
+    ]);
     const fields = [];
     const params = [];
-
-    if (title !== undefined) { fields.push("Title = ?"); params.push(title); }
-    if (description !== undefined) { fields.push("Description = ?"); params.push(description); }
-    if (deadline !== undefined) { fields.push("Deadline = ?"); params.push(deadline); }
-    if (type !== undefined) { fields.push("Type = ?"); params.push(type); }
-    if (unitId !== undefined) { fields.push("UnitID = ?"); params.push(unitId); }
-    if (status !== undefined) { fields.push("Status = ?"); params.push(status); }
+    
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined && allowed.has(key)) {
+        fields.push(`${key} = ?`);
+        params.push(value);
+      }
+    }
 
     if (!fields.length) return this.getAssignmentById(assignmentId);
-
     const sql = `UPDATE assignment SET ${fields.join(", ")} WHERE AssignmentID = ?`;
     params.push(assignmentId);
     await db.query(sql, params);
-
     return this.getAssignmentById(assignmentId);
   }
 
-  // Xóa mềm: đổi trạng thái
-  async softDeleteAssignment(assignmentId, newStatus = "inactive") {
+  // Xóa mềm
+  async softDeleteAssignment(assignmentId) {
     const db = await connectDB();
-    await db.query(
-      `UPDATE assignment SET Status = ? WHERE AssignmentID = ?`,
-      [newStatus, assignmentId]
-    );
+    await db.query(`UPDATE assignment SET Status = 'deleted' WHERE AssignmentID = ?`, [assignmentId]);
     return this.getAssignmentById(assignmentId);
   }
 
+  // Lấy chi tiết assignment
   async getAssignmentById(assignmentId) {
     const db = await connectDB();
     const [rows] = await db.query(
-      `SELECT AssignmentID, Title, Description, Deadline, Type, UnitID, Status
-       FROM assignment
-       WHERE AssignmentID = ?`,
+      `
+      SELECT 
+        a.AssignmentID, a.Title, a.Description, a.Deadline, a.Type, a.FileURL, a.Status,
+        u.UnitID, u.Title AS UnitTitle,
+        co.CourseID, co.Title AS CourseTitle,
+        i.FullName AS InstructorName
+      FROM assignment a
+      LEFT JOIN unit u ON a.UnitID = u.UnitID
+      LEFT JOIN course co ON u.CourseID = co.CourseID
+      LEFT JOIN instructor i ON a.InstructorID = i.InstructorID
+      WHERE a.AssignmentID = ?
+      `,
       [assignmentId]
     );
     return rows[0] || null;
   }
 
-  // Danh sách bài tập của giảng viên (chỉ active)
+  // Danh sách assignment của giảng viên (bao gồm draft)
   async getAssignmentsByInstructor(instructorAccId) {
     const db = await connectDB();
     const query = `
       SELECT 
-        a.AssignmentID, a.Title, a.Description, a.Deadline, a.Type, a.Status,
-        u.UnitID, u.Title AS UnitTitle,
-        co.CourseID, co.Title AS CourseTitle,
-        cl.ClassID, cl.Name AS ClassName
+        a.AssignmentID, a.Title, a.Description, a.Deadline, a.Type, a.FileURL, a.Status,
+        u.Title AS UnitTitle
       FROM assignment a
-      JOIN unit u ON a.UnitID = u.UnitID
-      JOIN course co ON u.CourseID = co.CourseID
-      JOIN class cl ON co.CourseID = cl.CourseID
-      JOIN instructor i ON cl.InstructorID = i.InstructorID
-      WHERE i.AccID = ? AND a.Status = 'active'
-      ORDER BY a.Deadline DESC
+      JOIN instructor i ON a.InstructorID = i.InstructorID
+      LEFT JOIN unit u ON a.UnitID = u.UnitID
+      WHERE i.AccID = ?
+      ORDER BY a.Status DESC, a.Deadline DESC
     `;
     const [rows] = await db.query(query, [instructorAccId]);
     return rows;
   }
+
+  // Lấy toàn bộ Unit của giảng viên (theo AccID) để fill dropdown
+  async getUnitsByInstructor(instructorAccId) {
+    const db = await connectDB();
+    const sql = `
+      SELECT
+        u.UnitID,
+        u.Title,
+        u.Status,
+        c.Title AS CourseTitle,
+        c.CourseID
+      FROM unit u
+      JOIN course c ON u.CourseID = c.CourseID
+      JOIN instructor i ON c.InstructorID = i.InstructorID
+      WHERE i.AccID = ?
+        AND (u.Status IS NULL OR LOWER(u.Status) != 'deleted')
+        AND (c.Status IS NULL OR LOWER(c.Status) != 'deleted')
+      ORDER BY c.Title ASC, u.Title ASC
+    `;
+    const [rows] = await db.query(sql, [instructorAccId]);
+
+    console.log(`[DEBUG] getUnitsByInstructor - AccID: ${instructorAccId}, Found: ${rows.length} units`);
+
+    return rows;
+  }
+  // Lấy danh sách courses của instructor (để làm dropdown Course)
+  async getCoursesByInstructor(instructorAccId) {
+    const db = await connectDB();
+    const sql = `
+    SELECT c.CourseID, c.Title, c.Status
+    FROM course c
+    JOIN instructor i ON c.InstructorID = i.InstructorID
+    WHERE i.AccID = ?
+      AND (c.Status IS NULL OR LOWER(c.Status) <> 'deleted')
+    ORDER BY c.Title ASC
+  `;
+    const [rows] = await db.query(sql, [instructorAccId]);
+    return rows;
+  }
+  // Lấy Units theo instructor + courseId (lọc động theo course đã chọn)
+  async getUnitsByInstructorAndCourse(instructorAccId, courseId) {
+    const db = await connectDB();
+    const sql = `
+    SELECT u.UnitID, u.Title, u.Status
+    FROM unit u
+    JOIN course c ON u.CourseID = c.CourseID
+    JOIN instructor i ON c.InstructorID = i.InstructorID
+    WHERE i.AccID = ?
+      AND c.CourseID = ?
+      AND (u.Status IS NULL OR LOWER(u.Status) <> 'deleted')
+    ORDER BY u.Title ASC
+  `;
+    const [rows] = await db.query(sql, [instructorAccId, courseId]);
+    return rows;
+  }
+
 }
 
 module.exports = new AssignmentRepository();

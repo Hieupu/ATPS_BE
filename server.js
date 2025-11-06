@@ -1,6 +1,7 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
+
 const router = require("./routes/routerAuth");
 const profileRoutes = require("./routes/profileRoutes");
 const courseRoutes = require("./routes/courseRoutes");
@@ -12,6 +13,7 @@ const materialRoutes = require("./routes/materialRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const examRoutes = require("./routes/examRoutes");
 const assignmentRoutes = require("./routes/assignmentRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
 const passport = require("passport");
 const cors = require("cors");
 // const paymentRoutes = require("./routes/paymentRoutes");
@@ -42,7 +44,7 @@ app.use("/api/schedule", scheduleRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/progress", progressRoutes);
 app.use("/api/materials", materialRoutes);
-// app.use("/api/payment", paymentRoutes);
+app.use("/api/payment", paymentRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/exams", examRoutes);
 app.use("/api/instructor", assignmentRoutes);
