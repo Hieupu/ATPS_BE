@@ -15,6 +15,7 @@ const assignmentRoutes = require("./routes/assignmentRoutes");
 const passport = require("passport");
 const cors = require("cors");
 // const paymentRoutes = require("./routes/paymentRoutes");
+const instructorCourseRoutes = require("./routes/instructorCourseRouter");
 
 dotenv.config();
 const app = express();

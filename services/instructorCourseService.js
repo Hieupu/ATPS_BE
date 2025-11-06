@@ -214,17 +214,44 @@ const listMaterialsByCourseService = async (courseId) => {
   return { message: "Danh sách material theo course", materials };
 };
 
-const addMaterialService = async (courseId, data) => {
+const addMaterialService = async (courseId, data, file) => {
   const course = await courseRepository.findById(courseId);
   if (!course) throw new ServiceError("Course không tồn tại", 404);
-  return await materialRepository.create(courseId, data);
+  if (!["draft", "rejected", "pending"].includes(course.Status))
+    throw new ServiceError(
+      "Không thể thêm Material khi course đã được duyệt hoặc publish",
+      400
+    );
+
+  const { Title } = data || {};
+  if (!Title) throw new ServiceError("Title là bắt buộc", 400);
+
+  let fileURL = data.FileURL;
+  if (file) fileURL = await uploadToCloudinary(file.buffer, "materials");
+  return await materialRepository.create(courseId, {
+    Title,
+    FileURL: fileURL,
+  });
 };
 
 const updateMaterialService = async (materialId, data) => {
   const material = await materialRepository.findById(materialId);
   if (!material) throw new ServiceError("Material không tồn tại", 404);
 
-  await materialRepository.update(materialId, data);
+  if (!["draft", "rejected", "pending"].includes(course.Status))
+    throw new ServiceError(
+      "Không thể cập nhật Material khi course đã được duyệt hoặc publish",
+      400
+    );
+
+  let fileURL = data.FileURL || material.FileURL;
+  if (file) fileURL = await uploadToCloudinary(file.buffer, "materials");
+
+  await materialRepository.update(materialId, {
+    Title: data.Title ?? material.Title,
+    FileURL: fileURL,
+    Status: data.Status ?? material.Status,
+  });
   return { message: "Đã cập nhật material" };
 };
 

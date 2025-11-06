@@ -185,10 +185,11 @@ const listMaterialsByCourse = async (req, res) => {
     res.status(error.status || 400).json({ message: error.message });
   }
 };
+
 const addMaterial = async (req, res) => {
   try {
     const courseId = Number(req.params.courseId);
-    const material = await addMaterialService(courseId, req.body);
+    const material = await addMaterialService(courseId, req.body, req.file);
     res.status(201).json({ message: "Material added", material });
   } catch (error) {
     console.error("addMaterial error:", error);
@@ -199,7 +200,7 @@ const addMaterial = async (req, res) => {
 const updateMaterial = async (req, res) => {
   try {
     const materialId = Number(req.params.materialId);
-    const result = await updateMaterialService(materialId, req.body);
+    const result = await updateMaterialService(materialId, req.body, req.file);
     res.json(result);
   } catch (error) {
     console.error("updateMaterial error:", error);

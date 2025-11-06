@@ -135,12 +135,14 @@ router.post(
   "/courses/:courseId/materials",
   verifyToken,
   authorizeRole("instructor"),
+  uploadFile,
   addMaterial
 );
 router.put(
   "/materials/:materialId",
   verifyToken,
   authorizeRole("instructor"),
+  uploadFile,
   updateMaterial
 );
 router.delete(
