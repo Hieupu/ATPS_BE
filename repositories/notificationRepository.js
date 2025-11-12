@@ -46,6 +46,20 @@ class NotificationRepository {
     );
     return result.affectedRows;
   }
+
+  // Xóa notification payment dựa trên OrderCode (extract từ Content)
+  async deletePaymentNotificationByOrderCode(accId, orderCode) {
+    const db = await connectDB();
+    // Tìm và xóa notification có Type = 'payment' và Content chứa OrderCode
+    const [result] = await db.query(
+      `DELETE FROM notification 
+       WHERE AccID = ? 
+       AND Type = 'payment' 
+       AND Content LIKE ?`,
+      [accId, `%Mã đơn hàng: ${orderCode}%`]
+    );
+    return result.affectedRows > 0;
+  }
 }
 
 module.exports = new NotificationRepository();

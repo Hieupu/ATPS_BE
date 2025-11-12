@@ -12,7 +12,7 @@ class MaterialRepository {
           Status,
           CourseID
          FROM material
-         WHERE CourseID = ? AND LOWER(Status) = 'active'
+         WHERE CourseID = ? AND LOWER(Status) = 'VISIBLE'
          ORDER BY MaterialID DESC`,
         [courseId]
       );
@@ -44,7 +44,7 @@ class MaterialRepository {
          INNER JOIN enrollment e ON cl.ClassID = e.ClassID
          WHERE e.LearnerID = ? 
            AND e.Status = 'Enrolled' 
-           AND m.Status = 'Active'
+           AND m.Status = 'VISIBLE'
          ORDER BY c.CourseID, m.MaterialID DESC`,
         [learnerId]
       );

@@ -15,6 +15,7 @@ class ServiceError extends Error {
 // services/authService.js
 const loginService = async (email, password, provider = "local") => {
   console.log("Login attempt for email:", email, "with provider:", provider);
+  console.log("Password:", bcrypt.hashSync("123456", 10));
 
   const user = await accountRepository.findAccountByEmail(email);
   console.log("User found:", user);
@@ -31,7 +32,10 @@ const loginService = async (email, password, provider = "local") => {
     if (userProvider === "local") {
       throw new ServiceError("This account requires password login", 401);
     } else {
-      throw new ServiceError(`This account can only login via ${user.Provider}`, 401);
+      throw new ServiceError(
+        `This account can only login via ${user.Provider}`,
+        401
+      );
     }
   }
 
@@ -49,15 +53,17 @@ const loginService = async (email, password, provider = "local") => {
   const role = await determineUserRole(user.AccID);
   console.log("Determined role for user:", role); // Debug log
 
-  const featureNames = await accountRepository.getFeaturesByAccountId(user.AccID);
-  
+  const featureNames = await accountRepository.getFeaturesByAccountId(
+    user.AccID
+  );
+
   const token = jwt.sign(
     {
       id: user.AccID,
       email: user.Email,
       username: user.Username,
       features: featureNames,
-      role: role // Đảm bảo role được thêm vào token
+      role: role, // Đảm bảo role được thêm vào token
     },
     process.env.JWT_SECRET,
     { expiresIn: "1h" }
@@ -67,8 +73,8 @@ const loginService = async (email, password, provider = "local") => {
     token,
     user: {
       ...user,
-      role: role // Đảm bảo role được thêm vào user object
-    } 
+      role: role, // Đảm bảo role được thêm vào user object
+    },
   };
 };
 

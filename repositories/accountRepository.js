@@ -20,7 +20,13 @@ class AccountRepository {
     };
   }
 
-  async createAccount({ username, email, phone, password, provider = "local" }) {
+  async createAccount({
+    username,
+    email,
+    phone,
+    password,
+    provider = "local",
+  }) {
     const db = await connectDB();
     const normalizedEmail = email.trim().toLowerCase();
     try {
@@ -40,17 +46,16 @@ class AccountRepository {
     }
   }
 
-async createLearner(accId) {
-  const db = await connectDB();
-  await db.query(
-    `INSERT INTO learner (AccID, FullName, DateOfBirth, ProfilePicture, Job, Address)
+  async createLearner(accId) {
+    const db = await connectDB();
+    await db.query(
+      `INSERT INTO learner (AccID, FullName, DateOfBirth, ProfilePicture, Job, Address)
      SELECT AccID, Username, NULL, NULL, NULL, NULL
      FROM account
      WHERE AccID = ?`,
-    [accId]
-  );
-}
-
+      [accId]
+    );
+  }
 
   async getFeaturesByAccountId(accountId) {
     const db = await connectDB();

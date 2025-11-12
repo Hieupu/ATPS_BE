@@ -24,6 +24,13 @@ class NotificationService {
   async markAllAsRead(accId) {
     return await notificationRepository.markAllAsRead(accId);
   }
+
+  async deletePaymentNotificationByOrderCode(accId, orderCode) {
+    return await notificationRepository.deletePaymentNotificationByOrderCode(
+      accId,
+      orderCode
+    );
+  }
 }
 
 module.exports = new NotificationService();

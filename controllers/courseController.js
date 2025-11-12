@@ -41,18 +41,19 @@ const searchCourses = async (req, res) => {
 // controllers/courseController.js
 const getMyCourses = async (req, res) => {
   try {
-    const accountId = req.user.id; // Lấy từ JWT token
+    const accountId = req.user.id;
 
-    // Lấy LearnerID từ AccountID
-    const learnerId = await courseRepository.getLearnerIdByAccountId(accountId);
+    // Lấy LearnerID từ AccountID - sửa theo database mới
+    const learner = await courseRepository.getLearnerByAccountId(accountId);
 
-    if (!learnerId) {
+    if (!learner) {
       return res.status(404).json({ message: "Learner profile not found" });
     }
 
+    const learnerId = learner.LearnerID;
+
     // Lấy danh sách khóa học đã đăng ký
-    const enrolledCourses =
-      await courseRepository.getEnrolledCoursesByLearnerId(learnerId);
+    const enrolledCourses = await courseRepository.getEnrolledCoursesByLearnerId(learnerId);
 
     res.json({
       success: true,
@@ -112,23 +113,25 @@ const enrollInCourse = async (req, res) => {
     const { classId } = req.body;
     const accountId = req.user.id;
 
-    // Lấy LearnerID từ AccountID
-    const learnerId = await courseRepository.getLearnerIdByAccountId(accountId);
+    // Lấy LearnerID từ AccountID - sửa theo database mới
+    const learner = await courseRepository.getLearnerByAccountId(accountId);
 
-    if (!learnerId) {
+    if (!learner) {
       return res.status(404).json({ message: "Learner profile not found" });
     }
+
+    const learnerId = learner.LearnerID;
 
     const enrollment = await courseRepository.createEnrollment(
       learnerId,
       classId
     );
 
-    // Tạo thông báo cho tài khoản về lịch học/lớp mới đăng ký
+    // Tạo thông báo - sửa accId thành AccID theo database mới
     try {
       const notificationService = require("../services/notificationService");
       await notificationService.create({
-        accId: accountId,
+        AccID: accountId, // Sửa từ accId thành AccID
         type: "enroll",
         content: `Bạn đã đăng ký lớp học (ClassID: ${classId}). Lịch học sẽ được cập nhật trong phần Lộ trình/Materials.`,
       });
@@ -148,6 +151,67 @@ const enrollInCourse = async (req, res) => {
     });
   }
 };
+
+const getMyClassesInCourse = async (req, res) => {
+  try {
+    const { id: courseId } = req.params;
+    const accountId = req.user.id;
+
+    console.log(`Getting classes for course ${courseId}, account ${accountId}`);
+
+    // Lấy LearnerID từ AccountID - sửa theo database mới
+    const learner = await courseRepository.getLearnerByAccountId(accountId);
+    if (!learner) {
+      return res.status(404).json({ message: "Learner profile not found" });
+    }
+
+    const learnerId = learner.LearnerID;
+    const classes = await courseRepository.getMyClassesInCourse(learnerId, courseId);
+
+    res.json({ 
+      success: true, 
+      classes,
+      count: classes.length 
+    });
+  } catch (error) {
+    console.error("Get my classes error:", error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message || "Failed to fetch your classes" 
+    });
+  }
+};
+
+const getCourseAssignments = async (req, res) => {
+  try {
+    const { id: courseId } = req.params;
+    const accountId = req.user.id;
+
+    console.log(`Getting assignments for course ${courseId}, account ${accountId}`);
+
+    // Lấy LearnerID từ AccountID - sửa theo database mới
+    const learner = await courseRepository.getLearnerByAccountId(accountId);
+    if (!learner) {
+      return res.status(404).json({ message: "Learner profile not found" });
+    }
+
+    const learnerId = learner.LearnerID;
+    const assignments = await courseRepository.getAssignmentsWithSubmissions(courseId, learnerId);
+
+    res.json({ 
+      success: true, 
+      assignments,
+      count: assignments.length 
+    });
+  } catch (error) {
+    console.error("Get assignments error:", error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message || "Failed to fetch assignments" 
+    });
+  }
+};
+
 
 const getPopularCourses = async (req, res) => {
   try {
@@ -194,15 +258,16 @@ const getLearnerIdByAccount = async (req, res) => {
   try {
     const { accountId } = req.params;
 
-    const learnerId = await courseRepository.getLearnerIdByAccountId(accountId);
+    // Sửa theo database mới - trả về object learner thay vì chỉ learnerId
+    const learner = await courseRepository.getLearnerByAccountId(accountId);
 
-    if (!learnerId) {
+    if (!learner) {
       return res
         .status(404)
         .json({ message: "Learner not found for this account" });
     }
 
-    res.json({ learnerId });
+    res.json({ learnerId: learner.LearnerID });
   } catch (error) {
     console.error("Get learner ID error:", error);
     res.status(500).json({
@@ -223,4 +288,6 @@ module.exports = {
   getLearnerIdByAccount,
   getClassesByCourse,
   getCourseCurriculum,
+  getMyClassesInCourse,
+  getCourseAssignments
 };

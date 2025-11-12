@@ -4,6 +4,7 @@ const instructorController = require("../controllers/instructorController");
 
 // Public endpoints for instructors list and detail
 router.get("/", instructorController.getAllInstructors);
+router.get("/account/:accountId", instructorController.getInstructorIdByAccountId);
 router.get("/:id", instructorController.getInstructorById);
 
 module.exports = router;
