@@ -12,6 +12,8 @@ const {
   getCourseCurriculum,
   getMyClassesInCourse,
   getCourseAssignments,
+  getPopularClasses,
+  checkEnrollmentStatus
 } = require("../controllers/courseController");
 const { verifyToken } = require("../middlewares/middware");
 
@@ -27,10 +29,12 @@ router.get("/my-courses/enrolled", verifyToken, getMyCourses);
 router.post("/enroll", verifyToken, enrollInCourse);
 router.get("/:id/my-classes", verifyToken, getMyClassesInCourse);
 router.get("/:id/assignments", verifyToken, getCourseAssignments);
+router.get("/classes/popular", getPopularClasses);
 
 // Dynamic routes - must be last
 router.get("/:id/classes", getClassesByCourse); // More specific first
 router.get("/:id/curriculum", getCourseCurriculum);
 router.get("/:id", getCourseById);
+router.get('/classes/:classId/enrollment-status', verifyToken, checkEnrollmentStatus);
 
 module.exports = router;

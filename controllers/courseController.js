@@ -1,5 +1,6 @@
 const courseRepository = require("../repositories/courseRepository");
 const profileService = require("../services/profileService");
+const connectDB = require("../config/db");
 const getAllCourses = async (req, res) => {
   try {
     const courses = await courseRepository.getAllCoursesWithDetails();
@@ -211,6 +212,49 @@ const getCourseAssignments = async (req, res) => {
     });
   }
 };
+// Thêm vào controller
+const checkEnrollmentStatus = async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const accountId = req.user.id;
+
+    // Lấy LearnerID từ AccountID
+    const learner = await courseRepository.getLearnerByAccountId(accountId);
+    if (!learner) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Learner profile not found",
+        isEnrolled: false 
+      });
+    }
+
+    const learnerId = learner.LearnerID;
+    
+    // Kiểm tra xem đã đăng ký lớp này chưa
+    const db = await connectDB();
+    const [enrollments] = await db.query(
+      `SELECT EnrollmentID, Status 
+       FROM enrollment 
+       WHERE LearnerID = ? AND ClassID = ? AND Status = 'enrolled'`,
+      [learnerId, classId]
+    );
+
+    const isEnrolled = enrollments.length > 0;
+
+    res.json({
+      success: true,
+      isEnrolled,
+      enrollment: isEnrolled ? enrollments[0] : null
+    });
+  } catch (error) {
+    console.error("Check enrollment error:", error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message || "Failed to check enrollment status",
+      isEnrolled: false
+    });
+  }
+};
 
 
 const getPopularCourses = async (req, res) => {
@@ -221,6 +265,19 @@ const getPopularCourses = async (req, res) => {
     console.error("Get popular courses error:", error);
     res.status(500).json({
       message: "Failed to fetch popular courses",
+      error: error.message,
+    });
+  }
+};
+
+const getPopularClasses = async (req, res) => {
+  try {
+    const classes = await courseRepository.getPopularClasses();
+    res.json(classes);
+  } catch (error) {
+    console.error("Get popular classes error:", error);
+    res.status(500).json({
+      message: "Failed to fetch popular classes",
       error: error.message,
     });
   }
@@ -289,5 +346,7 @@ module.exports = {
   getClassesByCourse,
   getCourseCurriculum,
   getMyClassesInCourse,
-  getCourseAssignments
+  getCourseAssignments,
+  getPopularClasses,
+  checkEnrollmentStatus
 };

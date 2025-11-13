@@ -243,6 +243,44 @@ class CourseRepository {
     }
   }
 
+async getPopularClasses() {
+  try {
+    const db = await connectDB();
+    const [rows] = await db.query(`
+      SELECT 
+        cl.ClassID,
+        cl.Name as ClassName,
+        cl.Status,
+        cl.Fee,
+        cl.Opendate,
+        cl.Numofsession,
+        cl.Maxstudent as MaxStudents,
+        c.CourseID,
+        c.Image as Image,
+        c.Title as CourseTitle,
+        i.InstructorID,
+        i.FullName as InstructorName,
+        i.ProfilePicture as InstructorAvatar,
+        COUNT(e.EnrollmentID) as CurrentStudents
+      FROM class cl
+      INNER JOIN course c ON cl.CourseID = c.CourseID
+      INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
+      LEFT JOIN enrollment e ON cl.ClassID = e.ClassID AND e.Status = 'enrolled'
+      WHERE cl.Status = 'active'
+      GROUP BY 
+        cl.ClassID, cl.Name, cl.Status, cl.Fee, cl.Opendate, 
+        cl.Numofsession, cl.Maxstudent, c.CourseID, c.Title,
+        i.InstructorID, i.FullName, i.ProfilePicture
+      ORDER BY cl.Opendate DESC
+      LIMIT 6
+    `);
+    return rows;
+  } catch (error) {
+    console.error("Database error in getPopularClasses:", error);
+    throw error;
+  }
+}
+
   async getLearnerByAccountId(accountId) {
     try {
       const db = await connectDB();
@@ -388,6 +426,7 @@ class CourseRepository {
       const [classes] = await db.query(
         `SELECT 
         cl.ClassID,
+         cl.CourseID,
         cl.Name as ClassName,
         cl.ZoomURL,
         cl.Status,
@@ -587,33 +626,45 @@ class CourseRepository {
     }
   }
 
-  async getPopularCourses() {
-    try {
-      const db = await connectDB();
+async getPopularCourses() {
+  try {
+    const db = await connectDB();
 
-      const [rows] = await db.query(`
-        SELECT 
-          c.CourseID,
-          c.Title,
-          c.Description,
-          c.Duration,
-          COALESCE(c.Fee, 0) as TuitionFee,
-          i.FullName as InstructorName,
-          i.ProfilePicture as InstructorAvatar,
-          0 as EnrollmentCount
-        FROM course c
-        INNER JOIN instructor i ON c.InstructorID = i.InstructorID
-        WHERE c.Status = 'Open'
-        ORDER BY c.CourseID DESC
-        LIMIT 6
-      `);
+    const [rows] = await db.query(`
+      SELECT 
+        c.CourseID,
+        c.Title,
+        c.Description,
+        c.Duration,
+        c.Image,
+        c.Level,
+        i.FullName as InstructorName,
+        i.ProfilePicture as InstructorAvatar,
+        COALESCE(MAX(cl.Maxstudent), 0) as MaxEnrollment,
+        COUNT(DISTINCT cl.ClassID) as TotalClasses,
+        COALESCE(SUM(e.EnrollmentCount), 0) as TotalEnrollments,
+        COALESCE(MIN(cl.Fee), 0) as MinFee
+      FROM course c
+      INNER JOIN instructor i ON c.InstructorID = i.InstructorID
+      LEFT JOIN class cl ON c.CourseID = cl.CourseID AND cl.Status = 'active'
+      LEFT JOIN (
+        SELECT ClassID, COUNT(*) as EnrollmentCount 
+        FROM enrollment 
+        WHERE Status = 'enrolled'
+        GROUP BY ClassID
+      ) e ON cl.ClassID = e.ClassID
+      WHERE c.Status IN ('PUBLISHED', 'APPROVED', 'Open')
+      GROUP BY c.CourseID, c.Title, c.Description, c.Duration, c.Image, c.Level, i.FullName, i.ProfilePicture
+      ORDER BY TotalEnrollments DESC, MaxEnrollment DESC
+      LIMIT 6
+    `);
 
-      return rows;
-    } catch (error) {
-      console.error("Database error in getPopularCourses:", error);
-      throw error;
-    }
+    return rows;
+  } catch (error) {
+    console.error("Database error in getPopularCourses:", error);
+    throw error;
   }
+}
 
   async getAllCoursesAdmin() {
     try {
@@ -625,7 +676,6 @@ class CourseRepository {
           c.Title,
           c.Description,
           c.Duration,
-          COALESCE(c.Fee, 0) as TuitionFee,
           c.Status,
           i.InstructorID,
           i.FullName as InstructorName,
