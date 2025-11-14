@@ -1,6 +1,7 @@
 const scheduleService = require("../services/scheduleService");
 const courseRepository = require("../repositories/courseRepository");
 
+
 class ScheduleController {
   async getLearnerSchedule(req, res) {
     try {
@@ -110,6 +111,195 @@ class ScheduleController {
       return res.status(500).json({ message: error.message || "Server error" });
     }
   }
+
+
+async checkScheduleConflict(req, res) {
+  try {
+    const { classId } = req.params;
+    const accId = req.user?.id || req.user?.AccID || req.user?.AccountID;
+    const learnerId = await courseRepository.getLearnerIdByAccountId(accId);
+
+    console.log("Check schedule conflict for group class:", { classId, learnerId });
+
+    if (!classId || !learnerId) {
+      return res.status(400).json({ 
+        message: "Class ID and Learner ID are required",
+        details: { classId, learnerId }
+      });
+    }
+
+    // Lấy lịch học CỤ THỂ của lớp muốn đăng ký (các session với ngày cụ thể)
+    const targetClassSchedule = await scheduleService.getClassSchedule(classId);
+    console.log("Target class schedule:", targetClassSchedule);
+
+    // Lấy lịch học hiện tại của learner (các session cụ thể với ngày)
+    const currentSchedule = await scheduleService.getLearnerSchedule(learnerId);
+    console.log("Current learner schedule:", currentSchedule);
+
+    const conflicts = [];
+
+    // Hàm normalize date
+    const normalizeDate = (dateInput) => {
+      if (!dateInput) return "";
+      const dateObj = new Date(dateInput);
+      return dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+    };
+
+    // Kiểm tra trùng lịch - ĐÃ SỬA: so sánh ngày CỤ THỂ
+    for (const targetSession of targetClassSchedule) {
+      const targetDate = normalizeDate(targetSession.Date);
+      
+      for (const currentSession of currentSchedule) {
+        const currentDate = normalizeDate(currentSession.Date);
+        
+        console.log(`Date comparison: ${targetDate} vs ${currentDate}`);
+
+        // Kiểm tra trùng ngày CỤ THỂ
+        if (targetDate === currentDate) {
+          const targetStart = targetSession.StartTime;
+          const targetEnd = targetSession.EndTime;
+          const currentStart = currentSession.StartTime;
+          const currentEnd = currentSession.EndTime;
+
+          console.log(`Checking time on ${targetDate}: ${targetStart}-${targetEnd} vs ${currentStart}-${currentEnd}`);
+
+          // Kiểm tra overlap thời gian
+          if (
+            (targetStart >= currentStart && targetStart < currentEnd) ||
+            (targetEnd > currentStart && targetEnd <= currentEnd) ||
+            (targetStart <= currentStart && targetEnd >= currentEnd)
+          ) {
+            conflicts.push({
+              ClassName: currentSession.ClassName,
+              Schedule: `${currentDate} ${currentStart}-${currentEnd}`,
+              InstructorName: currentSession.InstructorName,
+              ConflictingSession: `${targetDate} ${targetStart}-${targetEnd} (${targetSession.ClassName})`
+            });
+            console.log("Conflict found!");
+          }
+        }
+      }
+    }
+
+    console.log("Total conflicts:", conflicts.length);
+
+    return res.json({
+      hasConflict: conflicts.length > 0,
+      conflictingClasses: conflicts,
+      targetClassSessions: targetClassSchedule.length,
+      currentSessions: currentSchedule.length
+    });
+
+  } catch (error) {
+    console.error("Error in checkScheduleConflict:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+}
+
+async checkTimeslotConflict(req, res) {
+  try {
+    const { timeslotId } = req.params;
+    const { date } = req.query; // Nhận ngày cụ thể từ query parameter
+    const accId = req.user?.id || req.user?.AccID || req.user?.AccountID;
+    const learnerId = await courseRepository.getLearnerIdByAccountId(accId);
+
+    console.log("Check timeslot conflict:", { timeslotId, learnerId, date });
+
+    if (!timeslotId || !learnerId || !date) {
+      return res.status(400).json({ 
+        message: "Timeslot ID, Learner ID and Date are required",
+        details: { timeslotId, learnerId, date }
+      });
+    }
+
+    // Lấy thông tin timeslot muốn đăng ký từ bảng timeslot
+    const targetTimeslot = await scheduleService.getTimeslotById(timeslotId);
+    console.log("Target timeslot:", targetTimeslot);
+
+    if (!targetTimeslot) {
+      return res.status(404).json({ message: "Timeslot not found" });
+    }
+
+    // Lấy lịch học hiện tại của learner
+    const currentSchedule = await scheduleService.getLearnerSchedule(learnerId);
+    console.log("Current learner schedule:", currentSchedule);
+
+    // Hàm normalize date cho backend - tương thích với frontend
+    const normalizeDateForBackend = (dateInput) => {
+      if (!dateInput) return "";
+      
+      let dateObj;
+      if (typeof dateInput === 'string') {
+        // Xử lý các định dạng date từ frontend
+        if (dateInput.includes('T')) {
+          dateObj = new Date(dateInput);
+        } else {
+          // Định dạng YYYY-MM-DD
+          dateObj = new Date(dateInput + 'T00:00:00');
+        }
+      } else if (dateInput instanceof Date) {
+        dateObj = dateInput;
+      } else {
+        return "";
+      }
+      
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const conflicts = [];
+
+    // Normalize target date từ frontend
+    const targetDateNormalized = normalizeDateForBackend(date);
+    console.log("Normalized target date:", targetDateNormalized);
+
+    // Kiểm tra trùng lịch với timeslot muốn đăng ký
+    for (const currentSession of currentSchedule) {
+      if (!currentSession.Date) continue;
+      
+      // Normalize date từ current session
+      const currentSessionDate = normalizeDateForBackend(currentSession.Date);
+      
+      console.log(`Date comparison: ${targetDateNormalized} vs ${currentSessionDate}`);
+
+      if (targetDateNormalized === currentSessionDate) {
+        const targetStart = targetTimeslot.StartTime;
+        const targetEnd = targetTimeslot.EndTime;
+        const currentStart = currentSession.StartTime;
+        const currentEnd = currentSession.EndTime;
+
+        console.log(`Checking time: ${targetStart}-${targetEnd} vs ${currentStart}-${currentEnd}`);
+
+        // Kiểm tra overlap thời gian
+        if (
+          (targetStart >= currentStart && targetStart < currentEnd) ||
+          (targetEnd > currentStart && targetEnd <= currentEnd) ||
+          (targetStart <= currentStart && targetEnd >= currentEnd)
+        ) {
+          conflicts.push({
+            ClassName: currentSession.ClassName,
+            Schedule: `${currentSessionDate} ${currentStart}-${currentEnd}`,
+            InstructorName: currentSession.InstructorName
+          });
+          console.log("Conflict found!");
+        }
+      }
+    }
+
+    console.log("Total conflicts:", conflicts.length);
+
+    return res.json({
+      hasConflict: conflicts.length > 0,
+      conflictingClasses: conflicts
+    });
+
+  } catch (error) {
+    console.error("Error in checkTimeslotConflict:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+}
 
 async createOneOnOneBooking(req, res) {
     try {

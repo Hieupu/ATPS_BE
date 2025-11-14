@@ -1,5 +1,5 @@
 const scheduleRepository = require("../repositories/scheduleRepository");
-
+const connectDB = require("../config/db");
 class ScheduleService {
   async getLearnerSchedule(learnerId) {
     try {
@@ -202,6 +202,56 @@ class ScheduleService {
       throw error;
     }
   }
+
+async getTimeslotById(timeslotId) {
+  try {
+        const db = await connectDB();
+    const query = `
+      SELECT 
+        t.TimeslotID,
+        TIME_FORMAT(t.StartTime, '%H:%i') as StartTime,
+        TIME_FORMAT(t.EndTime, '%H:%i') as EndTime,
+        t.Day
+      FROM timeslot t
+      WHERE t.TimeslotID = ?
+    `;
+    
+    const [rows] = await db.execute(query, [timeslotId]);
+    return rows[0] || null;
+  } catch (error) {
+    console.error("Error in getTimeslotById:", error);
+    throw error;
+  }
+};
+
+async getClassSchedule(classId) {
+  try {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      `SELECT 
+         s.SessionID,
+         s.Date,
+         s.Title,
+         ts.Day,
+         ts.StartTime, 
+         ts.EndTime,
+         ts.TimeslotID,
+         c.Name as ClassName,
+         c.StartDate,
+         c.EndDate
+       FROM session s
+       JOIN timeslot ts ON s.TimeslotID = ts.TimeslotID
+       JOIN class c ON s.ClassID = c.ClassID
+       WHERE s.ClassID = ? AND s.Date >= CURDATE()
+       ORDER BY s.Date, ts.StartTime`,
+      [classId]
+    );
+    return rows;
+  } catch (error) {
+    console.error("Database error in getClassSchedule:", error);
+    throw error;
+  }
+}
 
   async getSessionDetails(sessionId) {
     try {
