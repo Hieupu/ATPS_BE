@@ -419,14 +419,14 @@ async getPopularClasses() {
       };
     }
   }
-  async getClassesByCourse(courseId) {
-    try {
-      const db = await connectDB();
+async getClassesByCourse(courseId) {
+  try {
+    const db = await connectDB();
 
-      const [classes] = await db.query(
-        `SELECT 
+    const [classes] = await db.query(
+      `SELECT 
         cl.ClassID,
-         cl.CourseID,
+        cl.CourseID,
         cl.Name as ClassName,
         cl.ZoomURL,
         cl.Status,
@@ -446,33 +446,35 @@ async getPopularClasses() {
        GROUP BY cl.ClassID, cl.Name, cl.ZoomURL, cl.Status, cl.Fee, cl.Maxstudent, 
                 cl.Opendate, cl.Enddate, cl.Numofsession, i.InstructorID, i.FullName
        ORDER BY cl.ClassID`,
-        [courseId]
-      );
+      [courseId]
+    );
 
-      // Lấy lịch học từ timeslot
-      for (let classItem of classes) {
-        const [weeklySchedule] = await db.query(
-          `SELECT DISTINCT
+    // Lấy lịch học cố định hàng tuần từ timeslot
+    for (let classItem of classes) {
+      const [weeklySchedule] = await db.query(
+        `SELECT DISTINCT
           t.StartTime,
           t.EndTime,
-          t.Day,
-          s.Date
+          t.Day
          FROM session s
          INNER JOIN timeslot t ON s.TimeslotID = t.TimeslotID
          WHERE s.ClassID = ?
-         ORDER BY s.Date, t.StartTime`,
-          [classItem.ClassID]
-        );
+         GROUP BY t.StartTime, t.EndTime, t.Day
+         ORDER BY 
+           FIELD(t.Day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'),
+           t.StartTime`,
+        [classItem.ClassID]
+      );
 
-        classItem.weeklySchedule = weeklySchedule;
-      }
-
-      return classes;
-    } catch (error) {
-      console.error("Database error in getClassesByCourse:", error);
-      throw error;
+      classItem.weeklySchedule = weeklySchedule;
     }
+
+    return classes;
+  } catch (error) {
+    console.error("Database error in getClassesByCourse:", error);
+    throw error;
   }
+}
 
   async getCourseCurriculum(courseId) {
     try {

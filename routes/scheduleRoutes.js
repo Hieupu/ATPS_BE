@@ -30,6 +30,9 @@ router.get(
   scheduleController.getInstructorWeeklySchedule
 );
 
+router.get('/check-conflict/:classId', verifyToken, scheduleController.checkScheduleConflict);
+router.get('/check-conflict/timeslot/:timeslotId', verifyToken, scheduleController.checkTimeslotConflict);
+
 // Get classes by instructor
 router.get(
   "/instructor/:instructorId/classes",
