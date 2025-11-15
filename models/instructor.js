@@ -1,3 +1,4 @@
+// Instructor.js
 class Instructor {
   constructor({
     InstructorID,
@@ -9,6 +10,7 @@ class Instructor {
     CV,
     AccID,
     Major,
+    Type, // 'fulltime' | 'parttime'
   }) {
     this.InstructorID = InstructorID;
     this.FullName = FullName;
@@ -19,7 +21,7 @@ class Instructor {
     this.CV = CV;
     this.AccID = AccID;
     this.Major = Major;
+    this.Type = Type;
   }
 }
-
 module.exports = Instructor;

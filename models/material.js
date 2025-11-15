@@ -4,8 +4,7 @@ class Material {
     this.CourseID = CourseID;
     this.Title = Title;
     this.FileURL = FileURL;
-    this.Status = Status || "active";
+    this.Status = Status;
   }
 }
-
 module.exports = Material;

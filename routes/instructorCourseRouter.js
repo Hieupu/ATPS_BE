@@ -32,11 +32,18 @@ router.get(
   authorizeRole("instructor"),
   listInstructorCourses
 );
-router.post("/courses", verifyToken, authorizeRole("instructor"), createCourse);
+router.post(
+  "/courses",
+  verifyToken,
+  authorizeRole("instructor"),
+  uploadFile,
+  createCourse
+);
 router.put(
   "/courses/:courseId",
   verifyToken,
   authorizeRole("instructor"),
+  uploadFile,
   updateCourse
 );
 router.delete(
