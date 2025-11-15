@@ -1,5 +1,5 @@
 const attendanceService = require("../services/attendanceService");
-
+const connectDB = require("../config/db");
 class AttendanceController {
   async getLearnerAttendance(req, res) {
     try {
@@ -61,6 +61,65 @@ class AttendanceController {
     } catch (error) {
       console.error("Error in updateAttendance:", error);
       return res.status(500).json({ message: error.message || "Server error" });
+    }
+  }
+
+    async recordAttendance(req, res) {
+    try {
+      const { learnerId, sessionId, status = 'present' } = req.body;
+          const db = await connectDB();
+
+      if (!learnerId || !sessionId) {
+        return res.status(400).json({ message: 'LearnerID and SessionID are required' });
+      }
+
+      // Check if attendance already exists
+      const [existing] = await db.query(
+        'SELECT * FROM attendance WHERE LearnerID = ? AND SessionID = ?',
+        [learnerId, sessionId]
+      );
+
+      if (existing.length > 0) {
+        return res.json({ 
+          message: 'Attendance already recorded', 
+          attendance: existing[0] 
+        });
+      }
+
+      // Insert new attendance
+      const [result] = await db.query(
+        `INSERT INTO attendance (LearnerID, SessionID, Status, Date) 
+         VALUES (?, ?, ?, CURDATE())`,
+        [learnerId, sessionId, status]
+      );
+
+      res.json({
+        message: 'Attendance recorded successfully',
+        attendanceId: result.insertId
+      });
+    } catch (error) {
+      console.error('Attendance recording error:', error);
+      res.status(500).json({ message: 'Failed to record attendance' });
+    }
+  }
+
+  async getAttendanceBySession(req, res) {
+    try {
+      const { sessionId } = req.params;
+          const db = await connectDB();
+      
+      const [attendance] = await db.query(
+        `SELECT a.*, l.FullName as LearnerName 
+         FROM attendance a 
+         INNER JOIN learner l ON a.LearnerID = l.LearnerID 
+         WHERE a.SessionID = ?`,
+        [sessionId]
+      );
+
+      res.json({ attendance });
+    } catch (error) {
+      console.error('Get attendance error:', error);
+      res.status(500).json({ message: 'Failed to fetch attendance' });
     }
   }
 }

@@ -1,7 +1,7 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
-
+const path = require('path');
 const router = require("./routes/routerAuth");
 const profileRoutes = require("./routes/profileRoutes");
 const courseRoutes = require("./routes/courseRoutes");
@@ -14,6 +14,7 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const examRoutes = require("./routes/examRoutes");
 const assignmentRoutes = require("./routes/assignmentRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const zoomRoutes = require("./routes/zoomRoutes");
 const passport = require("passport");
 const cors = require("cors");
 
@@ -28,6 +29,12 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
 };
+app.use((req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  next();
+});
 
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
@@ -46,6 +53,7 @@ app.use("/api/payment", paymentRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/exams", examRoutes);
 app.use("/api/instructor", assignmentRoutes);
+app.use("/api/zoom", zoomRoutes);
 
 const PORT = process.env.PORT || 9999;
 connectDB().then(() => {

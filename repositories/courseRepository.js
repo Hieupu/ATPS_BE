@@ -222,7 +222,8 @@ class CourseRepository {
         i.FullName as InstructorName,
         i.ProfilePicture as InstructorAvatar,
         i.Major as InstructorMajor,
-        cl.ZoomURL,
+         cl.ZoomID,
+        cl.Zoompass,
         cl.Name as ClassName,
         (SELECT COUNT(*) FROM unit u WHERE u.CourseID = c.CourseID AND u.Status = 'VISIBLE') as UnitCount,
         (SELECT COUNT(*) FROM enrollment e2 WHERE e2.ClassID = cl.ClassID AND e2.Status = 'enrolled') as TotalEnrollments
@@ -428,7 +429,8 @@ async getClassesByCourse(courseId) {
         cl.ClassID,
         cl.CourseID,
         cl.Name as ClassName,
-        cl.ZoomURL,
+         cl.ZoomID,
+        cl.Zoompass,
         cl.Status,
         cl.Fee,
         cl.Maxstudent,
@@ -443,7 +445,8 @@ async getClassesByCourse(courseId) {
        INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
        LEFT JOIN session se ON cl.ClassID = se.ClassID
        WHERE cl.CourseID = ? AND cl.Status = 'active'
-       GROUP BY cl.ClassID, cl.Name, cl.ZoomURL, cl.Status, cl.Fee, cl.Maxstudent, 
+       GROUP BY cl.ClassID, cl.Name, cl.ZoomID,
+        cl.Zoompass, cl.Status, cl.Fee, cl.Maxstudent, 
                 cl.Opendate, cl.Enddate, cl.Numofsession, i.InstructorID, i.FullName
        ORDER BY cl.ClassID`,
       [courseId]
@@ -703,7 +706,8 @@ async getPopularCourses() {
         `SELECT 
         cl.ClassID,
         cl.Name as ClassName,
-        cl.ZoomURL,
+        cl.ZoomID,
+        cl.Zoompass,
         cl.Status,
         cl.Fee,
         cl.InstructorID,
@@ -723,7 +727,8 @@ async getPopularCourses() {
          AND e.Status = 'enrolled'
           AND cl.Status IN ('active', 'ongoing')
        GROUP BY 
-         cl.ClassID, cl.Name, cl.ZoomURL, cl.Status, cl.Fee, 
+         cl.ClassID, cl.Name, cl.ZoomID,
+        cl.Zoompass, cl.Status, cl.Fee, 
          cl.InstructorID, i.FullName, i.ProfilePicture,
          e.EnrollmentID, e.EnrollmentDate, e.Status
        ORDER BY e.EnrollmentDate DESC`,

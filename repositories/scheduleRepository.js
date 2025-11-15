@@ -16,8 +16,10 @@ class ScheduleRepository {
           s.Title as SessionTitle,
           s.Description,
           s.ClassID,
+          s.ZoomUUID,
           cl.Name as ClassName,
-          cl.ZoomURL,
+           cl.ZoomID,
+        cl.Zoompass,
           cl.Status as ClassStatus,
           s.InstructorID,
           i.FullName as InstructorName,
@@ -56,7 +58,8 @@ class ScheduleRepository {
           s.InstructorID,
           s.ClassID,
           cl.Name as ClassName,
-          cl.ZoomURL,
+          cl.ZoomID,
+        cl.Zoompass,
           c.CourseID,
           c.Title as CourseTitle,
           s.Date,
@@ -80,7 +83,8 @@ class ScheduleRepository {
                SELECT 1 FROM enrollment e2 WHERE e2.ClassID = cl.ClassID
              ))
            )
-         GROUP BY s.SessionID, s.Title, s.Description, s.InstructorID, s.ClassID, cl.Name, cl.ZoomURL, c.CourseID, c.Title, s.Date, ts.StartTime, ts.EndTime, ts.Day
+         GROUP BY s.SessionID, s.Title, s.Description, s.InstructorID, s.ClassID, cl.Name, cl.ZoomID,
+        cl.Zoompass, c.CourseID, c.Title, s.Date, ts.StartTime, ts.EndTime, ts.Day
          ORDER BY s.Date DESC, ts.StartTime DESC`,
         [instructorId]
       );
@@ -100,6 +104,7 @@ class ScheduleRepository {
           s.Title as SessionTitle,
           s.Description,
           s.InstructorID,
+          s.ZoomUUID,
           i.FullName as InstructorName,
           i.ProfilePicture as InstructorAvatar
          FROM session s
@@ -160,7 +165,8 @@ class ScheduleRepository {
           cl.ClassID,
           cl.Name as ClassName,
           cl.Status,
-          cl.ZoomURL,
+          cl.ZoomID,
+        cl.Zoompass,
           cl.CourseID,
           (SELECT COUNT(*) FROM enrollment e WHERE e.ClassID = cl.ClassID AND e.Status = 'Enrolled') as StudentCount
          FROM class cl
@@ -184,6 +190,7 @@ class ScheduleRepository {
           s.Title,
           s.Description,
           s.Date,
+          s.ZoomUUID,
           ts.StartTime,
           ts.EndTime,
           ts.Day
@@ -313,6 +320,7 @@ async getInstructorWeeklySchedule(instructorId, weekStartDate) {
       // Lấy các slot đã bận từ instructortimeslot trong tuần này
       const [busySlots] = await db.query(
         `SELECT 
+          its.InstructortimeslotID,
           its.TimeslotID,
           its.Date,
           its.Status,
@@ -441,7 +449,7 @@ async getInstructorWeeklySchedule(instructorId, weekStartDate) {
 
       // Lấy tất cả instructortimeslot của giảng viên trong tuần
       const [allInstructorSlots] = await db.query(
-        `SELECT TimeslotID, Date FROM instructortimeslot 
+      `SELECT InstructortimeslotID, TimeslotID, Date FROM instructortimeslot 
          WHERE InstructorID = ? AND Date >= ? AND Date <= ?`,
         [instructorId, startDateStr, endDateStr]
       );
@@ -751,6 +759,7 @@ async getInstructorWeeklySchedule(instructorId, weekStartDate) {
           s.Title as SessionTitle,
           s.Description as SessionDescription,
           s.Date as SessionDate,
+           s.ZoomUUID as SessionZoomUUID,
           ts.TimeslotID,
           ts.Day,
           ts.StartTime,
