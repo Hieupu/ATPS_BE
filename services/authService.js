@@ -15,6 +15,7 @@ class ServiceError extends Error {
 // services/authService.js
 const loginService = async (email, password, provider = "local") => {
   console.log("Login attempt for email:", email, "with provider:", provider);
+  console.log("Password:", bcrypt.hashSync("123456", 10));
 
   const user = await accountRepository.findAccountByEmail(email);
   console.log("User found:", user);

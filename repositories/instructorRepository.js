@@ -144,6 +144,7 @@ class InstructorRepository {
           i.CV,
           i.Major,
           i.AccID,
+          i.InstructorFee,
           a.Email,
           a.Username,
           a.Phone
@@ -165,7 +166,6 @@ class InstructorRepository {
           c.Title,
           c.Description,
           c.Duration,
-          COALESCE(c.Fee, 0) as TuitionFee,
           c.Status
         FROM course c
         WHERE c.InstructorID = ?

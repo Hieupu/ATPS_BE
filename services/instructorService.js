@@ -40,6 +40,17 @@ class InstructorService {
   async searchInstructors(params) {
     return await instructorRepository.searchInstructors(params);
   }
+
+  async getInstructorIdByAccountId(accountId) {
+    try {
+      const instructorId =
+        await instructorRepository.getInstructorIdByAccountId(accountId);
+      return instructorId;
+    } catch (error) {
+      console.error("Error in getInstructorIdByAccountId service:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new InstructorService();

@@ -16,6 +16,7 @@ class ProfileService {
         Username: account.Username,
         Email: account.Email,
         Phone: account.Phone,
+         Gender: account.Gender,
         Role: role // Sử dụng role đã xác định
       }
     };
@@ -58,10 +59,13 @@ class ProfileService {
 
     if (updateData.Username !== undefined) accountData.Username = updateData.Username;
     if (updateData.Phone !== undefined) accountData.Phone = updateData.Phone;
+     if (updateData.Gender !== undefined) accountData.Gender = updateData.Gender;
 
     // Xử lý dữ liệu cho bảng profile theo role
     if (updateData.FullName !== undefined) profileData.FullName = updateData.FullName;
-    if (updateData.DateOfBirth !== undefined) profileData.DateOfBirth = updateData.DateOfBirth;
+       if (updateData.DateOfBirth !== undefined) {
+      profileData.DateOfBirth = this.formatDateForMySQL(updateData.DateOfBirth);
+    }
     if (updateData.Job !== undefined) profileData.Job = updateData.Job;
     if (updateData.Address !== undefined) profileData.Address = updateData.Address;
     
@@ -88,6 +92,34 @@ class ProfileService {
     }
 
     return this.getProfileByAccountId(accountId);
+  }
+
+    formatDateForMySQL(dateString) {
+    if (!dateString) return null;
+    
+    try {
+      // Nếu là ISO string (có chứa 'T'), lấy phần date
+      if (dateString.includes('T')) {
+        return dateString.split('T')[0];
+      }
+      
+      // Nếu đã là YYYY-MM-DD thì giữ nguyên
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+        return dateString;
+      }
+      
+      // Chuyển đổi từ các định dạng khác
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date format:', dateString);
+        return null;
+      }
+      
+      return date.toISOString().split('T')[0];
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return null;
+    }
   }
 
   generateUsername(fullName) {
