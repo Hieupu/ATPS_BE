@@ -1,6 +1,6 @@
 const scheduleService = require("../services/scheduleService");
 const courseRepository = require("../repositories/courseRepository");
-
+const axios = require("axios");
 
 class ScheduleController {
   async getLearnerSchedule(req, res) {
@@ -300,6 +300,8 @@ async checkTimeslotConflict(req, res) {
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 }
+
+// 🧠 THÊM HÀM NÀY VÀO FILE HIỆN TẠI (đặt trước hàm createOneOnOneBooking)
 
 async createOneOnOneBooking(req, res) {
     try {
@@ -657,39 +659,126 @@ if (endDateObj < startDateObj) {
   // Sửa: Sử dụng cùng logic format cho cả hai ngày
   enddatePlan = opendatePlan; // Với 1 buổi học, ngày kết thúc = ngày bắt đầu
 }
+            // ========== TẠO ZOOM MEETING TRỰC TIẾP ==========
+console.log("====== CREATING ZOOM MEETING DIRECTLY ======");
+let zoomMeetingData = null;
 
+try {
+  // 🎯 GỌI ZOOM API TRỰC TIẾP
+  const accessToken = await getZoomAccessToken();
+  
+  // Chuyển đổi days từ "Monday,Wednesday,Friday" sang "2,4,6"
+  const dayMap = {
+    "Monday": "2",
+    "Tuesday": "3", 
+    "Wednesday": "4",
+    "Thursday": "5",
+    "Friday": "6",
+    "Saturday": "7",
+    "Sunday": "1"
+  };
+  
+  const weeklyDays = timeslots.map(slot => dayMap[slot.Day]).join(",");
+  
+  const meetingData = {
+    topic: className,
+    type: 8, // Recurring meeting
+    start_time: bookingDate + "T07:30:00", // ⚠️ Sửa theo StartTime thực tế (7:30 AM)
+    timezone: "Asia/Ho_Chi_Minh",
+    duration: slotDurationMinutes, // 90 phút
+    recurrence: {
+      type: 2, // Weekly
+      repeat_interval: 1,
+      weekly_days: weeklyDays, // "2,4,6" - tự động từ timeslots
+      end_times: numberOfSessions, // Số buổi học
+    },
+    settings: {
+      join_before_host: false,
+      mute_upon_entry: true,
+      waiting_room: false,
+      approval_type: 0,
+      auto_recording: "cloud",
+    },
+  };
+
+  console.log("Zoom Meeting Data:", {
+    topic: className,
+    start_time: bookingDate + "T07:30:00",
+    duration: slotDurationMinutes,
+    weekly_days: weeklyDays,
+    end_times: numberOfSessions
+  });
+
+  const zoomResponse = await axios.post(
+    "https://api.zoom.us/v2/users/me/meetings",
+    meetingData,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+
+  zoomMeetingData = zoomResponse.data;
+  console.log("✅ Zoom Meeting Created:", {
+    id: zoomMeetingData.id,
+    password: zoomMeetingData.password,
+    occurrences: zoomMeetingData.occurrences?.length || 0
+  });
+  
+} catch (zoomError) {
+  console.error("❌ Zoom API Error:", zoomError.response?.data || zoomError.message);
+  // Vẫn tiếp tục tạo class dù Zoom fail (có thể tạo meeting sau)
+  zoomMeetingData = null;
+}
+
+            // ========== TẠO MAP ZOOM OCCURRENCES THEO NGÀY ==========
+            const zoomOccurrencesMap = new Map();
+if (zoomMeetingData?.occurrences) {
+  zoomMeetingData.occurrences.forEach(occurrence => {
+    // Lấy date từ start_time (format: "2025-11-10T19:00:00+07:00")
+    const occurrenceDate = occurrence.start_time.split('T')[0];
+    zoomOccurrencesMap.set(occurrenceDate, occurrence.occurrence_id);
+    console.log(`Mapped occurrence: ${occurrenceDate} -> ${occurrence.occurrence_id}`);
+  });
+}
+console.log("=====================================");
 
       // Bắt đầu transaction để đảm bảo tính toàn vẹn dữ liệu
        const connection = await pool.getConnection();
       await connection.beginTransaction();
       try {
-        // ========== LOG DATABASE INSERT: CLASS ==========
-        console.log("====== DATABASE INSERT: CLASS ======");
-        console.log("Query: INSERT INTO class (ZoomURL, Status, CourseID, InstructorID, Name, Fee, Maxstudent, OpendatePlan, EnddatePlan, Numofsession)");
-        console.log("Parameters:", [
-          CourseID,
-          InstructorID,
-          className,
-          totalFee,
-          opendatePlan,
-          enddatePlan,
-          numberOfSessions,
-        ]);
+     // ========== LOG DATABASE INSERT: CLASS (CẬP NHẬT) ==========
+console.log("====== DATABASE INSERT: CLASS ======");
+console.log("Query: INSERT INTO class (ZoomID, Zoompass, Status, CourseID, InstructorID, Name, Fee, Maxstudent, OpendatePlan, EnddatePlan, Numofsession)");
+console.log("Parameters:", [
+  zoomMeetingData?.id?.toString() || null, // ZoomID
+  zoomMeetingData?.password || null, // Zoompass
+  CourseID,
+  InstructorID,
+  className,
+  totalFee,
+  opendatePlan,
+  enddatePlan,
+  numberOfSessions,
+]);
 
-
-        const [classInsert] = await connection.query(
-          `INSERT INTO class (ZoomURL, Status, CourseID, InstructorID, Name, Fee, Maxstudent, OpendatePlan, EnddatePlan, Numofsession)
-           VALUES (NULL, 'Open', ?, ?, ?, ?, 1, ?, ?, ?)`,
-          [
-            CourseID,
-            InstructorID,
-            className,
-            totalFee,
-            opendatePlan,
-            enddatePlan,
-            numberOfSessions,
-          ]
-        );
+const [classInsert] = await connection.query(
+  `INSERT INTO class (ZoomID, Zoompass, Status, CourseID, InstructorID, Name, Fee, Maxstudent, OpendatePlan, EnddatePlan, Numofsession)
+   VALUES (?, ?, 'Open', ?, ?, ?, ?, 1, ?, ?, ?)`,
+  [
+    zoomMeetingData?.id?.toString() || null, // ZoomID (varchar(11))
+    zoomMeetingData?.password || null, // Zoompass (varchar(6))
+    CourseID,
+    InstructorID,
+    className,
+    totalFee,
+    opendatePlan,
+    enddatePlan,
+    numberOfSessions,
+  ]
+);
          const newClassId = classInsert.insertId;
         console.log("New Class ID:", newClassId);
         console.log("=====================================");
@@ -730,29 +819,20 @@ if (endDateObj < startDateObj) {
     const sessionDateStr = sessionDate.toLocaleDateString("en-CA");
 
             // ========== LOG DATABASE INSERT: SESSION ==========
-            console.log("====== DATABASE INSERT: SESSION ======");
-            console.log("Query: INSERT INTO session (Title, Description, InstructorID, TimeslotID, ClassID, Date)");
-            console.log("Parameters:", [
-              `Session: ${courseTitle}`,
-              `Buổi học 1-1 với giảng viên [Khóa học: ${courseTitle}] [ORIGINAL_BOOKING:${selectedSlot.Date}_${selectedSlot.TimeslotID}]`,
-              InstructorID,
-              selectedSlot.TimeslotID,
-              newClassId,
-              sessionDateStr,
-            ]);
 
-            const [sessionInsert] = await connection.query(
-              `INSERT INTO session (Title, Description, InstructorID, TimeslotID, ClassID, Date)
-               VALUES (?, ?, ?, ?, ?, ?)`,
-              [
-                `Session: ${courseTitle}`, // Title tạm thời
-                `Buổi học 1-1 với giảng viên [Khóa học: ${courseTitle}] [ORIGINAL_BOOKING:${selectedSlot.Date}_${selectedSlot.TimeslotID}]`,
-                InstructorID,
-                selectedSlot.TimeslotID,
-                newClassId,
-                sessionDateStr,
-              ]
-            );
+         const [sessionInsert] = await connection.query(
+  `INSERT INTO session (Title, Description, InstructorID, TimeslotID, ClassID, Date, ZoomUUID)
+   VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  [
+    `Session: ${courseTitle}`,
+    `Buổi học 1-1 với giảng viên [Khóa học: ${courseTitle}] [ORIGINAL_BOOKING:${selectedSlot.Date}_${selectedSlot.TimeslotID}]`,
+    InstructorID,
+    selectedSlot.TimeslotID,
+    newClassId,
+    sessionDateStr,
+    zoomOccurrencesMap.get(sessionDateStr) || null, // ZoomUUID (occurrence_id)
+  ]
+);
 
             console.log("New Session ID:", sessionInsert.insertId);
             console.log("=====================================");
@@ -1295,6 +1375,28 @@ if (endDateObj < startDateObj) {
       }
       return res.status(500).json({ message: error.message || "Server error" });
     }
+  }
+}
+
+async function getZoomAccessToken() {
+  try {
+    const ZOOM_ACCOUNT_ID = "UcvGoJiqTIWo2IPcT8UryQ";
+    const ZOOM_CLIENT_ID = "F2K0JTsdReyA6ETOOGJF2w";
+    const ZOOM_CLIENT_SECRET = "5dy6r1U4EHO6OK0inYZxmDnmUTy45eQS";
+
+    const tokenUrl = `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${ZOOM_ACCOUNT_ID}`;
+    const authHeader = Buffer.from(`${ZOOM_CLIENT_ID}:${ZOOM_CLIENT_SECRET}`).toString("base64");
+
+    const response = await axios.post(tokenUrl, null, {
+      headers: { Authorization: `Basic ${authHeader}` },
+    });
+    
+    console.log("✅ Zoom Token lấy thành công!");
+    return response.data.access_token;
+    
+  } catch (err) {
+    console.error("❌ Lỗi lấy Zoom token:", err.response?.data || err.message);
+    throw err;
   }
 }
 

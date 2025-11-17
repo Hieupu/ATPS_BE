@@ -199,49 +199,44 @@ class CourseRepository {
     }
   }
 
-  async getEnrolledCoursesByLearnerId(learnerId) {
-    try {
-      const db = await connectDB();
+async getEnrolledCoursesByLearnerId(learnerId) {
+  try {
+    const db = await connectDB();
 
-      const [rows] = await db.query(
-        `
+    const [rows] = await db.query(
+      `
       SELECT 
         c.CourseID,
-        cl.ClassID,
         c.Title,
         c.Description,
         c.Duration,
         c.Image,
         c.Level,
         c.Status as CourseStatus,
-        cl.Fee as TuitionFee,
-        e.EnrollmentID,
-        e.EnrollmentDate,
-        e.Status as EnrollmentStatus,
-        i.InstructorID,
-        i.FullName as InstructorName,
-        i.ProfilePicture as InstructorAvatar,
-        i.Major as InstructorMajor,
-        cl.ZoomURL,
-        cl.Name as ClassName,
+        ANY_VALUE(i.InstructorID) as InstructorID,
+        ANY_VALUE(i.FullName) as InstructorName,
+        ANY_VALUE(i.ProfilePicture) as InstructorAvatar,
+        ANY_VALUE(i.Major) as InstructorMajor,
         (SELECT COUNT(*) FROM unit u WHERE u.CourseID = c.CourseID AND u.Status = 'VISIBLE') as UnitCount,
-        (SELECT COUNT(*) FROM enrollment e2 WHERE e2.ClassID = cl.ClassID AND e2.Status = 'enrolled') as TotalEnrollments
+        COUNT(DISTINCT cl.ClassID) as TotalClasses,
+        MAX(e.EnrollmentDate) as LastEnrollmentDate
       FROM enrollment e
       INNER JOIN class cl ON e.ClassID = cl.ClassID
       INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
       INNER JOIN course c ON cl.CourseID = c.CourseID
       WHERE e.LearnerID = ? AND e.Status = 'enrolled'
-      ORDER BY e.EnrollmentDate DESC
-    `,
-        [learnerId]
-      );
+      GROUP BY c.CourseID
+      ORDER BY LastEnrollmentDate DESC
+      `,
+      [learnerId]
+    );
 
-      return rows;
-    } catch (error) {
-      console.error("Database error in getEnrolledCoursesByLearnerId:", error);
-      throw error;
-    }
+    return rows;
+  } catch (error) {
+    console.error("Database error in getEnrolledCoursesByLearnerId:", error);
+    throw error;
   }
+}
 
 async getPopularClasses() {
   try {
@@ -428,7 +423,8 @@ async getClassesByCourse(courseId) {
         cl.ClassID,
         cl.CourseID,
         cl.Name as ClassName,
-        cl.ZoomURL,
+         cl.ZoomID,
+        cl.Zoompass,
         cl.Status,
         cl.Fee,
         cl.Maxstudent,
@@ -443,7 +439,8 @@ async getClassesByCourse(courseId) {
        INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
        LEFT JOIN session se ON cl.ClassID = se.ClassID
        WHERE cl.CourseID = ? AND cl.Status = 'active'
-       GROUP BY cl.ClassID, cl.Name, cl.ZoomURL, cl.Status, cl.Fee, cl.Maxstudent, 
+       GROUP BY cl.ClassID, cl.Name, cl.ZoomID,
+        cl.Zoompass, cl.Status, cl.Fee, cl.Maxstudent, 
                 cl.Opendate, cl.Enddate, cl.Numofsession, i.InstructorID, i.FullName
        ORDER BY cl.ClassID`,
       [courseId]
@@ -703,7 +700,8 @@ async getPopularCourses() {
         `SELECT 
         cl.ClassID,
         cl.Name as ClassName,
-        cl.ZoomURL,
+        cl.ZoomID,
+        cl.Zoompass,
         cl.Status,
         cl.Fee,
         cl.InstructorID,
@@ -723,7 +721,8 @@ async getPopularCourses() {
          AND e.Status = 'enrolled'
           AND cl.Status IN ('active', 'ongoing')
        GROUP BY 
-         cl.ClassID, cl.Name, cl.ZoomURL, cl.Status, cl.Fee, 
+         cl.ClassID, cl.Name, cl.ZoomID,
+        cl.Zoompass, cl.Status, cl.Fee, 
          cl.InstructorID, i.FullName, i.ProfilePicture,
          e.EnrollmentID, e.EnrollmentDate, e.Status
        ORDER BY e.EnrollmentDate DESC`,
