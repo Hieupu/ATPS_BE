@@ -199,50 +199,44 @@ class CourseRepository {
     }
   }
 
-  async getEnrolledCoursesByLearnerId(learnerId) {
-    try {
-      const db = await connectDB();
+async getEnrolledCoursesByLearnerId(learnerId) {
+  try {
+    const db = await connectDB();
 
-      const [rows] = await db.query(
-        `
+    const [rows] = await db.query(
+      `
       SELECT 
         c.CourseID,
-        cl.ClassID,
         c.Title,
         c.Description,
         c.Duration,
         c.Image,
         c.Level,
         c.Status as CourseStatus,
-        cl.Fee as TuitionFee,
-        e.EnrollmentID,
-        e.EnrollmentDate,
-        e.Status as EnrollmentStatus,
-        i.InstructorID,
-        i.FullName as InstructorName,
-        i.ProfilePicture as InstructorAvatar,
-        i.Major as InstructorMajor,
-         cl.ZoomID,
-        cl.Zoompass,
-        cl.Name as ClassName,
+        ANY_VALUE(i.InstructorID) as InstructorID,
+        ANY_VALUE(i.FullName) as InstructorName,
+        ANY_VALUE(i.ProfilePicture) as InstructorAvatar,
+        ANY_VALUE(i.Major) as InstructorMajor,
         (SELECT COUNT(*) FROM unit u WHERE u.CourseID = c.CourseID AND u.Status = 'VISIBLE') as UnitCount,
-        (SELECT COUNT(*) FROM enrollment e2 WHERE e2.ClassID = cl.ClassID AND e2.Status = 'enrolled') as TotalEnrollments
+        COUNT(DISTINCT cl.ClassID) as TotalClasses,
+        MAX(e.EnrollmentDate) as LastEnrollmentDate
       FROM enrollment e
       INNER JOIN class cl ON e.ClassID = cl.ClassID
       INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
       INNER JOIN course c ON cl.CourseID = c.CourseID
       WHERE e.LearnerID = ? AND e.Status = 'enrolled'
-      ORDER BY e.EnrollmentDate DESC
-    `,
-        [learnerId]
-      );
+      GROUP BY c.CourseID
+      ORDER BY LastEnrollmentDate DESC
+      `,
+      [learnerId]
+    );
 
-      return rows;
-    } catch (error) {
-      console.error("Database error in getEnrolledCoursesByLearnerId:", error);
-      throw error;
-    }
+    return rows;
+  } catch (error) {
+    console.error("Database error in getEnrolledCoursesByLearnerId:", error);
+    throw error;
   }
+}
 
 async getPopularClasses() {
   try {

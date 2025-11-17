@@ -1,7 +1,8 @@
 const connectDB = require("../config/db");
 
 class ExamRepository {
-  async getExamsByCourse(courseId) {
+async getExamsByCourse(courseId) {
+  try {
     const db = await connectDB();
     const [rows] = await db.query(
       `SELECT ExamID, CourseID, Title, Description, StartTime, EndTime, Status
@@ -9,7 +10,11 @@ class ExamRepository {
       [courseId]
     );
     return rows;
+  } catch (error) {
+    console.error("Database error in getExamsByCourse:", error);
+    throw error;
   }
+}
 
   async getExamQuestions(examId) {
     const db = await connectDB();

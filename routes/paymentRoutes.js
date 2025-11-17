@@ -5,6 +5,9 @@ const {
   updatePaymentStatus,
   checkPromotionCode,
   getPaymentLinkByOrderCode,
+  requestRefund,
+  getPaymentHistory,
+  cancelRefundRequest
 } = require("../controllers/paymentController");
 const { verifyToken } = require("../middlewares/middware");
 
@@ -19,5 +22,12 @@ router.post("/check-promo", verifyToken, checkPromotionCode);
 
 // GET /api/payment/get-link/:orderCode
 router.get("/get-link/:orderCode", verifyToken, getPaymentLinkByOrderCode);
+
+router.get("/learner/:learnerId",verifyToken, getPaymentHistory);
+
+// Request refund
+router.post("/refunds/request", verifyToken, requestRefund);
+
+router.put("/refund/:refundId/cancel", verifyToken , cancelRefundRequest);
 
 module.exports = router;
