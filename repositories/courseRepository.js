@@ -199,49 +199,44 @@ class CourseRepository {
     }
   }
 
-  async getEnrolledCoursesByLearnerId(learnerId) {
-    try {
-      const db = await connectDB();
+async getEnrolledCoursesByLearnerId(learnerId) {
+  try {
+    const db = await connectDB();
 
-      const [rows] = await db.query(
-        `
+    const [rows] = await db.query(
+      `
       SELECT 
         c.CourseID,
-        cl.ClassID,
         c.Title,
         c.Description,
         c.Duration,
         c.Image,
         c.Level,
         c.Status as CourseStatus,
-        cl.Fee as TuitionFee,
-        e.EnrollmentID,
-        e.EnrollmentDate,
-        e.Status as EnrollmentStatus,
-        i.InstructorID,
-        i.FullName as InstructorName,
-        i.ProfilePicture as InstructorAvatar,
-        i.Major as InstructorMajor,
-        cl.ZoomURL,
-        cl.Name as ClassName,
+        ANY_VALUE(i.InstructorID) as InstructorID,
+        ANY_VALUE(i.FullName) as InstructorName,
+        ANY_VALUE(i.ProfilePicture) as InstructorAvatar,
+        ANY_VALUE(i.Major) as InstructorMajor,
         (SELECT COUNT(*) FROM unit u WHERE u.CourseID = c.CourseID AND u.Status = 'VISIBLE') as UnitCount,
-        (SELECT COUNT(*) FROM enrollment e2 WHERE e2.ClassID = cl.ClassID AND e2.Status = 'enrolled') as TotalEnrollments
+        COUNT(DISTINCT cl.ClassID) as TotalClasses,
+        MAX(e.EnrollmentDate) as LastEnrollmentDate
       FROM enrollment e
       INNER JOIN class cl ON e.ClassID = cl.ClassID
       INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
       INNER JOIN course c ON cl.CourseID = c.CourseID
       WHERE e.LearnerID = ? AND e.Status = 'enrolled'
-      ORDER BY e.EnrollmentDate DESC
-    `,
-        [learnerId]
-      );
+      GROUP BY c.CourseID
+      ORDER BY LastEnrollmentDate DESC
+      `,
+      [learnerId]
+    );
 
-      return rows;
-    } catch (error) {
-      console.error("Database error in getEnrolledCoursesByLearnerId:", error);
-      throw error;
-    }
+    return rows;
+  } catch (error) {
+    console.error("Database error in getEnrolledCoursesByLearnerId:", error);
+    throw error;
   }
+}
 
 async getPopularClasses() {
   try {
@@ -428,7 +423,8 @@ async getClassesByCourse(courseId) {
         cl.ClassID,
         cl.CourseID,
         cl.Name as ClassName,
-        cl.ZoomURL,
+         cl.ZoomID,
+        cl.Zoompass,
         cl.Status,
         cl.Fee,
         cl.Maxstudent,
@@ -443,7 +439,8 @@ async getClassesByCourse(courseId) {
        INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
        LEFT JOIN session se ON cl.ClassID = se.ClassID
        WHERE cl.CourseID = ? AND cl.Status = 'active'
-       GROUP BY cl.ClassID, cl.Name, cl.ZoomURL, cl.Status, cl.Fee, cl.Maxstudent, 
+       GROUP BY cl.ClassID, cl.Name, cl.ZoomID,
+        cl.Zoompass, cl.Status, cl.Fee, cl.Maxstudent, 
                 cl.Opendate, cl.Enddate, cl.Numofsession, i.InstructorID, i.FullName
        ORDER BY cl.ClassID`,
       [courseId]
@@ -691,6 +688,160 @@ async getPopularCourses() {
       return rows;
     } catch (error) {
       console.error("Database error in getAllCoursesAdmin:", error);
+      throw error;
+    }
+  }
+
+  async getMyClassesInCourse(learnerId, courseId) {
+    try {
+      const db = await connectDB();
+
+      const [classes] = await db.query(
+        `SELECT 
+        cl.ClassID,
+        cl.Name as ClassName,
+        cl.ZoomID,
+        cl.Zoompass,
+        cl.Status,
+        cl.Fee,
+        cl.InstructorID,
+        i.FullName as InstructorName,
+        i.ProfilePicture as InstructorAvatar,
+        e.EnrollmentID,
+        e.EnrollmentDate,
+        e.Status as EnrollmentStatus,
+        (SELECT COUNT(*) FROM enrollment e2 WHERE e2.ClassID = cl.ClassID AND e2.Status = 'enrolled') as StudentCount,
+        COUNT(DISTINCT se.SessionID) as TotalSessions
+       FROM class cl
+       INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
+       INNER JOIN enrollment e ON cl.ClassID = e.ClassID
+       LEFT JOIN session se ON cl.ClassID = se.ClassID
+       WHERE cl.CourseID = ? 
+         AND e.LearnerID = ? 
+         AND e.Status = 'enrolled'
+          AND cl.Status IN ('active', 'ongoing')
+       GROUP BY 
+         cl.ClassID, cl.Name, cl.ZoomID,
+        cl.Zoompass, cl.Status, cl.Fee, 
+         cl.InstructorID, i.FullName, i.ProfilePicture,
+         e.EnrollmentID, e.EnrollmentDate, e.Status
+       ORDER BY e.EnrollmentDate DESC`,
+        [courseId, learnerId]
+      );
+
+      // Lấy lịch học từ timeslot
+      for (let classItem of classes) {
+        const [weeklySchedule] = await db.query(
+          `SELECT DISTINCT
+          t.StartTime,
+          t.EndTime,
+          t.Day,
+          s.Date
+         FROM session s
+         INNER JOIN timeslot t ON s.TimeslotID = t.TimeslotID
+         WHERE s.ClassID = ?
+         ORDER BY s.Date, t.StartTime`,
+          [classItem.ClassID]
+        );
+
+        classItem.weeklySchedule = weeklySchedule;
+      }
+
+      return classes;
+    } catch (error) {
+      console.error("Database error in getMyClassesInCourse:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Lấy danh sách assignments của khóa học kèm trạng thái nộp bài của learner
+   */
+  async getAssignmentsWithSubmissions(courseId, learnerId) {
+    try {
+      const db = await connectDB();
+
+      const [assignments] = await db.query(
+        `SELECT 
+        a.AssignmentID,
+        a.Title,
+        a.Description,
+        a.Deadline,
+        a.FileURL,
+        a.MediaURL,
+        a.MaxDuration,
+        a.Type,
+        a.Status as AssignmentStatus,
+        a.ShowAnswersAfter,
+        a.UnitID,
+        u.Title as UnitTitle,
+        s.SubmissionID,
+        s.SubmissionDate,
+        s.Score,
+        s.Feedback,
+        s.Status as SubmissionStatus,
+        s.Content as SubmissionContent,
+        s.AudioURL as SubmissionAudioURL,
+        s.DurationSec as SubmissionDuration
+       FROM assignment a
+       INNER JOIN unit u ON a.UnitID = u.UnitID
+       LEFT JOIN submission s ON a.AssignmentID = s.AssignmentID AND s.LearnerID = ?
+       WHERE u.CourseID = ? 
+         AND a.Status IN ('published', 'scheduled')
+         AND u.Status = 'VISIBLE'
+       ORDER BY a.Deadline ASC, a.AssignmentID ASC`,
+        [learnerId, courseId]
+      );
+
+      return assignments.map((assignment) => ({
+        AssignmentID: assignment.AssignmentID,
+        Title: assignment.Title,
+        Description: assignment.Description,
+        Deadline: assignment.Deadline,
+        FileURL: assignment.FileURL,
+        MediaURL: assignment.MediaURL,
+        MaxDuration: assignment.MaxDuration,
+        Type: assignment.Type,
+        ShowAnswersAfter: assignment.ShowAnswersAfter,
+        UnitTitle: assignment.UnitTitle,
+        Submission: assignment.SubmissionID
+          ? {
+              SubmissionID: assignment.SubmissionID,
+              SubmissionDate: assignment.SubmissionDate,
+              Score: assignment.Score,
+              Feedback: assignment.Feedback,
+              Status: assignment.SubmissionStatus,
+              Content: assignment.SubmissionContent,
+              AudioURL: assignment.SubmissionAudioURL,
+              DurationSec: assignment.SubmissionDuration,
+            }
+          : null,
+      }));
+    } catch (error) {
+      console.error("Database error in getAssignmentsWithSubmissions:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Lấy LearnerID từ AccountID (có thể đã có, nhưng thêm cho chắc)
+   */
+  async getLearnerIdByAccountId(accountId) {
+    try {
+      const db = await connectDB();
+
+      const [rows] = await db.query(
+        `SELECT LearnerID FROM learner WHERE AccID = ?`,
+        [accountId]
+      );
+
+      if (!rows.length) {
+        throw new Error("Learner profile not found");
+      }
+
+      return rows[0].LearnerID;
+    } catch (error) {
+      console.error("Database error in getLearnerIdByAccountId:", error);
       throw error;
     }
   }

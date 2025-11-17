@@ -1,7 +1,8 @@
 const { PayOS } = require("@payos/node");
 const connectDB = require("../config/db");
 const { sendEmail } = require("../utils/nodemailer");
-
+const paymentService = require("../services/paymentService");
+const notificationService = require("../services/notificationService");
 const payos = new PayOS({
   clientId: process.env.PAYOS_CLIENT_ID,
   apiKey: process.env.PAYOS_API_KEY,
@@ -684,9 +685,84 @@ const getPaymentLinkByOrderCode = async (req, res) => {
   }
 };
 
+const getPaymentHistory = async(req, res) => {
+  try {
+    const { learnerId } = req.params;
+
+    if (!learnerId) {
+      return res.status(400).json({ message: "Learner ID is required" });
+    }
+
+    const payments = await paymentService.getPaymentHistory(learnerId);
+    return res.json({ payments });
+  } catch (error) {
+    console.error("Error in getPaymentHistory:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+const requestRefund = async(req, res) => {
+  try {
+    const { enrollmentId, reason } = req.body;
+
+    if (!enrollmentId || !reason) {
+      return res.status(400).json({ 
+        message: "Enrollment ID and reason are required" 
+      });
+    }
+
+    const result = await paymentService.requestRefund(enrollmentId, reason);
+    
+    // Tạo notification sau khi request refund thành công
+    if (result.success) {
+      await notificationService.createRefundNotification(
+        enrollmentId, 
+        result.refundRequest.RefundID,
+        'requested'
+      );
+    }
+    
+    return res.json(result);
+  } catch (error) {
+    console.error("Error in requestRefund:", error);
+    return res.status(500).json({ message: error.message || "Server error" });
+  }
+};
+
+const cancelRefundRequest = async(req, res) => {
+  try {
+    const { refundId } = req.params;
+
+    if (!refundId) {
+      return res.status(400).json({ 
+        message: "Refund ID is required" 
+      });
+    }
+
+    const result = await paymentService.cancelRefundRequest(refundId);
+    
+    // Tạo notification sau khi cancel refund thành công
+    if (result.success) {
+      await notificationService.createRefundNotification(
+        result.refundRequest.EnrollmentID, 
+        refundId,
+        'cancelled'
+      );
+    }
+    
+    return res.json(result);
+  } catch (error) {
+    console.error("Error in cancelRefundRequest:", error);
+    return res.status(500).json({ message: error.message || "Server error" });
+  }
+};
+
 module.exports = {
   createPaymentLink,
   updatePaymentStatus,
   checkPromotionCode,
   getPaymentLinkByOrderCode,
+  requestRefund,
+  getPaymentHistory,
+  cancelRefundRequest
 };
