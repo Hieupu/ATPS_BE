@@ -1,4 +1,5 @@
 const connectDB = require("../config/db");
+const Account = require("../models/account");
 
 class AccountRepository {
   async findAccountByEmail(email) {
@@ -8,16 +9,7 @@ class AccountRepository {
       normalizedEmail,
     ]);
     if (!rows.length) return null;
-    const u = rows[0];
-    return {
-      AccID: u.AccID,
-      Username: u.Username,
-      Email: u.Email,
-      Phone: u.Phone,
-      Password: u.Password,
-      Status: u.Status,
-      Provider: u.Provider || "local",
-    };
+    return new Account(rows[0]);
   }
 
   async createAccount({

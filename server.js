@@ -17,7 +17,8 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const zoomRoutes = require("./routes/zoomRoutes");
 const passport = require("passport");
 const cors = require("cors");
-
+// const paymentRoutes = require("./routes/paymentRoutes");
+const instructorCourseRoutes = require("./routes/instructorCourseRouter");
 
 dotenv.config();
 const app = express();
@@ -45,6 +46,7 @@ app.use("/api", router);
 app.use("/api/profile", profileRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/instructors", instructorRoutes);
+app.use("/api/instructor/courses", instructorCourseRoutes);
 app.use("/api/schedule", scheduleRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/progress", progressRoutes);

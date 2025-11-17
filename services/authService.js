@@ -51,7 +51,6 @@ const loginService = async (email, password, provider = "local") => {
 
   // LUÔN xác định role cho cả local và social
   const role = await determineUserRole(user.AccID);
-  console.log("Determined role for user:", role); // Debug log
 
   const featureNames = await accountRepository.getFeaturesByAccountId(
     user.AccID
@@ -143,6 +142,7 @@ const registerService = async ({
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
+
   const id = await accountRepository.createAccount({
     username,
     email: email.trim().toLowerCase(),
