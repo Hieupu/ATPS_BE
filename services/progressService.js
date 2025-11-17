@@ -7,6 +7,7 @@ class ProgressService {
         learnerId,
         courseId
       );
+      console.log("progressData", progressData)
 
       const formattedProgress = progressData.map((progress) => {
         const status = this.getProgressStatus(progress.ProgressPercentage);
