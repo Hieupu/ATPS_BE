@@ -128,13 +128,20 @@ async checkScheduleConflict(req, res) {
       });
     }
 
-    // Lấy lịch học CỤ THỂ của lớp muốn đăng ký (các session với ngày cụ thể)
+    // Lấy lịch học của lớp muốn đăng ký
     const targetClassSchedule = await scheduleService.getClassSchedule(classId);
     console.log("Target class schedule:", targetClassSchedule);
 
-    // Lấy lịch học hiện tại của learner (các session cụ thể với ngày)
+    // Lấy lịch học hiện tại của learner
     const currentSchedule = await scheduleService.getLearnerSchedule(learnerId);
     console.log("Current learner schedule:", currentSchedule);
+
+    // Hàm chuyển đổi time sang phút
+    const timeToMinutes = (timeStr) => {
+      if (!timeStr) return 0;
+      const [hours, minutes, seconds] = timeStr.split(':').map(Number);
+      return hours * 60 + (minutes || 0);
+    };
 
     const conflicts = [];
 
@@ -142,10 +149,10 @@ async checkScheduleConflict(req, res) {
     const normalizeDate = (dateInput) => {
       if (!dateInput) return "";
       const dateObj = new Date(dateInput);
-      return dateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+      return dateObj.toISOString().split('T')[0];
     };
 
-    // Kiểm tra trùng lịch - ĐÃ SỬA: so sánh ngày CỤ THỂ
+    // Kiểm tra trùng lịch
     for (const targetSession of targetClassSchedule) {
       const targetDate = normalizeDate(targetSession.Date);
       
@@ -154,28 +161,34 @@ async checkScheduleConflict(req, res) {
         
         console.log(`Date comparison: ${targetDate} vs ${currentDate}`);
 
-        // Kiểm tra trùng ngày CỤ THỂ
+        // Kiểm tra trùng ngày
         if (targetDate === currentDate) {
-          const targetStart = targetSession.StartTime;
-          const targetEnd = targetSession.EndTime;
-          const currentStart = currentSession.StartTime;
-          const currentEnd = currentSession.EndTime;
+          // Chuyển đổi sang phút để so sánh chính xác
+          const targetStart = timeToMinutes(targetSession.StartTime);
+          const targetEnd = timeToMinutes(targetSession.EndTime);
+          const currentStart = timeToMinutes(currentSession.StartTime);
+          const currentEnd = timeToMinutes(currentSession.EndTime);
 
-          console.log(`Checking time on ${targetDate}: ${targetStart}-${targetEnd} vs ${currentStart}-${currentEnd}`);
+          console.log(`Checking time on ${targetDate}: ${targetSession.StartTime}-${targetSession.EndTime} vs ${currentSession.StartTime}-${currentSession.EndTime}`);
+          console.log(`Time in minutes: ${targetStart}-${targetEnd} vs ${currentStart}-${currentEnd}`);
 
-          // Kiểm tra overlap thời gian
-          if (
-            (targetStart >= currentStart && targetStart < currentEnd) ||
-            (targetEnd > currentStart && targetEnd <= currentEnd) ||
-            (targetStart <= currentStart && targetEnd >= currentEnd)
-          ) {
+          // Kiểm tra overlap với điều kiện chặt chẽ hơn
+          // KHÔNG tính là conflict nếu thời gian kết thúc và bắt đầu trùng nhau chính xác
+          const hasOverlap = (
+            (targetStart < currentEnd && targetEnd > currentStart) &&
+            !(targetStart === currentEnd || targetEnd === currentStart)
+          );
+
+          if (hasOverlap) {
             conflicts.push({
               ClassName: currentSession.ClassName,
-              Schedule: `${currentDate} ${currentStart}-${currentEnd}`,
+              Schedule: `${currentDate} ${currentSession.StartTime}-${currentSession.EndTime}`,
               InstructorName: currentSession.InstructorName,
-              ConflictingSession: `${targetDate} ${targetStart}-${targetEnd} (${targetSession.ClassName})`
+              ConflictingSession: `${targetDate} ${targetSession.StartTime}-${targetSession.EndTime} (${targetSession.ClassName})`
             });
             console.log("Conflict found!");
+          } else {
+            console.log("No time conflict - sessions can be adjacent");
           }
         }
       }
@@ -199,7 +212,7 @@ async checkScheduleConflict(req, res) {
 async checkTimeslotConflict(req, res) {
   try {
     const { timeslotId } = req.params;
-    const { date } = req.query; // Nhận ngày cụ thể từ query parameter
+    const { date } = req.query;
     const accId = req.user?.id || req.user?.AccID || req.user?.AccountID;
     const learnerId = await courseRepository.getLearnerIdByAccountId(accId);
 
@@ -212,7 +225,7 @@ async checkTimeslotConflict(req, res) {
       });
     }
 
-    // Lấy thông tin timeslot muốn đăng ký từ bảng timeslot
+    // Lấy thông tin timeslot muốn đăng ký
     const targetTimeslot = await scheduleService.getTimeslotById(timeslotId);
     console.log("Target timeslot:", targetTimeslot);
 
@@ -224,17 +237,15 @@ async checkTimeslotConflict(req, res) {
     const currentSchedule = await scheduleService.getLearnerSchedule(learnerId);
     console.log("Current learner schedule:", currentSchedule);
 
-    // Hàm normalize date cho backend - tương thích với frontend
+    // Hàm normalize date
     const normalizeDateForBackend = (dateInput) => {
       if (!dateInput) return "";
       
       let dateObj;
       if (typeof dateInput === 'string') {
-        // Xử lý các định dạng date từ frontend
         if (dateInput.includes('T')) {
           dateObj = new Date(dateInput);
         } else {
-          // Định dạng YYYY-MM-DD
           dateObj = new Date(dateInput + 'T00:00:00');
         }
       } else if (dateInput instanceof Date) {
@@ -249,41 +260,56 @@ async checkTimeslotConflict(req, res) {
       return `${year}-${month}-${day}`;
     };
 
-    const conflicts = [];
+    // Hàm chuyển đổi time sang phút để so sánh chính xác
+    const timeToMinutes = (timeStr) => {
+      if (!timeStr) return 0;
+      const [hours, minutes] = timeStr.split(':').map(Number);
+      return hours * 60 + (minutes || 0);
+    };
 
-    // Normalize target date từ frontend
+    const conflicts = [];
     const targetDateNormalized = normalizeDateForBackend(date);
     console.log("Normalized target date:", targetDateNormalized);
 
-    // Kiểm tra trùng lịch với timeslot muốn đăng ký
+    // Chuyển đổi thời gian target timeslot sang phút
+    const targetStartMinutes = timeToMinutes(targetTimeslot.StartTime);
+    const targetEndMinutes = timeToMinutes(targetTimeslot.EndTime);
+
+    console.log(`Target time in minutes: ${targetStartMinutes}-${targetEndMinutes}`);
+
+    // Kiểm tra trùng lịch
     for (const currentSession of currentSchedule) {
       if (!currentSession.Date) continue;
       
-      // Normalize date từ current session
       const currentSessionDate = normalizeDateForBackend(currentSession.Date);
       
       console.log(`Date comparison: ${targetDateNormalized} vs ${currentSessionDate}`);
 
       if (targetDateNormalized === currentSessionDate) {
-        const targetStart = targetTimeslot.StartTime;
-        const targetEnd = targetTimeslot.EndTime;
-        const currentStart = currentSession.StartTime;
-        const currentEnd = currentSession.EndTime;
+        // Chuyển đổi thời gian current session sang phút
+        const currentStartMinutes = timeToMinutes(currentSession.StartTime);
+        const currentEndMinutes = timeToMinutes(currentSession.EndTime);
 
-        console.log(`Checking time: ${targetStart}-${targetEnd} vs ${currentStart}-${currentEnd}`);
+        console.log(`Current time in minutes: ${currentStartMinutes}-${currentEndMinutes}`);
+        console.log(`Checking time: ${targetTimeslot.StartTime}-${targetTimeslot.EndTime} vs ${currentSession.StartTime}-${currentSession.EndTime}`);
 
-        // Kiểm tra overlap thời gian
-        if (
-          (targetStart >= currentStart && targetStart < currentEnd) ||
-          (targetEnd > currentStart && targetEnd <= currentEnd) ||
-          (targetStart <= currentStart && targetEnd >= currentEnd)
-        ) {
+        // Kiểm tra overlap thời gian với điều kiện chặt chẽ hơn
+        // KHÔNG tính là conflict nếu thời gian kết thúc và bắt đầu trùng nhau chính xác
+        const hasOverlap = (
+          (targetStartMinutes < currentEndMinutes && targetEndMinutes > currentStartMinutes) &&
+          !(targetStartMinutes === currentEndMinutes || targetEndMinutes === currentStartMinutes)
+        );
+
+        if (hasOverlap) {
           conflicts.push({
             ClassName: currentSession.ClassName,
-            Schedule: `${currentSessionDate} ${currentStart}-${currentEnd}`,
-            InstructorName: currentSession.InstructorName
+            Schedule: `${currentSessionDate} ${currentSession.StartTime}-${currentSession.EndTime}`,
+            InstructorName: currentSession.InstructorName,
+            ConflictingTimeslot: `${targetDateNormalized} ${targetTimeslot.StartTime}-${targetTimeslot.EndTime}`
           });
           console.log("Conflict found!");
+        } else {
+          console.log("No time conflict - timeslots can be adjacent");
         }
       }
     }
@@ -292,7 +318,11 @@ async checkTimeslotConflict(req, res) {
 
     return res.json({
       hasConflict: conflicts.length > 0,
-      conflictingClasses: conflicts
+      conflictingClasses: conflicts,
+      targetTimeslot: {
+        ...targetTimeslot,
+        date: targetDateNormalized
+      }
     });
 
   } catch (error) {
