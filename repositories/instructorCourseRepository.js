@@ -29,6 +29,20 @@ class InstructorCourseRepository {
     return new Course(rows[0]);
   }
 
+  async findInstructorIdByAccountId(accId) {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      `SELECT InstructorID 
+       FROM atps.instructor 
+       WHERE AccID = ? 
+       LIMIT 1`,
+      [accId]
+    );
+
+    if (!rows.length) return null;
+    return rows[0].InstructorID;
+  }
+
   async listByInstructor(instructorId) {
     const db = await connectDB();
     const [rows] = await db.query(
@@ -79,7 +93,7 @@ class InstructorCourseRepository {
     const _Requirements = Requirements ?? "";
     const _Level = Level ?? "BEGINNER";
     const _Status = Status ?? "DRAFT";
-    const _Code = Code; // không tự sinh, để DB báo lỗi nếu thiếu
+    const _Code = Code;
 
     const [result] = await db.query(
       `INSERT INTO course

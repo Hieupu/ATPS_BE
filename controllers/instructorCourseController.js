@@ -31,10 +31,20 @@ const {
   getCourseDetailService,
 } = require("../services/instructorCourseService");
 
+const courseRepository = require("../repositories/instructorCourseRepository");
+
 /* ======================= COURSE ======================= */
 const listInstructorCourses = async (req, res) => {
   try {
-    const instructorId = Number(req.user.id);
+    const accId = Number(req.user.id);
+    const instructorId = await courseRepository.findInstructorIdByAccountId(
+      accId
+    );
+
+    if (!instructorId) {
+      return res.status(400).json({ message: "Instructor không tồn tại" });
+    }
+
     const result = await listInstructorCoursesService(instructorId);
     res.status(200).json(result);
   } catch (error) {
@@ -46,10 +56,19 @@ const listInstructorCourses = async (req, res) => {
 };
 
 const createCourse = async (req, res) => {
+  const accId = Number(req.user.id);
+
+  const instructorId = await courseRepository.findInstructorIdByAccountId(
+    accId
+  );
+
+  if (!instructorId) {
+    return res.status(400).json({ message: "Instructor không tồn tại" });
+  }
   try {
     const payload = {
       ...req.body,
-      InstructorID: Number(req.user.id),
+      InstructorID: instructorId,
     };
 
     // truyền thêm req.file xuống service
