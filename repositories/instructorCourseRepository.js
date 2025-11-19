@@ -29,6 +29,20 @@ class InstructorCourseRepository {
     return new Course(rows[0]);
   }
 
+  async findInstructorIdByAccountId(accId) {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      `SELECT InstructorID 
+       FROM atps.instructor 
+       WHERE AccID = ? 
+       LIMIT 1`,
+      [accId]
+    );
+
+    if (!rows.length) return null;
+    return rows[0].InstructorID;
+  }
+
   async listByInstructor(instructorId) {
     const db = await connectDB();
     const [rows] = await db.query(
