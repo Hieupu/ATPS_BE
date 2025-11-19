@@ -1,7 +1,7 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
-const path = require('path');
+const path = require("path");
 const router = require("./routes/routerAuth");
 const profileRoutes = require("./routes/profileRoutes");
 const courseRoutes = require("./routes/courseRoutes");
@@ -19,6 +19,7 @@ const passport = require("passport");
 const cors = require("cors");
 // const paymentRoutes = require("./routes/paymentRoutes");
 const instructorCourseRoutes = require("./routes/instructorCourseRouter");
+const instructorClassRoutes = require("./routes/instructorClassRoutes");
 
 dotenv.config();
 const app = express();
@@ -31,9 +32,9 @@ const corsOptions = {
   credentials: true,
 };
 app.use((req, res, next) => {
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
+  res.setHeader("Access-Control-Allow-Origin", "*");
   next();
 });
 
@@ -47,6 +48,7 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/instructors", instructorRoutes);
 app.use("/api/instructor/courses", instructorCourseRoutes);
+app.use("/api/instructor", instructorClassRoutes);
 app.use("/api/schedule", scheduleRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/progress", progressRoutes);

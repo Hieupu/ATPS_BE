@@ -79,7 +79,7 @@ class InstructorCourseRepository {
     const _Requirements = Requirements ?? "";
     const _Level = Level ?? "BEGINNER";
     const _Status = Status ?? "DRAFT";
-    const _Code = Code; // không tự sinh, để DB báo lỗi nếu thiếu
+    const _Code = Code;
 
     const [result] = await db.query(
       `INSERT INTO course
