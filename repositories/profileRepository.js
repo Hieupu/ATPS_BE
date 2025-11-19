@@ -40,6 +40,11 @@ class ProfileRepository {
       updateFields.push("Phone = ?");
       updateValues.push(data.Phone);
     }
+
+      if (data.Gender !== undefined) {
+      updateFields.push("Gender = ?");
+      updateValues.push(data.Gender);
+    }
     
     if (updateFields.length === 0) {
       return;

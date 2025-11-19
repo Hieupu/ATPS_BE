@@ -30,7 +30,25 @@ const authorizeFeature = (featureName) => (req, res, next) => {
   next();
 };
 
+const authorizeRole = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user || !req.user.role) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const { role } = req.user;
+    if (!allowedRoles.includes(role)) {
+      return res.status(403).json({
+        message: `Access denied. Requires role: ${allowedRoles.join(" or ")}`,
+      });
+    }
+
+    next();
+  };
+};
+
 module.exports = {
   verifyToken,
   authorizeFeature,
+  authorizeRole,
 };

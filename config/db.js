@@ -14,6 +14,8 @@ const connectDB = async () => {
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0,
+         timezone: "Z", // hoặc '+00:00'
+  dateStrings: true // rất quan trọng!
       });
       console.log("✅ MySQL connected successfully (using pool)");
     } catch (error) {

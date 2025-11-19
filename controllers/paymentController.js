@@ -1,7 +1,8 @@
 const { PayOS } = require("@payos/node");
 const connectDB = require("../config/db");
 const { sendEmail } = require("../utils/nodemailer");
-
+const paymentService = require("../services/paymentService");
+const notificationService = require("../services/notificationService");
 const payos = new PayOS({
   clientId: process.env.PAYOS_CLIENT_ID,
   apiKey: process.env.PAYOS_API_KEY,
@@ -88,10 +89,54 @@ async function cancelExistingPaymentLink(orderCode) {
   return false;
 }
 
+const checkPromotionCode = async (req, res) => {
+  try {
+    const { code } = req.body;
+    if (!code || !String(code).trim()) {
+      return res
+        .status(400)
+        .json({ valid: false, message: "Mã giảm giá không hợp lệ" });
+    }
+
+    const db = await connectDB();
+    const [promoRows] = await db.query(
+      `SELECT PromotionID, Code, Discount, StartDate, EndDate
+       FROM promotion WHERE Code = ? LIMIT 1`,
+      [String(code).trim()]
+    );
+
+    if (!promoRows.length) {
+      return res.json({ valid: false, message: "Không tìm thấy mã giảm giá" });
+    }
+
+    const promo = promoRows[0];
+    const [dateRows] = await db.query("SELECT CURDATE() as today");
+    const today = dateRows?.[0]?.today;
+    const startOk = !promo.StartDate || promo.StartDate <= today;
+    const endOk = !promo.EndDate || promo.EndDate >= today;
+    const discount = Number(promo.Discount) || 0;
+    if (!startOk || !endOk || discount <= 0) {
+      return res.json({
+        valid: false,
+        message: "Mã giảm giá không còn hiệu lực",
+      });
+    }
+
+    return res.json({
+      valid: true,
+      code: promo.Code,
+      discountPercent: Math.min(discount, 100),
+    });
+  } catch (error) {
+    console.error("Check promotion error:", error);
+    res.status(500).json({ valid: false, message: "Lỗi kiểm tra mã giảm giá" });
+  }
+};
+
 const createPaymentLink = async (req, res) => {
   try {
     console.log("Account info from JWT:", req.user);
-    const { classID } = req.body;
+    const { classID, promoCode } = req.body;
     const accId = req.user.id;
 
     if (!classID) {
@@ -117,10 +162,10 @@ const createPaymentLink = async (req, res) => {
     // Logic giá tiền: Nếu class có Fee thì lấy từ class, nếu không thì lấy từ course
     const [classData] = await db.query(
       `SELECT cl.*, c.Title as CourseTitle, 
-       CASE WHEN cl.Fee IS NOT NULL THEN cl.Fee ELSE COALESCE(c.Fee, 0) END as TuitionFee
-       FROM class cl 
-       LEFT JOIN course c ON cl.CourseID = c.CourseID 
-       WHERE cl.ClassID = ? AND cl.Status = 'active'`,
+   COALESCE(cl.Fee, 0) as TuitionFee  -- Sửa: chỉ dùng cl.Fee
+   FROM class cl 
+   LEFT JOIN course c ON cl.CourseID = c.CourseID 
+   WHERE cl.ClassID = ? AND cl.Status IN ('active','pending','paid')`,
       [classID]
     );
     if (!classData.length)
@@ -128,19 +173,38 @@ const createPaymentLink = async (req, res) => {
 
     const classInfo = classData[0];
     let amount = Number(classInfo.TuitionFee) || 0;
-    // Nếu chưa thiết lập học phí cho lớp (đặc biệt lớp 1-1), fallback hợp lệ
-    if (amount <= 0) {
-      // Thử lấy lại từ course
-      const [courseRows] = await db.query(
-        "SELECT COALESCE(Fee, 0) as Fee FROM course WHERE CourseID = ?",
-        [classInfo.CourseID]
-      );
-      const courseFee = Number(courseRows?.[0]?.Fee) || 0;
-      amount = courseFee;
+
+    // Áp dụng mã giảm giá (nếu có)
+    let appliedDiscountPercent = 0;
+    let appliedPromoCode = null;
+    if (promoCode && String(promoCode).trim()) {
+      try {
+        const code = String(promoCode).trim();
+        const [promoRows] = await db.query(
+          `SELECT PromotionID, Code, Discount, StartDate, EndDate
+           FROM promotion WHERE Code = ? LIMIT 1`,
+          [code]
+        );
+        if (promoRows.length) {
+          const promo = promoRows[0];
+          const [dateRows] = await db.query("SELECT CURDATE() as today");
+          const today = dateRows?.[0]?.today;
+          const startOk = !promo.StartDate || promo.StartDate <= today;
+          const endOk = !promo.EndDate || promo.EndDate >= today;
+          if (startOk && endOk) {
+            const discount = Number(promo.Discount) || 0;
+            if (discount > 0) {
+              appliedDiscountPercent = Math.min(discount, 100);
+              appliedPromoCode = promo.Code;
+            }
+          }
+        }
+      } catch (_) {}
     }
-    // Nếu vẫn không có học phí, dùng mặc định
-    if (amount <= 0) {
-      amount = Number(process.env.DEFAULT_TUITION_FEE || 5000); // VND
+
+    if (appliedDiscountPercent > 0) {
+      const discounted = amount * (1 - appliedDiscountPercent / 100);
+      amount = Math.max(0, Math.round(discounted));
     }
 
     // Chặn trùng: nếu đã Enrolled -> từ chối; nếu Pending -> tái sử dụng OrderCode
@@ -185,10 +249,13 @@ const createPaymentLink = async (req, res) => {
       );
     }
 
+    // PayOS chỉ cho phép description tối đa 25 ký tự
+    const description = "Thanh toán lớp học".substring(0, 25);
+
     const body = {
       orderCode: orderCode,
       amount: Math.round(amount),
-      description: `Thanh toán lớp học`,
+      description: description,
       returnUrl: `${
         process.env.FRONTEND_URL
       }/payment-success?orderCode=${encodeURIComponent(orderCode)}`,
@@ -211,6 +278,8 @@ const createPaymentLink = async (req, res) => {
         success: true,
         paymentUrl: paymentLink.checkoutUrl || paymentLink.url,
         orderCode: orderCode,
+        amount: Math.round(amount),
+        appliedPromo: appliedPromoCode,
       });
     } catch (e) {
       if (e?.error?.code === "231") {
@@ -247,6 +316,7 @@ const createPaymentLink = async (req, res) => {
 };
 
 const updatePaymentStatus = async (req, res) => {
+  let db;
   try {
     const { orderCode, status, amount } = req.body;
 
@@ -256,35 +326,22 @@ const updatePaymentStatus = async (req, res) => {
         .json({ message: "Order code and status are required" });
     }
 
-    const db = await connectDB();
+    db = await connectDB();
 
-    // Tìm enrollment theo OrderCode trước, fallback theo EnrollmentID nếu orderCode là số
-    let enrollments = [];
-    const [rowsByCode] = await db.query(
+    // BẮT ĐẦU TRANSACTION
+    await db.query("START TRANSACTION");
+
+    const [enrollments] = await db.query(
       `SELECT e.*, 
-       CASE WHEN cl.Fee IS NOT NULL THEN cl.Fee ELSE COALESCE(c.Fee, 0) END as TuitionFee 
-       FROM enrollment e 
-       LEFT JOIN class cl ON e.ClassID = cl.ClassID 
-       LEFT JOIN course c ON cl.CourseID = c.CourseID 
-       WHERE e.OrderCode = ?`,
+   COALESCE(cl.Fee, 0) as TuitionFee  
+   FROM enrollment e 
+   LEFT JOIN class cl ON e.ClassID = cl.ClassID 
+   LEFT JOIN course c ON cl.CourseID = c.CourseID 
+   WHERE e.OrderCode = ? FOR UPDATE`,
       [orderCode]
     );
-    enrollments = rowsByCode;
-    if (!enrollments.length && /^\d+$/.test(String(orderCode))) {
-      const [rowsById] = await db.query(
-        `SELECT e.*, 
-         CASE WHEN cl.Fee IS NOT NULL THEN cl.Fee ELSE COALESCE(c.Fee, 0) END as TuitionFee 
-         FROM enrollment e 
-         LEFT JOIN class cl ON e.ClassID = cl.ClassID 
-         LEFT JOIN course c ON cl.CourseID = c.CourseID 
-         WHERE e.EnrollmentID = ?`,
-        [orderCode]
-      );
-      enrollments = rowsById;
-    }
-
     if (!enrollments.length) {
-      // Nếu không tìm thấy enrollment, có thể đã bị xóa do failed trước đó
+      await db.query("ROLLBACK");
       if (status === "failed" || status === "cancelled") {
         return res.json({
           success: true,
@@ -297,179 +354,209 @@ const updatePaymentStatus = async (req, res) => {
     const enrollment = enrollments[0];
     const enrollmentId = enrollment.EnrollmentID;
 
-    // Lấy amount từ course.TuitionFee hoặc từ request body
+    // KIỂM TRA TRẠNG THÁI HIỆN TẠI TRƯỚC KHI XỬ LÝ
+    console.log(
+      `Current enrollment status: ${enrollment.Status} for orderCode: ${orderCode}`
+    );
+
+    // Nếu đã là Enrolled rồi, không xử lý tiếp
+    if (enrollment.Status === "Enrolled") {
+      await db.query("ROLLBACK");
+      console.log(
+        `Enrollment ${enrollmentId} already enrolled, skipping processing`
+      );
+      return res.json({ success: true, message: "Already enrolled" });
+    }
+
     const paymentAmount = amount || enrollment.TuitionFee;
 
-    // KIỂM TRA KỸ HƠN: Tìm payment theo EnrollmentID
+    // Kiểm tra payment đã tồn tại chưa
     const [existingPayments] = await db.query(
       `SELECT p.* FROM payment p 
-       JOIN enrollment e ON p.EnrollmentID = e.EnrollmentID 
-       WHERE e.EnrollmentID = ?`,
+       WHERE p.EnrollmentID = ?`,
       [enrollmentId]
     );
 
-    // Nếu đã có payment thành công cho orderCode này, không xử lý nữa
     if (existingPayments.length > 0) {
-      console.log(
-        "Payment already processed successfully for orderCode:",
-        orderCode
-      );
-      return res.json({
-        success: true,
-        message: "Payment already processed successfully",
-      });
+      await db.query("ROLLBACK");
+      console.log(`Payment already exists for enrollment ${enrollmentId}`);
+      return res.json({ success: true, message: "Payment already processed" });
     }
 
     if (status === "success") {
-      // KIỂM TRA THÊM: Đảm bảo enrollment chưa được cập nhật thành Enrolled
-      if (enrollment.Status === "Enrolled") {
-        console.log(
-          "Enrollment already marked as Enrolled for orderCode:",
-          orderCode
-        );
-        return res.json({
-          success: true,
-          message: "Enrollment already processed",
-        });
-      }
-
-      // THANH TOÁN THÀNH CÔNG: Ghi nhận payment trước
       await db.query(
-        `INSERT INTO payment (Amount, PaymentMethod, PaymentDate, EnrollmentID) 
-         VALUES (?, ?, NOW(), ?)`,
+        `INSERT INTO payment (Amount, PaymentMethod, PaymentDate, EnrollmentID, Status) 
+   VALUES (?, ?, NOW(), ?, 'success')`, // Hoặc 'paid', 'completed', 'success'
         [paymentAmount, "PayOS", enrollmentId]
       );
 
-      //       // Sau đó cập nhật enrollment status
-      await db.query(
-        "UPDATE enrollment SET Status = 'Enrolled' WHERE EnrollmentID = ?",
+      // CẬP NHẬT ENROLLMENT STATUS - QUAN TRỌNG!
+      const [updateResult] = await db.query(
+        "UPDATE enrollment SET Status = 'Enrolled' WHERE EnrollmentID = ? AND Status = 'Pending'",
         [enrollmentId]
       );
 
-      console.log("Payment success recorded - enrollment updated to Enrolled");
-
-      // Sau khi Enrolled: gửi email lịch học
-      try {
-        // Lấy thông tin learner + email
-        const [learnerRows] = await db.query(
-          `SELECT l.LearnerID, l.FullName, a.Email, a.AccID
-           FROM learner l JOIN account a ON l.AccID = a.AccID
-           WHERE l.LearnerID = ?`,
-          [enrollment.LearnerID]
-        );
-
-        const [classRows] = await db.query(
-          `SELECT cl.Name as ClassName, cl.ZoomURL, c.Title as CourseTitle
-           FROM class cl LEFT JOIN course c ON cl.CourseID = c.CourseID
-           WHERE cl.ClassID = ?`,
-          [enrollment.ClassID]
-        );
-
-        const [scheduleRows] = await db.query(
-          `SELECT s.Title, s.Date, ts.StartTime, ts.EndTime
-           FROM session s LEFT JOIN timeslot ts ON s.TimeslotID = ts.TimeslotID
-           WHERE s.ClassID = ?
-           ORDER BY s.Date ASC, ts.StartTime ASC`,
-          [enrollment.ClassID]
-        );
-
-        const learnerInfo = learnerRows[0];
-        const classInfo = classRows[0] || {};
-
-        if (learnerInfo?.Email) {
-          const scheduleHtml = scheduleRows
-            .map((r) => {
-              const date = r.Date
-                ? new Date(r.Date).toISOString().slice(0, 10)
-                : "";
-              const start = r.StartTime
-                ? r.StartTime.toString().slice(0, 5)
-                : "";
-              const end = r.EndTime ? r.EndTime.toString().slice(0, 5) : "";
-              return `<tr><td style="padding:6px 8px;border:1px solid #eee;">${
-                r.Title || "Buổi học"
-              }</td><td style="padding:6px 8px;border:1px solid #eee;">${date}</td><td style=\"padding:6px 8px;border:1px solid #eee;\">${start} - ${end}</td></tr>`;
-            })
-            .join("");
-
-          const html = `
-            <div style="font-family:Arial,Helvetica,sans-serif;">
-              <h2>Chào ${learnerInfo.FullName || "bạn"},</h2>
-              <p>Bạn đã đăng ký thành công lớp học: <strong>${
-                classInfo.ClassName || "Lớp học"
-              }</strong>${
-            classInfo.CourseTitle ? ` (Khóa: ${classInfo.CourseTitle})` : ""
-          }.</p>
-              ${
-                classInfo.ZoomURL
-                  ? `<p>Link học/Zoom: <a href="${classInfo.ZoomURL}">${classInfo.ZoomURL}</a></p>`
-                  : ""
-              }
-              <p>Lịch học dự kiến:</p>
-              <table style="border-collapse:collapse;border:1px solid #eee;">
-                <thead>
-                  <tr>
-                    <th style="padding:6px 8px;border:1px solid #eee;text-align:left;">Buổi</th>
-                    <th style="padding:6px 8px;border:1px solid #eee;text-align:left;">Ngày</th>
-                    <th style="padding:6px 8px;border:1px solid #eee;text-align:left;">Thời gian</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${
-                    scheduleHtml ||
-                    `<tr><td colspan="3" style="padding:8px;">Lịch sẽ được cập nhật sau.</td></tr>`
-                  }
-                </tbody>
-              </table>
-              <p>Nếu có thay đổi, hệ thống sẽ cập nhật đến bạn.</p>
-              <p>Trân trọng,<br/>ATPS Education</p>
-            </div>`;
-
-          await sendEmail({
-            to: learnerInfo.Email,
-            subject: "Xác nhận đăng ký và lịch học",
-            html,
-          });
-        }
-        // Tạo thông báo cho tài khoản
-        try {
-          const notificationService = require("../services/notificationService");
-          const accId = learnerInfo?.AccID;
-          if (accId) {
-            await notificationService.create({
-              accId,
-              type: "schedule",
-              content: `Đăng ký thành công lớp ${
-                classInfo.ClassName || ""
-              }. Lịch học đã sẵn sàng trong mục Lịch học.`,
-            });
-          }
-        } catch (_) {}
-      } catch (mailErr) {
-        console.warn("Send schedule email failed:", mailErr.message);
+      // Kiểm tra xem có thực sự update được không
+      if (updateResult.affectedRows === 0) {
+        await db.query("ROLLBACK");
+        console.error(`Failed to update enrollment status for ${enrollmentId}`);
+        return res
+          .status(500)
+          .json({ message: "Failed to update enrollment status" });
       }
-    } else if (status === "failed" || status === "cancelled") {
-      // KIỂM TRA: Nếu enrollment đã bị xóa hoặc đã thành Enrolled thì không xử lý
-      if (enrollment.Status === "Enrolled") {
-        console.log(
-          "Cannot delete enrolled enrollment for orderCode:",
-          orderCode
-        );
-        return res.json({
-          success: true,
-          message: "Enrollment is already enrolled, cannot delete",
-        });
-      }
-
-      // THANH TOÁN THẤT BẠI: Xóa enrollment, KHÔNG tạo payment record
-      await db.query("DELETE FROM enrollment WHERE EnrollmentID = ?", [
-        enrollmentId,
-      ]);
 
       console.log(
-        "Payment failed - enrollment deleted, no payment record created"
+        `Successfully updated enrollment ${enrollmentId} to Enrolled`
       );
+
+     // Cập nhật class status
+try {
+  // Lấy thông tin class name và status hiện tại
+  const [classInfoRows] = await db.query(
+    "SELECT ClassID, Name, Status FROM class WHERE ClassID = ?",
+    [enrollment.ClassID]
+  );
+
+  if (classInfoRows.length > 0) {
+    const classInfo = classInfoRows[0];
+    let newStatus = classInfo.Status; // Giữ nguyên status cũ mặc định
+
+    // Chỉ cập nhật nếu là lớp 1-on-1
+    if (classInfo.Name && classInfo.Name.includes('1-on-1')) {
+      newStatus = 'Ongoing';
+      console.log(`Class ${classInfo.ClassID} is 1-on-1, updating status to Ongoing`);
+      
+      // Cập nhật status class chỉ cho lớp 1-on-1
+      await db.query("UPDATE class SET Status = ? WHERE ClassID = ?", [
+        newStatus,
+        enrollment.ClassID
+      ]);
+
+      console.log(`Class ${classInfo.ClassID} status updated to: ${newStatus}`);
     } else {
+      console.log(`Class ${classInfo.ClassID} is regular class, keeping current status: ${classInfo.Status}`);
+      // Không cập nhật gì cả, giữ nguyên status trong DB
+    }
+  }
+} catch (classError) {
+  console.warn("Class status update warning:", classError.message);
+  // Không rollback vì lỗi này không quan trọng bằng enrollment
+}
+
+      // COMMIT TRANSACTION
+      await db.query("COMMIT");
+
+      // Không cần cập nhật session vì enrollment status đã được cập nhật thành 'Enrolled'
+      // Các session sẽ tự động hiển thị vì query đã filter theo enrollment status = 'Enrolled'
+
+      // GỬI EMAIL VÀ XỬ LÝ NOTIFICATION (sau khi commit)
+      try {
+        await sendConfirmationEmail(db, enrollmentId, orderCode);
+      } catch (emailError) {
+        console.warn("Email sending failed:", emailError.message);
+        // Không ảnh hưởng đến kết quả chính
+      }
+
+      // GỬI NOTIFICATION CHO HỌC SINH VÀ GIÁO VIÊN
+      try {
+        const notificationService = require("../services/notificationService");
+
+        // Lấy thông tin class và learner
+        const [classRows] = await db.query(
+          `SELECT c.Name as ClassName, c.InstructorID, i.AccID as InstructorAccID,
+           l.AccID as LearnerAccID, l.FullName as LearnerName
+           FROM class c
+           INNER JOIN enrollment e ON c.ClassID = e.ClassID
+           INNER JOIN learner l ON e.LearnerID = l.LearnerID
+           INNER JOIN instructor i ON c.InstructorID = i.InstructorID
+           WHERE e.EnrollmentID = ?`,
+          [enrollmentId]
+        );
+
+        if (classRows.length > 0) {
+          const classInfo = classRows[0];
+
+          // Notification cho học sinh
+          await notificationService.create({
+            content: `Thanh toán thành công! Bạn đã đăng ký lớp "${classInfo.ClassName}". Lịch học đã được tạo.`,
+            type: "enrollment",
+            status: "unread",
+            accId: classInfo.LearnerAccID,
+          });
+
+          // Notification cho giáo viên
+          await notificationService.create({
+            content: `Học sinh ${classInfo.LearnerName} đã thanh toán và đăng ký lớp "${classInfo.ClassName}". Lịch học đã được tạo.`,
+            type: "enrollment",
+            status: "unread",
+            accId: classInfo.InstructorAccID,
+          });
+        }
+      } catch (notifError) {
+        console.warn("Notification creation failed:", notifError.message);
+      }
+
+      // XÓA NOTIFICATION PAYMENT
+      try {
+        await deletePaymentNotification(db, enrollment.LearnerID, orderCode);
+      } catch (notifError) {
+        console.warn("Notification cleanup failed:", notifError.message);
+      }
+   } else if (status === "failed" || status === "cancelled") {
+  // Lấy thông tin class trước khi xóa để kiểm tra
+  const [classRows] = await db.query(
+    `SELECT c.ClassID, c.Name as ClassName, c.InstructorID, i.AccID as InstructorAccID,
+     l.AccID as LearnerAccID, l.FullName as LearnerName
+     FROM class c
+     INNER JOIN enrollment e ON c.ClassID = e.ClassID
+     INNER JOIN learner l ON e.LearnerID = l.LearnerID
+     INNER JOIN instructor i ON c.InstructorID = i.InstructorID
+     WHERE e.EnrollmentID = ?`,
+    [enrollmentId]
+  );
+
+  // XÓA NOTIFICATION PAYMENT TRƯỚC
+  try {
+    await deletePaymentNotification(db, enrollment.LearnerID, orderCode);
+  } catch (notifError) {
+    console.warn("Notification cleanup failed:", notifError.message);
+  }
+
+  const classId = enrollment.ClassID;
+  const className = classRows.length > 0 ? classRows[0].ClassName : "";
+
+  // CHỈ XÓA CLASS NẾU LÀ LỚP 1-ON-1 (chứa "1-on-1" trong tên)
+  const isOneOnOneClass = className && className.includes("1-on-1");
+
+  console.log(`Class ${classId} name: "${className}", isOneOnOne: ${isOneOnOneClass}`);
+
+  if (isOneOnOneClass) {
+    // XÓA HOÀN TOÀN: session → enrollment → class (lớp 1-on-1)
+    
+    // 1. Xóa tất cả session của class
+    await db.query(`DELETE FROM session WHERE ClassID = ?`, [classId]);
+    console.log(`Deleted sessions for 1-on-1 class ${classId}`);
+
+    // 2. Xóa enrollment
+    await db.query("DELETE FROM enrollment WHERE EnrollmentID = ?", [enrollmentId]);
+    console.log(`Deleted enrollment ${enrollmentId} for 1-on-1 class`);
+
+    // 3. Xóa class (lớp 1-on-1 chờ thanh toán)
+    await db.query(`DELETE FROM class WHERE ClassID = ?`, [classId]);
+    console.log(`Deleted 1-on-1 class ${classId} due to ${status} payment`);
+
+  } else {
+    // CHỈ XÓA ENROLLMENT (lớp thường - giữ lại class cho người khác đăng ký)
+    await db.query("DELETE FROM enrollment WHERE EnrollmentID = ?", [enrollmentId]);
+    console.log(`Deleted enrollment ${enrollmentId} for regular class (class ${classId} preserved)`);
+  }
+
+  await db.query("COMMIT");
+  console.log(`Payment ${status} processed successfully for order ${orderCode}`);
+
+  // Không gửi notification khi thanh toán thất bại/hủy
+} else {
+      await db.query("ROLLBACK");
       return res.status(400).json({ message: "Invalid status" });
     }
 
@@ -478,6 +565,12 @@ const updatePaymentStatus = async (req, res) => {
       message: `Payment ${status} processed successfully`,
     });
   } catch (error) {
+    // ROLLBACK NẾU CÓ LỖI
+    if (db)
+      await db.query("ROLLBACK").catch((rollbackError) => {
+        console.error("Rollback failed:", rollbackError);
+      });
+
     console.error("Update payment status error:", error);
     res.status(500).json({
       message: "Failed to update payment status",
@@ -485,4 +578,191 @@ const updatePaymentStatus = async (req, res) => {
     });
   }
 };
-module.exports = { createPaymentLink, updatePaymentStatus };
+// Get payment link by OrderCode
+const getPaymentLinkByOrderCode = async (req, res) => {
+  try {
+    const { orderCode } = req.params;
+
+    if (!orderCode) {
+      return res.status(400).json({ message: "OrderCode is required" });
+    }
+
+    const db = await connectDB();
+
+    // Lấy thông tin enrollment từ OrderCode
+    const [enrollments] = await db.query(
+      `SELECT e.EnrollmentID, e.LearnerID, e.ClassID, e.OrderCode, cl.Fee as ClassFee, cl.Name as ClassName,
+       l.FullName, a.Email, a.AccID
+       FROM enrollment e
+       INNER JOIN class cl ON e.ClassID = cl.ClassID
+       INNER JOIN learner l ON e.LearnerID = l.LearnerID
+       INNER JOIN account a ON l.AccID = a.AccID
+       WHERE e.OrderCode = ? AND e.Status = 'Pending'`,
+      [orderCode]
+    );
+
+    if (!enrollments.length) {
+      return res
+        .status(404)
+        .json({ message: "Enrollment not found or already paid" });
+    }
+
+    const enrollment = enrollments[0];
+
+    // Thử lấy payment link từ PayOS trước
+    let paymentInfo = await getExistingPaymentLink(orderCode);
+
+    // Nếu không tìm thấy trong PayOS, tạo payment link mới
+    if (!paymentInfo || !paymentInfo.url) {
+      console.log(
+        `Payment link not found in PayOS for orderCode: ${orderCode}, creating new link...`
+      );
+
+      // Lấy số tiền từ ClassFee của enrollment
+      const amount = Math.round(enrollment.ClassFee || 0);
+
+      // PayOS chỉ cho phép description tối đa 25 ký tự
+      const classNameShort = enrollment.ClassName
+        ? enrollment.ClassName.length > 20
+          ? enrollment.ClassName.substring(0, 20) + "..."
+          : enrollment.ClassName
+        : "1-on-1";
+      const description = `Thanh toán: ${classNameShort}`.substring(0, 25);
+
+      const paymentBody = {
+        orderCode: Number(orderCode),
+        amount: amount,
+        description: description,
+        returnUrl: `${
+          process.env.FRONTEND_URL
+        }/payment-success?orderCode=${encodeURIComponent(orderCode)}`,
+        cancelUrl: `${
+          process.env.FRONTEND_URL
+        }/payment-failed?orderCode=${encodeURIComponent(orderCode)}`,
+        buyerName: enrollment.FullName || "Người học",
+        buyerEmail: enrollment.Email || "unknown@example.com",
+        buyerPhone: "0000000000",
+      };
+
+      try {
+        const paymentLink = await createPaymentWithBody(paymentBody);
+        const paymentUrl = paymentLink.checkoutUrl || paymentLink.url;
+
+        console.log(`✅ Created new payment link for orderCode: ${orderCode}`);
+
+        return res.json({
+          paymentUrl: paymentUrl,
+          status: "PENDING",
+        });
+      } catch (createError) {
+        console.error("Error creating new payment link:", createError);
+        return res.status(500).json({
+          message: "Cannot create payment link",
+          error: createError.message,
+        });
+      }
+    }
+
+    // Nếu đã tìm thấy trong PayOS
+    if (paymentInfo.status === "PAID") {
+      return res.status(400).json({
+        message: "Order has already been paid",
+        status: "PAID",
+      });
+    }
+
+    if (paymentInfo.url) {
+      return res.json({
+        paymentUrl: paymentInfo.url,
+        status: paymentInfo.status || "PENDING",
+      });
+    }
+
+    return res.status(404).json({ message: "Payment URL not available" });
+  } catch (error) {
+    console.error("Error getting payment link:", error);
+    return res.status(500).json({ message: error.message || "Server error" });
+  }
+};
+
+const getPaymentHistory = async(req, res) => {
+  try {
+    const { learnerId } = req.params;
+
+    if (!learnerId) {
+      return res.status(400).json({ message: "Learner ID is required" });
+    }
+
+    const payments = await paymentService.getPaymentHistory(learnerId);
+    return res.json({ payments });
+  } catch (error) {
+    console.error("Error in getPaymentHistory:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+const requestRefund = async(req, res) => {
+  try {
+    const { enrollmentId, reason } = req.body;
+
+    if (!enrollmentId || !reason) {
+      return res.status(400).json({ 
+        message: "Enrollment ID and reason are required" 
+      });
+    }
+
+    const result = await paymentService.requestRefund(enrollmentId, reason);
+    
+    // Tạo notification sau khi request refund thành công
+    if (result.success) {
+      await notificationService.createRefundNotification(
+        enrollmentId, 
+        result.refundRequest.RefundID,
+        'requested'
+      );
+    }
+    
+    return res.json(result);
+  } catch (error) {
+    console.error("Error in requestRefund:", error);
+    return res.status(500).json({ message: error.message || "Server error" });
+  }
+};
+
+const cancelRefundRequest = async(req, res) => {
+  try {
+    const { refundId } = req.params;
+
+    if (!refundId) {
+      return res.status(400).json({ 
+        message: "Refund ID is required" 
+      });
+    }
+
+    const result = await paymentService.cancelRefundRequest(refundId);
+    
+    // Tạo notification sau khi cancel refund thành công
+    if (result.success) {
+      await notificationService.createRefundNotification(
+        result.refundRequest.EnrollmentID, 
+        refundId,
+        'cancelled'
+      );
+    }
+    
+    return res.json(result);
+  } catch (error) {
+    console.error("Error in cancelRefundRequest:", error);
+    return res.status(500).json({ message: error.message || "Server error" });
+  }
+};
+
+module.exports = {
+  createPaymentLink,
+  updatePaymentStatus,
+  checkPromotionCode,
+  getPaymentLinkByOrderCode,
+  requestRefund,
+  getPaymentHistory,
+  cancelRefundRequest
+};

@@ -41,6 +41,22 @@ class InstructorController {
       return res.status(500).json({ message: "Server error" });
     }
   }
+
+  async getInstructorIdByAccountId(req, res) {
+    try {
+      const { accountId } = req.params;
+      const instructorId = await instructorService.getInstructorIdByAccountId(
+        accountId
+      );
+      if (!instructorId) {
+        return res.status(404).json({ message: "Instructor not found for this account" });
+      }
+      return res.json({ instructorId });
+    } catch (error) {
+      console.error("Error in getInstructorIdByAccountId:", error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  }
 }
 
 module.exports = new InstructorController();

@@ -163,6 +163,7 @@ const googleAuthCallback = (req, res, next) => {
         const { token, user: userWithRole } = await loginService(user.Email, null, "google");
         
         const safeUser = {
+           AccID: userWithRole.AccID || userWithRole.id || userWithRole.AccountID,
           Username: userWithRole.Username,
           Email: userWithRole.Email,
           Provider: "google",
