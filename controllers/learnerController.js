@@ -1,10 +1,10 @@
-const Learner = require("../models/learner");
+const learnerService = require("../services/learnerService");
 
 const learnerController = {
   // Lấy tất cả học viên
   getAllLearners: async (req, res) => {
     try {
-      const learners = await Learner.findAll();
+      const learners = await learnerService.getAllLearners();
 
       res.status(200).json({
         success: true,
@@ -25,14 +25,7 @@ const learnerController = {
   getLearnerById: async (req, res) => {
     try {
       const learnerId = req.params.id;
-      const learner = await Learner.findById(learnerId);
-
-      if (!learner) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy học viên",
-        });
-      }
+      const learner = await learnerService.getLearnerById(learnerId);
 
       res.status(200).json({
         success: true,
@@ -41,6 +34,13 @@ const learnerController = {
       });
     } catch (error) {
       console.error("Error getting learner:", error);
+      if (error.message === "Learner not found") {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy học viên",
+          error: error.message,
+        });
+      }
       res.status(500).json({
         success: false,
         message: "Lỗi khi lấy thông tin học viên",
@@ -69,7 +69,7 @@ const learnerController = {
         });
       }
 
-      const newLearner = await Learner.create(learnerData);
+      const newLearner = await learnerService.createLearner(learnerData);
 
       res.status(201).json({
         success: true,
@@ -92,14 +92,7 @@ const learnerController = {
       const learnerId = req.params.id;
       const updateData = req.body;
 
-      const updatedLearner = await Learner.update(learnerId, updateData);
-
-      if (!updatedLearner) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy học viên",
-        });
-      }
+      const updatedLearner = await learnerService.updateLearner(learnerId, updateData);
 
       res.status(200).json({
         success: true,
@@ -108,6 +101,13 @@ const learnerController = {
       });
     } catch (error) {
       console.error("Error updating learner:", error);
+      if (error.message === "Learner not found") {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy học viên",
+          error: error.message,
+        });
+      }
       res.status(500).json({
         success: false,
         message: "Lỗi khi cập nhật thông tin học viên",
@@ -121,14 +121,7 @@ const learnerController = {
     try {
       const learnerId = req.params.id;
 
-      const deleted = await Learner.delete(learnerId);
-
-      if (!deleted) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy học viên",
-        });
-      }
+      const deleted = await learnerService.deleteLearner(learnerId);
 
       res.status(200).json({
         success: true,
@@ -136,6 +129,13 @@ const learnerController = {
       });
     } catch (error) {
       console.error("Error deleting learner:", error);
+      if (error.message === "Learner not found") {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy học viên",
+          error: error.message,
+        });
+      }
       res.status(500).json({
         success: false,
         message: "Lỗi khi xóa học viên",
@@ -149,14 +149,7 @@ const learnerController = {
     try {
       const learnerId = req.params.id;
 
-      const learnerWithClasses = await Learner.findByIdWithClasses(learnerId);
-
-      if (!learnerWithClasses) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy học viên",
-        });
-      }
+      const learnerWithClasses = await learnerService.getLearnerWithClasses(learnerId);
 
       res.status(200).json({
         success: true,
@@ -179,7 +172,7 @@ const learnerController = {
       const learnerId = req.params.id;
       const { startDate, endDate } = req.query;
 
-      const schedule = await Learner.getSchedule(learnerId, startDate, endDate);
+      const schedule = await learnerService.getLearnerSchedule(learnerId, startDate, endDate);
 
       res.status(200).json({
         success: true,
@@ -201,7 +194,7 @@ const learnerController = {
     try {
       const learnerId = req.params.id;
 
-      const statistics = await Learner.getStatistics(learnerId);
+      const statistics = await learnerService.getLearnerStatistics(learnerId);
 
       res.status(200).json({
         success: true,
@@ -224,7 +217,7 @@ const learnerController = {
       const learnerId = req.params.id;
       const { classId } = req.query;
 
-      const attendance = await Learner.getAttendance(learnerId, classId);
+      const attendance = await learnerService.getLearnerAttendance(learnerId, classId);
 
       res.status(200).json({
         success: true,

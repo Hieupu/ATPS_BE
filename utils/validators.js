@@ -50,17 +50,36 @@ const validateClass = [
       "Status phải là một trong: Chưa phân giảng viên, Sắp khai giảng, Đang hoạt động, Đã kết thúc, Tạm dừng"
     ),
 
-  body("ZoomURL")
+  // dbver5: Không có ZoomURL, chỉ có ZoomID và Zoompass
+  body("ZoomID")
     .optional({ nullable: true })
-    .custom((val) => {
-      if (val === null || val === "") return true; // cho phép rỗng
-      try {
-        new URL(val);
-        return true;
-      } catch {
-        throw new Error("ZoomURL phải là URL hợp lệ");
-      }
-    }),
+    .isLength({ max: 11 })
+    .withMessage("ZoomID tối đa 11 ký tự"),
+
+  body("Zoompass")
+    .optional({ nullable: true })
+    .isLength({ max: 6 })
+    .withMessage("Zoompass tối đa 6 ký tự"),
+
+  body("OpendatePlan")
+    .optional({ nullable: true })
+    .isISO8601()
+    .withMessage("OpendatePlan phải là ngày hợp lệ (YYYY-MM-DD)"),
+
+  body("EnddatePlan")
+    .optional({ nullable: true })
+    .isISO8601()
+    .withMessage("EnddatePlan phải là ngày hợp lệ (YYYY-MM-DD)"),
+
+  body("Numofsession")
+    .optional({ nullable: true })
+    .isInt({ min: 1 })
+    .withMessage("Numofsession phải là số nguyên dương"),
+
+  body("Maxstudent")
+    .optional({ nullable: true })
+    .isInt({ min: 1 })
+    .withMessage("Maxstudent phải là số nguyên dương"),
 
   handleValidationErrors,
 ];
@@ -85,7 +104,36 @@ const validateClassUpdate = [
       "Status phải là một trong: Chưa phân giảng viên, Sắp khai giảng, Đang hoạt động, Đã kết thúc, Tạm dừng"
     ),
 
-  body("ZoomURL").optional().isURL().withMessage("ZoomURL phải là URL hợp lệ"),
+  // dbver5: Không có ZoomURL, chỉ có ZoomID và Zoompass
+  body("ZoomID")
+    .optional({ nullable: true })
+    .isLength({ max: 11 })
+    .withMessage("ZoomID tối đa 11 ký tự"),
+
+  body("Zoompass")
+    .optional({ nullable: true })
+    .isLength({ max: 6 })
+    .withMessage("Zoompass tối đa 6 ký tự"),
+
+  body("OpendatePlan")
+    .optional({ nullable: true })
+    .isISO8601()
+    .withMessage("OpendatePlan phải là ngày hợp lệ (YYYY-MM-DD)"),
+
+  body("EnddatePlan")
+    .optional({ nullable: true })
+    .isISO8601()
+    .withMessage("EnddatePlan phải là ngày hợp lệ (YYYY-MM-DD)"),
+
+  body("Numofsession")
+    .optional({ nullable: true })
+    .isInt({ min: 1 })
+    .withMessage("Numofsession phải là số nguyên dương"),
+
+  body("Maxstudent")
+    .optional({ nullable: true })
+    .isInt({ min: 1 })
+    .withMessage("Maxstudent phải là số nguyên dương"),
 
   body("CourseID")
     .optional()
@@ -305,19 +353,18 @@ const validateMaterialUpdate = [
   handleValidationErrors,
 ];
 
-// Validation cho Session
+// Validation cho Session (dbver3 schema)
 const validateSession = [
   body("Title")
     .notEmpty()
     .withMessage("Title là bắt buộc")
-    .isLength({ min: 3, max: 255 })
-    .withMessage("Title phải từ 3-255 ký tự"),
+    .isLength({ min: 1, max: 255 })
+    .withMessage("Title phải từ 1-255 ký tự"),
 
   body("Description")
-    .notEmpty()
-    .withMessage("Description là bắt buộc")
-    .isLength({ min: 10 })
-    .withMessage("Description phải tối thiểu 10 ký tự"),
+    .optional({ nullable: true })
+    .isLength({ max: 10000 })
+    .withMessage("Description tối đa 10000 ký tự"),
 
   body("InstructorID")
     .notEmpty()
@@ -331,20 +378,42 @@ const validateSession = [
     .isInt({ min: 1 })
     .withMessage("ClassID phải là số nguyên dương"),
 
+  body("TimeslotID")
+    .notEmpty()
+    .withMessage("TimeslotID là bắt buộc")
+    .isInt({ min: 1 })
+    .withMessage("TimeslotID phải là số nguyên dương"),
+
+  body("Date")
+    .notEmpty()
+    .withMessage("Date là bắt buộc")
+    .isISO8601()
+    .withMessage("Date phải là ngày hợp lệ (YYYY-MM-DD)")
+    .custom((value) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const sessionDate = new Date(value);
+      sessionDate.setHours(0, 0, 0, 0);
+      if (sessionDate < today) {
+        throw new Error("Date không được là ngày đã qua");
+      }
+      return true;
+    }),
+
   handleValidationErrors,
 ];
 
-// Validation cho Session Update
+// Validation cho Session Update (dbver3 schema)
 const validateSessionUpdate = [
   body("Title")
     .optional()
-    .isLength({ min: 3, max: 255 })
-    .withMessage("Title phải từ 3-255 ký tự"),
+    .isLength({ min: 1, max: 255 })
+    .withMessage("Title phải từ 1-255 ký tự"),
 
   body("Description")
-    .optional()
-    .isLength({ min: 10 })
-    .withMessage("Description phải tối thiểu 10 ký tự"),
+    .optional({ nullable: true })
+    .isLength({ max: 10000 })
+    .withMessage("Description tối đa 10000 ký tự"),
 
   body("InstructorID")
     .optional()
@@ -355,6 +424,28 @@ const validateSessionUpdate = [
     .optional()
     .isInt({ min: 1 })
     .withMessage("ClassID phải là số nguyên dương"),
+
+  body("TimeslotID")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("TimeslotID phải là số nguyên dương"),
+
+  body("Date")
+    .optional()
+    .isISO8601()
+    .withMessage("Date phải là ngày hợp lệ (YYYY-MM-DD)")
+    .custom((value) => {
+      if (value) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const sessionDate = new Date(value);
+        sessionDate.setHours(0, 0, 0, 0);
+        if (sessionDate < today) {
+          throw new Error("Date không được là ngày đã qua");
+        }
+      }
+      return true;
+    }),
 
   handleValidationErrors,
 ];
@@ -444,6 +535,68 @@ const validateAttendanceUpdate = [
   handleValidationErrors,
 ];
 
+// Validation cho Bulk Create Sessions
+const validateBulkSessions = [
+  body("sessions")
+    .notEmpty()
+    .withMessage("sessions là bắt buộc")
+    .isArray({ min: 1 })
+    .withMessage("sessions phải là một array không rỗng")
+    .custom((sessions) => {
+      if (!Array.isArray(sessions) || sessions.length === 0) {
+        throw new Error("sessions phải là một array không rỗng");
+      }
+      return true;
+    }),
+
+  body("sessions.*.Title")
+    .notEmpty()
+    .withMessage("Mỗi session phải có Title")
+    .isLength({ min: 1, max: 255 })
+    .withMessage("Title phải từ 1-255 ký tự"),
+
+  body("sessions.*.Description")
+    .optional({ nullable: true })
+    .isLength({ max: 10000 })
+    .withMessage("Description tối đa 10000 ký tự"),
+
+  body("sessions.*.InstructorID")
+    .notEmpty()
+    .withMessage("Mỗi session phải có InstructorID")
+    .isInt({ min: 1 })
+    .withMessage("InstructorID phải là số nguyên dương"),
+
+  body("sessions.*.ClassID")
+    .notEmpty()
+    .withMessage("Mỗi session phải có ClassID")
+    .isInt({ min: 1 })
+    .withMessage("ClassID phải là số nguyên dương"),
+
+  body("sessions.*.TimeslotID")
+    .notEmpty()
+    .withMessage("Mỗi session phải có TimeslotID")
+    .isInt({ min: 1 })
+    .withMessage("TimeslotID phải là số nguyên dương"),
+
+  body("sessions.*.Date")
+    .notEmpty()
+    .withMessage("Mỗi session phải có Date")
+    .isISO8601()
+    .withMessage("Date phải là ngày hợp lệ (YYYY-MM-DD)")
+    .custom((value) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const sessionDate = new Date(value);
+      sessionDate.setHours(0, 0, 0, 0);
+      if (sessionDate < today) {
+        throw new Error("Date không được là ngày đã qua");
+      }
+      return true;
+    }),
+
+  handleValidationErrors,
+];
+
 module.exports = {
   handleValidationErrors,
   validateClass,
@@ -456,6 +609,7 @@ module.exports = {
   validateMaterialUpdate,
   validateSession,
   validateSessionUpdate,
+  validateBulkSessions,
   validateEnrollment,
   validateSessionTimeslot,
   validateSessionTimeslotUpdate,

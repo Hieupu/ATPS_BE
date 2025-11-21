@@ -257,6 +257,100 @@ const enrollmentController = {
       });
     }
   },
+
+  // =====================================================
+  // BƯỚC 4: HỌC VIÊN ĐĂNG KÝ LỚP
+  // =====================================================
+
+  // Học viên tự đăng ký lớp
+  selfEnroll: async (req, res) => {
+    try {
+      const { classId } = req.params;
+      const learnerId = req.user.LearnerID;
+
+      // Kiểm tra lớp có PUBLISHED không
+      const classData = await classService.getClassById(classId);
+      if (!classData) {
+        return res.status(404).json({
+          success: false,
+          message: "Lớp học không tồn tại",
+        });
+      }
+
+      if (classData.Status !== "PUBLISHED") {
+        return res.status(400).json({
+          success: false,
+          message: "Lớp học chưa được xuất bản",
+        });
+      }
+
+      // Kiểm tra sĩ số
+      if (classData.CurrentLearners >= classData.Maxstudent) {
+        return res.status(400).json({
+          success: false,
+          message: "Lớp học đã đầy",
+        });
+      }
+
+      // Kiểm tra đã đăng ký chưa
+      const existingEnrollment = await enrollmentService.findByLearnerAndClass(
+        learnerId,
+        classId
+      );
+      if (existingEnrollment) {
+        return res.status(400).json({
+          success: false,
+          message: "Bạn đã đăng ký lớp này rồi",
+        });
+      }
+
+      // Tạo enrollment
+      const enrollment = await enrollmentService.createEnrollment({
+        LearnerID: learnerId,
+        ClassID: classId,
+        Status: "PENDING_PAYMENT",
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Đăng ký lớp học thành công",
+        data: enrollment,
+      });
+    } catch (error) {
+      console.error("Error self enrolling:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi đăng ký lớp học",
+        error: error.message,
+      });
+    }
+  },
+
+  // Lấy danh sách lớp có thể đăng ký
+  getAvailableClasses: async (req, res) => {
+    try {
+      const { page = 1, limit = 10, search = "" } = req.query;
+
+      const classes = await classService.getAvailableClasses({
+        page: parseInt(page),
+        limit: parseInt(limit),
+        search,
+      });
+
+      res.json({
+        success: true,
+        message: "Lấy danh sách lớp có thể đăng ký thành công",
+        data: classes,
+      });
+    } catch (error) {
+      console.error("Error getting available classes:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách lớp",
+        error: error.message,
+      });
+    }
+  },
 };
 
 module.exports = enrollmentController;

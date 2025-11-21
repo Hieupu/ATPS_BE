@@ -1,12 +1,14 @@
 const courseService = require("../services/courseService");
 const instructorService = require("../services/instructorService");
 const learnerService = require("../services/learnerService");
+const logService = require("../services/logService");
 
 const courseController = {
   // Tạo khóa học mới
   createCourse: async (req, res) => {
     try {
       const courseData = req.body;
+      const adminAccID = req.user ? req.user.AccID : null;
 
       if (!courseData.Title || !courseData.Description) {
         return res.status(400).json({
@@ -16,6 +18,15 @@ const courseController = {
       }
 
       const newCourse = await courseService.createCourse(courseData);
+
+      // Ghi log CREATE_COURSE
+      if (adminAccID && newCourse?.CourseID) {
+        await logService.logAction({
+          action: "CREATE_COURSE",
+          accId: adminAccID,
+          detail: `CourseID: ${newCourse.CourseID}, Title: ${newCourse.Title}`,
+        });
+      }
 
       res.status(201).json({
         success: true,
@@ -93,6 +104,7 @@ const courseController = {
     try {
       const courseId = req.params.id;
       const updateData = req.body;
+      const adminAccID = req.user ? req.user.AccID : null;
 
       const updatedCourse = await courseService.updateCourse(
         courseId,
@@ -103,6 +115,15 @@ const courseController = {
         return res.status(404).json({
           success: false,
           message: "Không tìm thấy khóa học",
+        });
+      }
+
+      // Ghi log UPDATE_COURSE
+      if (adminAccID && updatedCourse?.CourseID) {
+        await logService.logAction({
+          action: "UPDATE_COURSE",
+          accId: adminAccID,
+          detail: `CourseID: ${updatedCourse.CourseID}, Title: ${updatedCourse.Title}`,
         });
       }
 
@@ -125,6 +146,13 @@ const courseController = {
   deleteCourse: async (req, res) => {
     try {
       const courseId = req.params.id;
+      const adminAccID = req.user ? req.user.AccID : null;
+
+      // Lấy thông tin khóa học trước khi xóa để log
+      let course = null;
+      if (adminAccID) {
+        course = await courseService.getCourseById(courseId);
+      }
 
       const deleted = await courseService.deleteCourse(courseId);
 
@@ -132,6 +160,15 @@ const courseController = {
         return res.status(404).json({
           success: false,
           message: "Không tìm thấy khóa học",
+        });
+      }
+
+      // Ghi log DELETE_COURSE
+      if (adminAccID && course) {
+        await logService.logAction({
+          action: "DELETE_COURSE",
+          accId: adminAccID,
+          detail: `CourseID: ${course.CourseID}, Title: ${course.Title}`,
         });
       }
 
@@ -227,6 +264,68 @@ const courseController = {
       res.status(500).json({
         success: false,
         message: "Lỗi khi lấy danh sách lớp học của khóa học",
+        error: error.message,
+      });
+    }
+  },
+
+  // Admin duyệt khóa học
+  approveCourse: async (req, res) => {
+    try {
+      const courseId = req.params.id;
+      const { action } = req.body; // 'APPROVE' hoặc 'REJECT'
+      const adminAccID = req.user ? req.user.AccID : null;
+
+      if (!action || !["APPROVE", "REJECT"].includes(action)) {
+        return res.status(400).json({
+          success: false,
+          message: "Action phải là 'APPROVE' hoặc 'REJECT'",
+        });
+      }
+
+      const course = await courseService.getCourseById(courseId);
+      if (!course) {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy khóa học",
+        });
+      }
+
+      // Chỉ cho phép duyệt các khóa học đang ở trạng thái IN_REVIEW hoặc DRAFT
+      if (course.Status !== "IN_REVIEW" && course.Status !== "DRAFT") {
+        return res.status(400).json({
+          success: false,
+          message: "Chỉ có thể duyệt khóa học ở trạng thái IN_REVIEW hoặc DRAFT",
+        });
+      }
+
+      const newStatus = action === "APPROVE" ? "APPROVED" : "DRAFT";
+      const updatedCourse = await courseService.updateCourse(courseId, {
+        Status: newStatus,
+      });
+
+      // Ghi log APPROVE_COURSE / REJECT_COURSE
+      if (adminAccID && updatedCourse?.CourseID) {
+        await logService.logAction({
+          action: action === "APPROVE" ? "APPROVE_COURSE" : "REJECT_COURSE",
+          accId: adminAccID,
+          detail: `CourseID: ${updatedCourse.CourseID}, Title: ${updatedCourse.Title}`,
+        });
+      }
+
+      res.json({
+        success: true,
+        message:
+          action === "APPROVE"
+            ? "Duyệt khóa học thành công"
+            : "Từ chối khóa học thành công",
+        data: updatedCourse,
+      });
+    } catch (error) {
+      console.error("Error approving course:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi duyệt khóa học",
         error: error.message,
       });
     }

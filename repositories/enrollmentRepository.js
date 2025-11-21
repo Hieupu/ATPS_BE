@@ -2,20 +2,18 @@ const pool = require("../config/db");
 
 class EnrollmentRepository {
   async create(enrollmentData) {
-    const { LearnerID, CourseID, EnrollmentDate, Status, PaymentStatus } =
-      enrollmentData;
+    const { LearnerID, ClassID, EnrollmentDate, Status } = enrollmentData;
 
     const query = `
-      INSERT INTO enrollment (LearnerID, CourseID, EnrollmentDate, Status, PaymentStatus)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO enrollment (LearnerID, ClassID, EnrollmentDate, Status)
+      VALUES (?, ?, ?, ?)
     `;
 
     const [result] = await pool.execute(query, [
       LearnerID,
-      CourseID,
+      ClassID,
       EnrollmentDate,
       Status || "active",
-      PaymentStatus || "pending",
     ]);
 
     return { EnrollmentID: result.insertId, ...enrollmentData };
@@ -26,10 +24,12 @@ class EnrollmentRepository {
       SELECT 
         e.*,
         l.FullName as learnerName,
+        cl.Name as className,
         c.Title as courseTitle
       FROM enrollment e
       LEFT JOIN learner l ON e.LearnerID = l.LearnerID
-      LEFT JOIN course c ON e.CourseID = c.CourseID
+      LEFT JOIN \`class\` cl ON e.ClassID = cl.ClassID
+      LEFT JOIN course c ON cl.CourseID = c.CourseID
       WHERE e.EnrollmentID = ?
     `;
 
@@ -41,12 +41,25 @@ class EnrollmentRepository {
     const query = `
       SELECT 
         e.*,
-        c.Title as courseTitle,
-        c.Description as courseDescription,
+        cl.Name as ClassName,
+        cl.ClassID,
+        cl.Status as ClassStatus,
+        cl.Fee as ClassFee,
+        cl.OpendatePlan,
+        cl.Opendate,
+        cl.Numofsession,
+        cl.Maxstudent,
+        c.CourseID,
+        c.Title as CourseTitle,
+        c.Description as CourseDescription,
         c.Duration,
-        c.Price
+        c.Level as CourseLevel,
+        c.Code as CourseCode,
+        i.FullName as InstructorName
       FROM enrollment e
-      LEFT JOIN course c ON e.CourseID = c.CourseID
+      LEFT JOIN \`class\` cl ON e.ClassID = cl.ClassID
+      LEFT JOIN course c ON cl.CourseID = c.CourseID
+      LEFT JOIN instructor i ON cl.InstructorID = i.InstructorID
       WHERE e.LearnerID = ?
       ORDER BY e.EnrollmentDate DESC
     `;
@@ -62,7 +75,7 @@ class EnrollmentRepository {
         l.FullName as learnerName,
         a.Email,
         a.Phone,
-        cl.ClassName,
+        cl.Name as ClassName,
         c.Title as courseTitle,
         i.FullName as instructorName,
         p.Amount,
@@ -87,10 +100,13 @@ class EnrollmentRepository {
       SELECT 
         e.*,
         l.FullName as learnerName,
-        l.Email as learnerEmail
+        a.Email,
+        cl.Name as className
       FROM enrollment e
       LEFT JOIN learner l ON e.LearnerID = l.LearnerID
-      WHERE e.CourseID = ?
+      LEFT JOIN account a ON l.AccID = a.AccID
+      LEFT JOIN \`class\` cl ON e.ClassID = cl.ClassID
+      WHERE cl.CourseID = ?
       ORDER BY e.EnrollmentDate DESC
     `;
 
@@ -109,10 +125,12 @@ class EnrollmentRepository {
       SELECT 
         e.*,
         l.FullName as learnerName,
+        cl.Name as className,
         c.Title as courseTitle
       FROM enrollment e
       LEFT JOIN learner l ON e.LearnerID = l.LearnerID
-      LEFT JOIN course c ON e.CourseID = c.CourseID
+      LEFT JOIN \`class\` cl ON e.ClassID = cl.ClassID
+      LEFT JOIN course c ON cl.CourseID = c.CourseID
       ORDER BY e.EnrollmentDate DESC
     `;
 
@@ -145,9 +163,9 @@ class EnrollmentRepository {
     return rows.length > 0;
   }
 
-  async checkEnrollmentExists(learnerId, courseId) {
-    const query = `SELECT 1 FROM enrollment WHERE LearnerID = ? AND CourseID = ?`;
-    const [rows] = await db.query(query, [learnerId, courseId]);
+  async checkEnrollmentExists(learnerId, classId) {
+    const query = `SELECT 1 FROM enrollment WHERE LearnerID = ? AND ClassID = ?`;
+    const [rows] = await pool.execute(query, [learnerId, classId]);
     return rows.length > 0;
   }
 }

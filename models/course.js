@@ -4,17 +4,17 @@ class Course {
     Title,
     Description,
     Duration,
-    Price,
+    Fee,
     Status,
-    CreatedAt,
+    InstructorID,
   }) {
     this.CourseID = CourseID;
     this.Title = Title;
     this.Description = Description;
     this.Duration = Duration;
-    this.Price = Price;
+    this.Fee = Fee;
     this.Status = Status;
-    this.CreatedAt = CreatedAt;
+    this.InstructorID = InstructorID;
   }
 }
 

@@ -2,19 +2,21 @@ const pool = require("../config/db");
 
 class CourseRepository {
   async create(courseData) {
-    const { Title, Description, Duration, Price, Status } = courseData;
+    const { Title, Description, Duration, Fee, Status, InstructorID } =
+      courseData;
 
     const query = `
-      INSERT INTO course (Title, Description, Duration, Price, Status, CreatedAt)
-      VALUES (?, ?, ?, ?, ?, NOW())
+      INSERT INTO course (Title, Description, Duration, Fee, Status, InstructorID)
+      VALUES (?, ?, ?, ?, ?, ?)
     `;
 
     const [result] = await pool.execute(query, [
       Title,
       Description,
       Duration,
-      Price,
+      Fee,
       Status || "active",
+      InstructorID,
     ]);
 
     return { CourseID: result.insertId, ...courseData };

@@ -1,18 +1,10 @@
 class Enrollment {
-  constructor({
-    EnrollmentID,
-    LearnerID,
-    CourseID,
-    EnrollmentDate,
-    Status,
-    PaymentStatus,
-  }) {
+  constructor({ EnrollmentID, EnrollmentDate, Status, LearnerID, ClassID }) {
     this.EnrollmentID = EnrollmentID;
-    this.LearnerID = LearnerID;
-    this.CourseID = CourseID;
     this.EnrollmentDate = EnrollmentDate;
     this.Status = Status;
-    this.PaymentStatus = PaymentStatus;
+    this.LearnerID = LearnerID;
+    this.ClassID = ClassID;
   }
 }
 

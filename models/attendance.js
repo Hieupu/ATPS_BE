@@ -1,8 +1,8 @@
 class Attendance {
-  constructor({ AttendanceID, LearnerID, sessiontimeslotID, Status, Date }) {
+  constructor({ AttendanceID, LearnerID, SessionID, Status, Date }) {
     this.AttendanceID = AttendanceID;
     this.LearnerID = LearnerID;
-    this.sessiontimeslotID = sessiontimeslotID;
+    this.SessionID = SessionID;
     this.Status = Status;
     this.Date = Date;
   }

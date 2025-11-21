@@ -75,4 +75,24 @@ router.get(
   enrollmentController.getLearnerEnrollments
 );
 
+// =====================================================
+// BƯỚC 4: HỌC VIÊN ĐĂNG KÝ LỚP
+// =====================================================
+
+// Học viên tự đăng ký lớp
+router.post(
+  "/self-enroll/:classId",
+  // verifyToken,
+  // authorizeFeature("learner"),
+  enrollmentController.selfEnroll
+);
+
+// Lấy danh sách lớp có thể đăng ký
+router.get(
+  "/available-classes",
+  // verifyToken,
+  // authorizeFeature("learner"),
+  enrollmentController.getAvailableClasses
+);
+
 module.exports = router;

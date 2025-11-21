@@ -2,16 +2,17 @@ const pool = require("../config/db");
 
 class AttendanceRepository {
   async create(attendanceData) {
-    const { LearnerID, sessiontimeslotID, Status, Date } = attendanceData;
+    // dbver3: attendance trực tiếp có SessionID, không cần sessiontimeslotID
+    const { LearnerID, SessionID, Status, Date } = attendanceData;
 
     const query = `
-      INSERT INTO attendance (LearnerID, sessiontimeslotID, Status, Date)
+      INSERT INTO attendance (LearnerID, SessionID, Status, Date)
       VALUES (?, ?, ?, ?)
     `;
 
     const [result] = await pool.execute(query, [
       LearnerID,
-      sessiontimeslotID,
+      SessionID,
       Status,
       Date,
     ]);
@@ -20,28 +21,28 @@ class AttendanceRepository {
   }
 
   async findById(id) {
+    // dbver3: attendance trực tiếp có SessionID
     const query = `
       SELECT 
         a.AttendanceID,
         a.LearnerID,
-        a.sessiontimeslotID,
+        a.SessionID,
         a.Status,
         a.Date,
         l.FullName as learnerName,
         s.Title as sessionTitle,
-        t.Date as sessionDate,
+        s.Date as sessionDate,
         t.StartTime,
         t.EndTime,
-        t.Location,
-        c.Title as courseTitle,
+        c.Name as className,
+        co.Title as courseTitle,
         i.FullName as instructorName
       FROM attendance a
       LEFT JOIN learner l ON a.LearnerID = l.LearnerID
-      LEFT JOIN sessiontimeslot st ON a.sessiontimeslotID = st.sessiontimeslotID
-      LEFT JOIN session s ON st.SessionID = s.SessionID
-      LEFT JOIN timeslot t ON st.TimeslotID = t.TimeslotID
-      LEFT JOIN \`class\` cl ON s.ClassID = cl.ClassID
-      LEFT JOIN course c ON cl.CourseID = c.CourseID
+      LEFT JOIN session s ON a.SessionID = s.SessionID
+      LEFT JOIN timeslot t ON s.TimeslotID = t.TimeslotID
+      LEFT JOIN \`class\` c ON s.ClassID = c.ClassID
+      LEFT JOIN course co ON c.CourseID = co.CourseID
       LEFT JOIN instructor i ON s.InstructorID = i.InstructorID
       WHERE a.AttendanceID = ?
     `;
@@ -50,58 +51,75 @@ class AttendanceRepository {
     return rows[0] || null;
   }
 
-  async findBySessionTimeslotId(sessionTimeslotId) {
+  // dbver3: Thay đổi từ findBySessionTimeslotId sang findBySessionId
+  async findBySessionId(sessionId) {
     const query = `
       SELECT 
         a.AttendanceID,
         a.LearnerID,
-        a.sessiontimeslotID,
+        a.SessionID,
         a.Status,
         a.Date,
         l.FullName as learnerName,
         s.Title as sessionTitle,
-        t.Date as sessionDate,
+        s.Date as sessionDate,
         t.StartTime,
         t.EndTime,
-        t.Location
+        c.Name as className
       FROM attendance a
       LEFT JOIN learner l ON a.LearnerID = l.LearnerID
-      LEFT JOIN sessiontimeslot st ON a.sessiontimeslotID = st.sessiontimeslotID
-      LEFT JOIN session s ON st.SessionID = s.SessionID
-      LEFT JOIN timeslot t ON st.TimeslotID = t.TimeslotID
-      WHERE a.sessiontimeslotID = ?
+      LEFT JOIN session s ON a.SessionID = s.SessionID
+      LEFT JOIN timeslot t ON s.TimeslotID = t.TimeslotID
+      LEFT JOIN \`class\` c ON s.ClassID = c.ClassID
+      WHERE a.SessionID = ?
       ORDER BY l.FullName
     `;
 
-    const [rows] = await pool.execute(query, [sessionTimeslotId]);
+    const [rows] = await pool.execute(query, [sessionId]);
     return rows;
   }
 
-  async findByLearnerId(learnerId) {
-    const query = `
+  // Alias for backward compatibility
+  async findBySessionTimeslotId(sessionId) {
+    return this.findBySessionId(sessionId);
+  }
+
+  async findByLearnerId(learnerId, classId = null) {
+    // dbver3: attendance trực tiếp có SessionID
+    let query = `
       SELECT 
         a.AttendanceID,
         a.LearnerID,
-        a.sessiontimeslotID,
+        a.SessionID,
         a.Status,
         a.Date,
         s.Title as sessionTitle,
-        t.Date as sessionDate,
+        s.Date as sessionDate,
         t.StartTime,
         t.EndTime,
-        t.Location,
-        c.Title as courseTitle
+        c.Name as className,
+        c.ClassID,
+        co.Title as courseTitle,
+        i.FullName as instructorName
       FROM attendance a
-      LEFT JOIN sessiontimeslot st ON a.sessiontimeslotID = st.sessiontimeslotID
-      LEFT JOIN session s ON st.SessionID = s.SessionID
-      LEFT JOIN timeslot t ON st.TimeslotID = t.TimeslotID
-      LEFT JOIN \`class\` cl ON s.ClassID = cl.ClassID
-      LEFT JOIN course c ON cl.CourseID = c.CourseID
+      LEFT JOIN session s ON a.SessionID = s.SessionID
+      LEFT JOIN timeslot t ON s.TimeslotID = t.TimeslotID
+      LEFT JOIN \`class\` c ON s.ClassID = c.ClassID
+      LEFT JOIN course co ON c.CourseID = co.CourseID
+      LEFT JOIN instructor i ON s.InstructorID = i.InstructorID
       WHERE a.LearnerID = ?
-      ORDER BY t.Date DESC, t.StartTime DESC
     `;
 
-    const [rows] = await pool.execute(query, [learnerId]);
+    const params = [learnerId];
+
+    if (classId) {
+      query += ` AND c.ClassID = ?`;
+      params.push(classId);
+    }
+
+    query += ` ORDER BY s.Date DESC, t.StartTime DESC`;
+
+    const [rows] = await pool.execute(query, params);
     return rows;
   }
 
@@ -131,16 +149,17 @@ class AttendanceRepository {
   }
 
   async deleteBySessionId(sessionId) {
+    // dbver3: attendance trực tiếp có SessionID, không cần sessiontimeslot
     const query = `
-      DELETE a FROM attendance a
-      INNER JOIN sessiontimeslot st ON a.sessiontimeslotID = st.sessiontimeslotID
-      WHERE st.SessionID = ?
+      DELETE FROM attendance
+      WHERE SessionID = ?
     `;
     const [result] = await pool.execute(query, [sessionId]);
     return result.affectedRows;
   }
 
   async getStatisticsByClass(classId) {
+    // dbver3: attendance trực tiếp có SessionID
     const query = `
       SELECT 
         COUNT(*) as totalSessions,
@@ -149,12 +168,11 @@ class AttendanceRepository {
         SUM(CASE WHEN a.Status = 'Late' THEN 1 ELSE 0 END) as lateCount,
         ROUND((SUM(CASE WHEN a.Status = 'Present' THEN 1 ELSE 0 END) / COUNT(*)) * 100, 2) as attendanceRate
       FROM attendance a
-      LEFT JOIN sessiontimeslot st ON a.sessiontimeslotID = st.sessiontimeslotID
-      LEFT JOIN session s ON st.SessionID = s.SessionID
+      INNER JOIN session s ON a.SessionID = s.SessionID
       WHERE s.ClassID = ?
     `;
 
-    const [rows] = await db.query(query, [classId]);
+    const [rows] = await pool.execute(query, [classId]);
     return rows[0];
   }
 

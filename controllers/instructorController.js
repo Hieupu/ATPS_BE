@@ -1,10 +1,10 @@
-const Instructor = require("../models/instructor");
+const instructorService = require("../services/instructorService");
 
 const instructorController = {
   // Lấy tất cả giảng viên
   getAllInstructors: async (req, res) => {
     try {
-      const instructors = await Instructor.findAll();
+      const instructors = await instructorService.getAllInstructors();
 
       res.status(200).json({
         success: true,
@@ -25,7 +25,7 @@ const instructorController = {
   getInstructorById: async (req, res) => {
     try {
       const instructorId = req.params.id;
-      const instructor = await Instructor.findById(instructorId);
+      const instructor = await instructorService.getInstructorById(instructorId);
 
       if (!instructor) {
         return res.status(404).json({
@@ -41,6 +41,13 @@ const instructorController = {
       });
     } catch (error) {
       console.error("Error getting instructor:", error);
+      if (error.message === "Instructor not found") {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giảng viên",
+          error: error.message,
+        });
+      }
       res.status(500).json({
         success: false,
         message: "Lỗi khi lấy thông tin giảng viên",
@@ -60,6 +67,7 @@ const instructorController = {
         Job: req.body.Job,
         Address: req.body.Address,
         Major: req.body.Major,
+        InstructorFee: req.body.InstructorFee,
       };
 
       // Validation
@@ -70,7 +78,7 @@ const instructorController = {
         });
       }
 
-      const newInstructor = await Instructor.create(instructorData);
+      const newInstructor = await instructorService.createInstructor(instructorData);
 
       res.status(201).json({
         success: true,
@@ -93,17 +101,10 @@ const instructorController = {
       const instructorId = req.params.id;
       const updateData = req.body;
 
-      const updatedInstructor = await Instructor.update(
+      const updatedInstructor = await instructorService.updateInstructor(
         instructorId,
         updateData
       );
-
-      if (!updatedInstructor) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy giảng viên",
-        });
-      }
 
       res.status(200).json({
         success: true,
@@ -112,6 +113,13 @@ const instructorController = {
       });
     } catch (error) {
       console.error("Error updating instructor:", error);
+      if (error.message === "Instructor not found") {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giảng viên",
+          error: error.message,
+        });
+      }
       res.status(500).json({
         success: false,
         message: "Lỗi khi cập nhật thông tin giảng viên",
@@ -125,14 +133,7 @@ const instructorController = {
     try {
       const instructorId = req.params.id;
 
-      const deleted = await Instructor.delete(instructorId);
-
-      if (!deleted) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy giảng viên",
-        });
-      }
+      await instructorService.deleteInstructor(instructorId);
 
       res.status(200).json({
         success: true,
@@ -153,16 +154,9 @@ const instructorController = {
     try {
       const instructorId = req.params.id;
 
-      const instructorWithCourses = await Instructor.findByIdWithCourses(
+      const instructorWithCourses = await instructorService.getInstructorWithCourses(
         instructorId
       );
-
-      if (!instructorWithCourses) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy giảng viên",
-        });
-      }
 
       res.status(200).json({
         success: true,
@@ -171,6 +165,13 @@ const instructorController = {
       });
     } catch (error) {
       console.error("Error getting instructor with courses:", error);
+      if (error.message === "Instructor not found") {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giảng viên",
+          error: error.message,
+        });
+      }
       res.status(500).json({
         success: false,
         message: "Lỗi khi lấy thông tin giảng viên với khóa học",
@@ -185,7 +186,7 @@ const instructorController = {
       const instructorId = req.params.id;
       const { startDate, endDate } = req.query;
 
-      const schedule = await Instructor.getSchedule(
+      const schedule = await instructorService.getInstructorSchedule(
         instructorId,
         startDate,
         endDate
@@ -198,6 +199,13 @@ const instructorController = {
       });
     } catch (error) {
       console.error("Error getting instructor schedule:", error);
+      if (error.message === "Instructor not found") {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giảng viên",
+          error: error.message,
+        });
+      }
       res.status(500).json({
         success: false,
         message: "Lỗi khi lấy lịch dạy của giảng viên",
@@ -211,7 +219,7 @@ const instructorController = {
     try {
       const instructorId = req.params.id;
 
-      const statistics = await Instructor.getStatistics(instructorId);
+      const statistics = await instructorService.getInstructorStatistics(instructorId);
 
       res.status(200).json({
         success: true,
@@ -220,6 +228,13 @@ const instructorController = {
       });
     } catch (error) {
       console.error("Error getting instructor statistics:", error);
+      if (error.message === "Instructor not found") {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giảng viên",
+          error: error.message,
+        });
+      }
       res.status(500).json({
         success: false,
         message: "Lỗi khi lấy thống kê giảng viên",

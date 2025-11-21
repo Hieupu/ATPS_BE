@@ -1,7 +1,7 @@
 class Account {
-  constructor({ AccID, Username, Email, Phone, Password, Status, Provider }) {
+  constructor({ AccID, username, Email, Phone, Password, Status, Provider }) {
     this.AccID = AccID;
-    this.Username = Username;
+    this.username = username;
     this.Email = Email;
     this.Phone = Phone;
     this.Password = Password;

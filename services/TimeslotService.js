@@ -4,11 +4,11 @@ class TimeslotService {
   async createTimeslot(data) {
     try {
       // Validate required fields
-      if (!data.StartTime || !data.EndTime || !data.Date) {
-        throw new Error("StartTime, EndTime, and Date are required");
+      if (!data.StartTime || !data.EndTime) {
+        throw new Error("StartTime and EndTime are required");
       }
 
-      // Create timeslot
+      // Create timeslot (only StartTime and EndTime, no Date)
       const newTimeslot = await timeslotRepository.create(data);
       return newTimeslot;
     } catch (error) {

@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const path = require("path");
 require("./config/db");
 
 // Import new routes
@@ -14,14 +15,34 @@ const learnerRouter = require("./routes/learnerRouter");
 const materialRouter = require("./routes/materialRouter");
 const sessionRouter = require("./routes/sessionRouter");
 const timeslotRouter = require("./routes/timeslotRouter");
-const sessiontimeslotRouter = require("./routes/sessiontimeslotRouter");
+const accountRouter = require("./routes/accountRouter");
+const newsRouter = require("./routes/newsRouter");
+const refundRouter = require("./routes/refundRouter");
+const promotionRouter = require("./routes/promotionRouter");
+const dashboardRouter = require("./routes/dashboardRouter");
+// Removed sessiontimeslotRouter - no longer needed
 const commonRouter = require("./routes/commonRouter");
+
+// Debug: Log khi dashboard router được import
+console.log("Dashboard router imported successfully");
+
+// New routes for workflow 4 steps
+// const instructorMaterialRouter = require("./routes/instructorMaterialRouter");
+// const lessonRouter = require("./routes/lessonRouter");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static assets (images, uploads)
+app.use(
+  "/assets",
+  express.static(path.join(__dirname, "public", "assets"), {
+    maxAge: "7d",
+  })
+);
 
 // New API routes
 app.use("/api/auth", authRouter);
@@ -35,8 +56,18 @@ app.use("/api/learners", learnerRouter);
 app.use("/api/materials", materialRouter);
 app.use("/api/sessions", sessionRouter);
 app.use("/api/timeslots", timeslotRouter);
-app.use("/api/sessiontimeslots", sessiontimeslotRouter);
+app.use("/api/accounts", accountRouter);
+app.use("/api/news", newsRouter);
+app.use("/api/refunds", refundRouter);
+app.use("/api/promotions", promotionRouter);
+app.use("/api/dashboard", dashboardRouter);
+console.log("Dashboard route registered: /api/dashboard");
+// Removed sessiontimeslots route - no longer needed
 app.use("/api/common", commonRouter);
+
+// New routes for workflow 4 steps
+// app.use("/api/instructor-materials", instructorMaterialRouter);
+// app.use("/api/lessons", lessonRouter);
 
 // Legacy API routes (for compatibility)
 app.use("/api/admin/classes", classRouter);
@@ -65,10 +96,17 @@ app.get("/", (req, res) => {
       enrollments: "/api/enrollments",
       instructors: "/api/instructors",
       learners: "/api/learners",
+      accounts: "/api/accounts",
+      news: "/api/news",
+      refunds: "/api/refunds",
+      promotions: "/api/promotions",
+      dashboard: "/api/dashboard",
       materials: "/api/materials",
       sessions: "/api/sessions",
       timeslots: "/api/timeslots",
-      sessiontimeslots: "/api/sessiontimeslots",
+      // sessiontimeslots removed - replaced by TimeslotID in sessions
+      instructorMaterials: "/api/instructor-materials",
+      lessons: "/api/lessons",
     },
     documentation: "/API_DOCUMENTATION.md",
   });

@@ -71,8 +71,32 @@ class LearnerRepository {
   }
 
   async update(id, updateData) {
-    const fields = Object.keys(updateData);
-    const values = Object.values(updateData);
+    // Whitelist các trường được phép update trong bảng learner (dbver3)
+    const allowedFields = [
+      'FullName',
+      'DateOfBirth',
+      'ProfilePicture',
+      'Job',
+      'Address'
+      // AccID không được update qua đây (phải thông qua account)
+      // Email, Phone, Status, Level, Bio, Interests không có trong bảng learner
+    ];
+
+    // Lọc chỉ các trường hợp lệ
+    const filteredData = {};
+    Object.keys(updateData).forEach(key => {
+      if (allowedFields.includes(key)) {
+        filteredData[key] = updateData[key];
+      }
+    });
+
+    // Nếu không có trường nào hợp lệ, return null
+    if (Object.keys(filteredData).length === 0) {
+      return await this.findById(id);
+    }
+
+    const fields = Object.keys(filteredData);
+    const values = Object.values(filteredData);
     const setClause = fields.map((field) => `${field} = ?`).join(", ");
 
     const query = `UPDATE learner SET ${setClause} WHERE LearnerID = ?`;

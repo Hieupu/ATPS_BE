@@ -4,37 +4,81 @@ const instructorRepository = require("../repositories/instructorRepository");
 const enrollmentRepository = require("../repositories/enrollmentRepository");
 const sessionRepository = require("../repositories/sessionRepository");
 const timeslotRepository = require("../repositories/timeslotRepository");
-const sessiontimeslotRepository = require("../repositories/sessiontimeslotRepository");
 const attendanceRepository = require("../repositories/attendanceRepository");
 const paymentRepository = require("../repositories/paymentRepository");
+const { generateSessions } = require("../utils/scheduleUtils");
 const pool = require("../config/db");
 
 class ClassService {
   async createClass(data) {
     try {
       // Validate required fields (CourseID is optional)
-      if (!data.ClassName || !data.InstructorID) {
-        throw new Error("ClassName and InstructorID are required");
+      const className = data.Name || data.ClassName; // Support both old and new field names
+      if (!className || !data.InstructorID) {
+        throw new Error("Name and InstructorID are required");
       }
 
+      // dbver5: Sử dụng các trường mới (không có ZoomURL)
+      const { CLASS_STATUS } = require("../constants/classStatus");
+      const classData = {
+        Name: className,
+        CourseID: data.CourseID || null,
+        InstructorID: data.InstructorID,
+        Status: data.Status || CLASS_STATUS.DRAFT,
+        ZoomID: data.ZoomID || null,
+        Zoompass: data.Zoompass || null,
+        Fee: data.Fee || null,
+        OpendatePlan: data.OpendatePlan || null,
+        EnddatePlan: data.EnddatePlan || null,
+        Numofsession: data.Numofsession || 0,
+        Maxstudent: data.Maxstudent || 0,
+      };
+
       // Check if course exists (only if CourseID is provided)
-      if (data.CourseID) {
-        const course = await courseRepository.findById(data.CourseID);
+      if (classData.CourseID) {
+        const course = await courseRepository.findById(classData.CourseID);
         if (!course) {
           throw new Error("Course not found");
         }
       }
 
       // Check if instructor exists
-      const instructor = await instructorRepository.findById(data.InstructorID);
+      const instructor = await instructorRepository.findById(classData.InstructorID);
       if (!instructor) {
         throw new Error("Instructor not found");
       }
 
       // Create class
-      const newClass = await classRepository.create(data);
-      return newClass;
+      const newClass = await classRepository.create(classData);
+      const classId = newClass.insertId;
+
+      // Auto-generate sessions if schedule is provided
+      if (data.schedule) {
+        const { OpendatePlan, EnddatePlan, DaysOfWeek, TimeslotID } = data.schedule;
+        
+        // Generate sessions array
+        const sessions = generateSessions({
+          classId,
+          instructorId: classData.InstructorID,
+          startDate: OpendatePlan,
+          endDate: EnddatePlan,
+          daysOfWeek: DaysOfWeek,
+          timeslotId: TimeslotID,
+        });
+
+        // Create each session
+        for (const session of sessions) {
+          await sessionRepository.create(session);
+        }
+
+        console.log(`Auto-generated ${sessions.length} sessions for class ${classId}`);
+      }
+
+      // Return full class data
+      const fullClassData = await classRepository.findById(classId);
+      return fullClassData[0];
     } catch (error) {
+      console.error("Error creating class:", error);
       throw error;
     }
   }
@@ -55,11 +99,11 @@ class ClassService {
       }
 
       const classData = await classRepository.findById(id);
-      if (!classData) {
+      if (!classData || classData.length === 0) {
         console.log(`Class with ID ${id} not found`);
         return null; // Return null instead of throwing error
       }
-      return classData;
+      return classData[0]; // Return first element of array
     } catch (error) {
       console.error("Error in getClassById:", error);
       throw error;
@@ -70,12 +114,26 @@ class ClassService {
     try {
       // Check if class exists
       const existingClass = await classRepository.findById(id);
-      if (!existingClass) {
+      if (!existingClass || existingClass.length === 0) {
         throw new Error("Class not found");
       }
 
+      // Whitelist allowed fields for dbver5 (không có ZoomURL)
+      const allowedFields = [
+        'Name', 'CourseID', 'InstructorID', 'Status', 'ZoomID', 'Zoompass', 'Fee',
+        'OpendatePlan', 'Opendate', 'EnddatePlan', 'Enddate',
+        'Numofsession', 'Maxstudent'
+      ];
+      
+      const filteredData = {};
+      Object.keys(data).forEach(key => {
+        if (allowedFields.includes(key)) {
+          filteredData[key] = data[key];
+        }
+      });
+
       // Update class
-      const updatedClass = await classRepository.update(id, data);
+      const updatedClass = await classRepository.update(id, filteredData);
       return updatedClass;
     } catch (error) {
       throw error;
@@ -86,7 +144,7 @@ class ClassService {
     try {
       // Check if class exists
       const existingClass = await classRepository.findById(id);
-      if (!existingClass) {
+      if (!existingClass || existingClass.length === 0) {
         throw new Error("Class not found");
       }
 
@@ -101,12 +159,10 @@ class ClassService {
       await enrollmentRepository.deleteByClassId(id);
 
       // 3. Delete sessions and related records
+      // dbver5: attendance trực tiếp có SessionID, không cần sessiontimeslot
       for (const session of sessions) {
-        // Delete attendance records first (they reference sessiontimeslot)
+        // Delete attendance records first (they reference SessionID)
         await attendanceRepository.deleteBySessionId(session.SessionID);
-
-        // Delete sessiontimeslots
-        await sessiontimeslotRepository.deleteBySessionId(session.SessionID);
 
         // Delete session
         await sessionRepository.delete(session.SessionID);
@@ -149,12 +205,15 @@ class ClassService {
 
   async autoUpdateClassStatus() {
     try {
-      // Logic để auto update status của classes dựa trên schedule
-      const classes = await classRepository.findAll();
+      // Tích hợp với classScheduleService để tự động đóng lớp
+      const classScheduleService = require("./classScheduleService");
+      const closedClasses = await classScheduleService.autoCloseClasses();
 
-      // Có thể implement logic phức tạp hơn ở đây
-      // Hiện tại chỉ return classes
-      return classes;
+      // Có thể thêm logic khác ở đây (ví dụ: tự động chuyển OPEN -> ON_GOING)
+      return {
+        closedClasses: closedClasses,
+        message: `Đã đóng ${closedClasses.length} lớp học`,
+      };
     } catch (error) {
       throw error;
     }
@@ -168,41 +227,44 @@ class ClassService {
 
       // Lấy thông tin class để lấy InstructorID
       const classInfo = await classRepository.findById(classId);
-      if (!classInfo) {
+      if (!classInfo || classInfo.length === 0) {
         throw new Error("Class not found");
       }
 
       console.log(
-        `Creating session for class ${classId}, instructor ${classInfo.InstructorID}`
+        `Creating session for class ${classId}, instructor ${classInfo[0].InstructorID}`
       );
 
+      // dbver5: Mỗi session có một TimeslotID và một Date
+      // Mỗi phần tử trong timeslots sẽ tạo một session riêng
+      const createdSessions = [];
+
       // Kiểm tra conflict timeslot trước khi tạo với options
-      await this.checkTimeslotConflicts(classInfo.InstructorID, timeslots, options);
+      await this.checkTimeslotConflicts(classInfo[0].InstructorID, timeslots, options);
 
-      // Tạo session
-      const session = await sessionRepository.create({
-        Title: title,
-        Description: description,
-        ClassID: classId,
-        InstructorID: classInfo.InstructorID,
-      });
-
-      // Tạo timeslots cho session
+      // Tạo sessions cho mỗi timeslot
       for (const timeslotData of timeslots) {
+        // Tìm hoặc tạo timeslot với StartTime và EndTime (không có Date)
+        // TODO: Nên check xem timeslot đã tồn tại chưa để tránh duplicate
         const timeslot = await timeslotRepository.create({
           StartTime: timeslotData.startTime,
           EndTime: timeslotData.endTime,
+        });
+
+        // Tạo session với TimeslotID và Date
+        const sessionResult = await sessionRepository.create({
+          Title: title,
+          Description: description,
+          ClassID: classId,
+          InstructorID: classInfo[0].InstructorID,
+          TimeslotID: timeslot.TimeslotID,
           Date: timeslotData.date,
         });
 
-        // Liên kết session với timeslot
-        await sessiontimeslotRepository.create({
-          SessionID: session.SessionID,
-          TimeslotID: timeslot.TimeslotID,
-        });
+        createdSessions.push(sessionResult);
       }
 
-      // Lấy lại session với timeslots
+      // Lấy lại sessions với timeslots
       const createdSession = await this.getClassSessions(classId);
       return createdSession;
     } catch (error) {
@@ -216,22 +278,22 @@ class ClassService {
       const { allowOverlap = false, maxOverlapMinutes = 0 } = options;
 
       for (const newTimeslot of newTimeslots) {
-        // Kiểm tra trùng ca học của instructor ở các lớp khác
+        // Kiểm tra trùng ca học của instructor ở các lớp khác (dbver5 schema)
+        // dbver5: session trực tiếp có TimeslotID và Date, không cần sessiontimeslot
         const conflictQuery = `
           SELECT DISTINCT
             s.SessionID,
             s.Title as sessionTitle,
-            c.ClassName,
+            c.Name as ClassName,
             c.ClassID,
-            t.Date,
+            s.Date,
             t.StartTime,
             t.EndTime
           FROM session s
-          INNER JOIN sessiontimeslot st ON s.SessionID = st.SessionID
-          INNER JOIN timeslot t ON st.TimeslotID = t.TimeslotID
+          INNER JOIN timeslot t ON s.TimeslotID = t.TimeslotID
           INNER JOIN \`class\` c ON s.ClassID = c.ClassID
           WHERE s.InstructorID = ?
-            AND t.Date = ?
+            AND s.Date = ?
             AND (
               (t.StartTime <= ? AND t.EndTime > ?) OR
               (t.StartTime < ? AND t.EndTime >= ?) OR
@@ -315,31 +377,32 @@ class ClassService {
 
   async updateClassSession(sessionId, sessionData) {
     try {
+      // dbver5: Session chỉ có một TimeslotID và một Date
+      // Nếu timeslots là mảng, chỉ lấy phần tử đầu tiên
       const { title, description, timeslots } = sessionData;
 
-      // Cập nhật session
-      const updatedSession = await sessionRepository.update(sessionId, {
+      let updateData = {
         Title: title,
         Description: description,
-      });
+      };
 
-      // Xóa timeslots cũ
-      await sessiontimeslotRepository.deleteBySessionId(sessionId);
+      // Nếu có timeslot, cập nhật TimeslotID và Date
+      if (timeslots && timeslots.length > 0) {
+        const timeslotData = timeslots[0]; // Chỉ lấy phần tử đầu tiên
 
-      // Tạo timeslots mới
-      for (const timeslotData of timeslots) {
+        // Tìm hoặc tạo timeslot với StartTime và EndTime
+        // TODO: Nên check xem timeslot đã tồn tại chưa để tránh duplicate
         const timeslot = await timeslotRepository.create({
           StartTime: timeslotData.startTime,
           EndTime: timeslotData.endTime,
-          Date: timeslotData.date,
         });
 
-        // Liên kết session với timeslot
-        await sessiontimeslotRepository.create({
-          SessionID: sessionId,
-          TimeslotID: timeslot.TimeslotID,
-        });
+        updateData.TimeslotID = timeslot.TimeslotID;
+        updateData.Date = timeslotData.date;
       }
+
+      // Cập nhật session
+      const updatedSession = await sessionRepository.update(sessionId, updateData);
 
       return updatedSession;
     } catch (error) {
@@ -349,12 +412,224 @@ class ClassService {
 
   async deleteClassSession(sessionId) {
     try {
-      // Xóa sessiontimeslot trước
-      await sessiontimeslotRepository.deleteBySessionId(sessionId);
-
-      // Xóa session
+      // Xóa session (không cần xóa sessiontimeslot nữa)
       const deleted = await sessionRepository.delete(sessionId);
       return deleted;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // =====================================================
+  // WORKFLOW 4 BƯỚC - CLASS MANAGEMENT
+  // =====================================================
+
+  // Lấy danh sách lớp theo status
+  async getClassesByStatus(status, options = {}) {
+    try {
+      const { page = 1, limit = 10 } = options;
+      const offset = (page - 1) * limit;
+
+      const classes = await classRepository.findByStatus(status, {
+        limit,
+        offset,
+      });
+
+      const total = await classRepository.countByStatus(status);
+
+      return {
+        classes,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // ========== HÀM ĐẾM HỌC VIÊN ==========
+  /**
+   * Hàm Đếm Học viên: Trả lời câu hỏi "đã có bao nhiêu học viên tham gia lớp"
+   * @param {number} classId - ID của lớp
+   * @returns {number} - Số lượng học viên đã đăng ký
+   */
+  async getEnrollmentCount(classId) {
+    try {
+      const pool = require("../config/db");
+      const query = `
+        SELECT COUNT(*) as count
+        FROM enrollment
+        WHERE ClassID = ? AND Status = 'active'
+      `;
+
+      const [rows] = await pool.execute(query, [classId]);
+      return rows[0]?.count || 0;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // ========== HÀM KIỂM TRA ĐẦY LỚP ==========
+  /**
+   * Hàm Kiểm tra Đầy lớp: Kiểm tra xem lớp đã đầy chưa
+   * @param {number} classId - ID của lớp
+   * @returns {boolean} - true nếu lớp đã đầy
+   */
+  async isClassFull(classId) {
+    try {
+      const classData = await classRepository.findById(classId);
+      if (!classData || classData.length === 0) {
+        throw new Error("Lớp học không tồn tại");
+      }
+
+      const enrollmentCount = await this.getEnrollmentCount(classId);
+      const maxLearners = classData[0].Maxstudent || 0;
+
+      return enrollmentCount >= maxLearners;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // ========== HÀM TỰ ĐỘNG ĐÓNG ĐĂNG KÝ ==========
+  /**
+   * Hàm Tự động Đóng đăng ký: Tự động đóng lớp khi đủ học viên
+   * @param {number} classId - ID của lớp
+   * @returns {boolean} - true nếu đã đóng đăng ký
+   */
+  async autoCloseEnrollment(classId) {
+    try {
+      const isFull = await this.isClassFull(classId);
+      if (isFull) {
+        // Có thể set flag hoặc chuyển status tùy business logic
+        // Ở đây ta chỉ log, không tự động đóng (để admin quyết định)
+        console.log(`Lớp ${classId} đã đầy (${await this.getEnrollmentCount(classId)} học viên)`);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // ========== HÀM TỰ ĐỘNG KẾT THÚC ==========
+  /**
+   * Hàm Tự động Kết thúc: Tự động chuyển Status sang CLOSE/DONE khi Enddate < NOW()
+   * Nên chạy hàng đêm (cron job)
+   * @returns {Array} - Danh sách các lớp đã được đóng
+   */
+  async autoCloseClass() {
+    try {
+      const pool = require("../config/db");
+      const { CLASS_STATUS } = require("../constants/classStatus");
+
+      // Tìm các lớp đã kết thúc nhưng chưa đóng
+      const query = `
+        SELECT ClassID, Name, Enddate
+        FROM \`class\`
+        WHERE Status IN (?, ?, ?)
+          AND Enddate IS NOT NULL
+          AND Enddate < CURDATE()
+      `;
+
+      const [classes] = await pool.execute(query, [
+        CLASS_STATUS.ON_GOING,
+        CLASS_STATUS.ACTIVE,
+      ]);
+
+      const closedClasses = [];
+
+      for (const classItem of classes) {
+        await classRepository.update(classItem.ClassID, {
+          Status: CLASS_STATUS.CLOSE,
+        });
+
+        closedClasses.push({
+          ClassID: classItem.ClassID,
+          Name: classItem.Name,
+          Enddate: classItem.Enddate,
+        });
+      }
+
+      console.log(`Đã tự động đóng ${closedClasses.length} lớp học`);
+      return closedClasses;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // ========== HÀM TỰ ĐỘNG CHUYỂN SANG ON_GOING ==========
+  /**
+   * Hàm Tự động Chuyển sang ON_GOING: Tự động chuyển status sang ON_GOING khi Opendate <= NOW()
+   * Nên chạy hàng ngày (cron job)
+   * @returns {Array} - Danh sách các lớp đã được chuyển sang ON_GOING
+   */
+  async autoStartClass() {
+    try {
+      const pool = require("../config/db");
+      const { CLASS_STATUS } = require("../constants/classStatus");
+
+      // Tìm các lớp đã đến ngày bắt đầu nhưng chưa chuyển sang ON_GOING
+      const query = `
+        SELECT ClassID, Name, Opendate
+        FROM \`class\`
+        WHERE (Status = ? OR Status = ?)
+          AND Opendate IS NOT NULL
+          AND Opendate <= CURDATE()
+      `;
+
+      const [classes] = await pool.execute(query, [
+        CLASS_STATUS.ACTIVE,
+      ]);
+
+      const startedClasses = [];
+
+      for (const classItem of classes) {
+        await classRepository.update(classItem.ClassID, {
+          Status: CLASS_STATUS.ON_GOING,
+        });
+
+        startedClasses.push({
+          ClassID: classItem.ClassID,
+          Name: classItem.Name,
+          Opendate: classItem.Opendate,
+        });
+      }
+
+      console.log(`Đã tự động chuyển ${startedClasses.length} lớp sang ON_GOING`);
+      return startedClasses;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Lấy danh sách lớp có thể đăng ký (PUBLISHED)
+  async getAvailableClasses(options = {}) {
+    try {
+      const { page = 1, limit = 10, search = "" } = options;
+      const offset = (page - 1) * limit;
+
+      const classes = await classRepository.findAvailableClasses({
+        limit,
+        offset,
+        search,
+      });
+
+      const total = await classRepository.countAvailableClasses(search);
+
+      return {
+        classes,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+      };
     } catch (error) {
       throw error;
     }

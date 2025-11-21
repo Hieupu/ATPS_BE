@@ -8,12 +8,11 @@ const timeslotController = {
 
       if (
         !timeslotData.StartTime ||
-        !timeslotData.EndTime ||
-        !timeslotData.Date
+        !timeslotData.EndTime
       ) {
         return res.status(400).json({
           success: false,
-          message: "StartTime, EndTime và Date là bắt buộc",
+          message: "StartTime và EndTime là bắt buộc",
         });
       }
 

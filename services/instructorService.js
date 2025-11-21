@@ -89,6 +89,48 @@ class InstructorService {
       throw error;
     }
   }
+
+  async getInstructorWithCourses(instructorId) {
+    try {
+      const instructor = await instructorRepository.findByIdWithCourses(instructorId);
+      if (!instructor) {
+        throw new Error("Instructor not found");
+      }
+      return instructor;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getInstructorSchedule(instructorId, startDate = null, endDate = null) {
+    try {
+      // Check if instructor exists
+      const existingInstructor = await instructorRepository.findById(instructorId);
+      if (!existingInstructor) {
+        throw new Error("Instructor not found");
+      }
+
+      const schedule = await instructorRepository.getSchedule(instructorId, startDate, endDate);
+      return schedule;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async getInstructorStatistics(instructorId) {
+    try {
+      // Check if instructor exists
+      const existingInstructor = await instructorRepository.findById(instructorId);
+      if (!existingInstructor) {
+        throw new Error("Instructor not found");
+      }
+
+      const statistics = await instructorRepository.getStatistics(instructorId);
+      return statistics;
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 module.exports = new InstructorService();

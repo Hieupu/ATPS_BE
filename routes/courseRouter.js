@@ -63,6 +63,14 @@ router.get(
   courseController.getCourseClasses
 );
 
+// Admin approve/reject course
+router.post(
+  "/:id/approve",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  courseController.approveCourse
+);
+
 // Public APIs
 router.get("/available", courseController.getAllCourses);
 

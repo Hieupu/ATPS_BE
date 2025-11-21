@@ -37,6 +37,11 @@ class AccountRepository {
     };
   }
 
+  // Alias for findAccountById
+  async findById(accountId) {
+    return this.findAccountById(accountId);
+  }
+
   async createAccount({
     username,
     email,
@@ -83,14 +88,39 @@ class AccountRepository {
   }
 
   async updateAccount(accountId, updateData) {
-    const fields = Object.keys(updateData);
-    const values = Object.values(updateData);
+    // Whitelist các trường được phép update trong bảng account
+    const allowedFields = [
+      'Email',
+      'Phone',
+      'Status',
+      'Password'
+      // Username và Provider không được update qua đây
+      // AccID là primary key, không thể update
+    ];
+
+    // Lọc chỉ các trường hợp lệ
+    const filteredData = {};
+    Object.keys(updateData).forEach(key => {
+      if (allowedFields.includes(key)) {
+        filteredData[key] = updateData[key];
+      }
+    });
+
+    // Nếu không có trường nào hợp lệ, return
+    if (Object.keys(filteredData).length === 0) {
+      return;
+    }
+
+    const fields = Object.keys(filteredData);
+    const values = Object.values(filteredData);
     const setClause = fields.map((field) => `${field} = ?`).join(", ");
 
-    await pool.query(`UPDATE account SET ${setClause} WHERE AccID = ?`, [
-      ...values,
-      accountId,
-    ]);
+    const [result] = await pool.query(
+      `UPDATE account SET ${setClause} WHERE AccID = ?`,
+      [...values, accountId]
+    );
+
+    return result;
   }
 
   async updatePassword(accountId, hashedPassword) {

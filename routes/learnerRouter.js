@@ -6,8 +6,8 @@ const learnerController = require("../controllers/learnerController");
 // Admin APIs
 router.get(
   "/",
-  verifyToken,
-  authorizeFeature("admin"),
+  // verifyToken,
+  // authorizeFeature("admin"),
   learnerController.getAllLearners
 );
 router.post(
@@ -18,8 +18,8 @@ router.post(
 );
 router.get(
   "/:id",
-  verifyToken,
-  authorizeFeature("admin"),
+  // verifyToken,
+  // authorizeFeature("admin"),
   learnerController.getLearnerById
 );
 router.put(

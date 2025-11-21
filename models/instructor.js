@@ -1,3 +1,9 @@
+/**
+ * Instructor Model - dbver5
+ * 
+ * Trường mới (dbver5):
+ * - Type: ENUM('fulltime', 'parttime') - Loại giảng viên
+ */
 class Instructor {
   constructor({
     InstructorID,
@@ -7,7 +13,10 @@ class Instructor {
     ProfilePicture,
     Job,
     Address,
+    CV,
     Major,
+    InstructorFee,
+    Type, // dbver5: 'fulltime' hoặc 'parttime'
   }) {
     this.InstructorID = InstructorID;
     this.AccID = AccID;
@@ -16,7 +25,10 @@ class Instructor {
     this.ProfilePicture = ProfilePicture;
     this.Job = Job;
     this.Address = Address;
+    this.CV = CV;
     this.Major = Major;
+    this.InstructorFee = InstructorFee;
+    this.Type = Type || 'fulltime'; // dbver5
   }
 }
 
