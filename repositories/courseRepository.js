@@ -795,6 +795,7 @@ async getPopularCourses() {
 
       return assignments.map((assignment) => ({
         AssignmentID: assignment.AssignmentID,
+         UnitID: assignment.UnitID,
         Title: assignment.Title,
         Description: assignment.Description,
         Deadline: assignment.Deadline,
