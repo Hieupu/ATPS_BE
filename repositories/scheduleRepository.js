@@ -281,408 +281,215 @@ class ScheduleRepository {
     }
   }
 
-  // Lấy lịch học của giảng viên theo tuần (từ instructortimeslot và Session)
 async getInstructorWeeklySchedule(instructorId, weekStartDate) {
-    try {
-      const db = await connectDB();
+  try {
+    const db = await connectDB();
 
-      // Tính ngày bắt đầu và kết thúc của tuần
-      const startDate = new Date(weekStartDate);
-      const endDate = new Date(startDate);
-      endDate.setDate(startDate.getDate() + 6); // 7 ngày (0-6)
+    const startDate = new Date(weekStartDate);
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
 
-      const startDateStr = startDate.toISOString().split("T")[0];
-      const endDateStr = endDate.toISOString().split("T")[0];
+    const startDateStr = startDate.toISOString().split("T")[0];
+    const endDateStr = endDate.toISOString().split("T")[0];
 
-      console.log('=== WEEK RANGE ===');
-      console.log('Start Date:', startDateStr);
-      console.log('End Date:', endDateStr);
-      console.log('Instructor ID:', instructorId);
-
-      // Lấy tất cả timeslots
-      const [allTimeslots] = await db.query(
-        `SELECT TimeslotID, Day, StartTime, EndTime FROM timeslot ORDER BY 
-         CASE Day
-           WHEN 'Monday' THEN 1
-           WHEN 'Tuesday' THEN 2
-           WHEN 'Wednesday' THEN 3
-           WHEN 'Thursday' THEN 4
-           WHEN 'Friday' THEN 5
-           WHEN 'Saturday' THEN 6
-           WHEN 'Sunday' THEN 7
-         END, StartTime`
-      );
-
-      console.log('\n=== ALL TIMESLOTS ===');
-      console.log('Total timeslots:', allTimeslots.length);
-      console.log('Sample timeslots:', allTimeslots.slice(0, 3));
-
-      // Lấy các slot đã bận từ instructortimeslot trong tuần này
-      const [busySlots] = await db.query(
-        `SELECT 
-          its.InstructortimeslotID,
-          its.TimeslotID,
-          its.Date,
-          its.Status,
-          ts.Day,
-          ts.StartTime,
-          ts.EndTime
-         FROM instructortimeslot its
-         INNER JOIN timeslot ts ON its.TimeslotID = ts.TimeslotID
-         WHERE its.InstructorID = ? 
-           AND its.Date >= ? 
-           AND its.Date <= ?
-           AND its.Status = 'busy'`,
-        [instructorId, startDateStr, endDateStr]
-      );
-
-      console.log('\n=== BUSY SLOTS ===');
-      console.log('Total busy slots:', busySlots.length);
-      console.log('Busy slots data:', JSON.stringify(busySlots, null, 2));
-
-      // Lấy các session đang dạy trong tuần này
-      const [teachingSessions] = await db.query(
-        `SELECT 
-          s.TimeslotID,
-          s.Date,
-          ts.Day,
-          ts.StartTime,
-          ts.EndTime
-         FROM session s
-         INNER JOIN timeslot ts ON s.TimeslotID = ts.TimeslotID
-         LEFT JOIN class cl ON s.ClassID = cl.ClassID
-         LEFT JOIN enrollment e ON cl.ClassID = e.ClassID
-         WHERE s.InstructorID = ?
-           AND s.Date >= ?
-           AND s.Date <= ?
-           AND (
-             (e.Status = 'Enrolled')
-             OR
-             (e.EnrollmentID IS NULL AND NOT EXISTS (
-               SELECT 1 FROM enrollment e2 WHERE e2.ClassID = cl.ClassID
-             ))
-           )`,
-        [instructorId, startDateStr, endDateStr]
-      );
-
-      console.log('\n=== TEACHING SESSIONS ===');
-      console.log('Total teaching sessions:', teachingSessions.length);
-      console.log('Teaching sessions data:', JSON.stringify(teachingSessions, null, 2));
-
-      // Tạo map để đánh dấu slot bận
-      const busyMap = new Map();
-      const teachingMap = new Map();
-
-      // Đánh dấu slot bận từ instructortimeslot
-      busySlots.forEach((slot) => {
-        let dateStr = slot.Date;
-        if (dateStr instanceof Date) {
-          // Sử dụng local date thay vì UTC
-          const year = dateStr.getFullYear();
-          const month = String(dateStr.getMonth() + 1).padStart(2, '0');
-          const day = String(dateStr.getDate()).padStart(2, '0');
-          dateStr = `${year}-${month}-${day}`;
-        } else if (typeof dateStr === "string") {
-          // Nếu là string UTC, convert sang local date
-          const date = new Date(dateStr);
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          dateStr = `${year}-${month}-${day}`;
-        }
-        const key = `${dateStr}_${slot.TimeslotID}`;
-        busyMap.set(key, slot);
-        console.log(`[BUSY MAP] Added key: ${key}`);
-      });
-
-      console.log('\n=== BUSY MAP ===');
-      console.log('Busy map keys:', Array.from(busyMap.keys()));
-
-      // Đánh dấu slot đang dạy từ session
-      teachingSessions.forEach((session) => {
-        let dateStr = session.Date;
-        if (dateStr instanceof Date) {
-          // Sử dụng local date thay vì UTC
-          const year = dateStr.getFullYear();
-          const month = String(dateStr.getMonth() + 1).padStart(2, '0');
-          const day = String(dateStr.getDate()).padStart(2, '0');
-          dateStr = `${year}-${month}-${day}`;
-        } else if (typeof dateStr === "string") {
-          // Nếu là string UTC, convert sang local date
-          const date = new Date(dateStr);
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          dateStr = `${year}-${month}-${day}`;
-        }
-        const key = `${dateStr}_${session.TimeslotID}`;
-        teachingMap.set(key, session);
-        console.log(`[TEACHING MAP] Added key: ${key}`);
-      });
-
-      console.log('\n=== TEACHING MAP ===');
-      console.log('Teaching map keys:', Array.from(teachingMap.keys()));
-
-      // Tạo lịch học theo tuần
-      const schedule = [];
-      const dayOrder = {
-        Monday: 1,
-        Tuesday: 2,
-        Wednesday: 3,
-        Thursday: 4,
-        Friday: 5,
-        Saturday: 6,
-        Sunday: 7,
-      };
-
-      // Tính ngày cho mỗi thứ trong tuần
-      const dayDates = {};
-      for (let i = 0; i < 7; i++) {
-        const date = new Date(startDate);
-        date.setDate(startDate.getDate() + i);
-        const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
-        dayDates[dayName] = date.toISOString().split("T")[0];
-      }
-
-      console.log('\n=== DAY DATES MAPPING ===');
-      console.log('Day dates:', dayDates);
-
-      // Lấy tất cả instructortimeslot của giảng viên trong tuần
-      const [allInstructorSlots] = await db.query(
-      `SELECT InstructortimeslotID, TimeslotID, Date FROM instructortimeslot 
-         WHERE InstructorID = ? AND Date >= ? AND Date <= ?`,
-        [instructorId, startDateStr, endDateStr]
-      );
-
-      console.log('\n=== ALL INSTRUCTOR SLOTS ===');
-      console.log('Total instructor slots:', allInstructorSlots.length);
-      console.log('Instructor slots data:', JSON.stringify(allInstructorSlots, null, 2));
-
-      const instructorSlotMap = new Map();
-      allInstructorSlots.forEach((slot) => {
-        let dateStr = slot.Date;
-        if (dateStr instanceof Date) {
-          // Sử dụng local date thay vì UTC
-          const year = dateStr.getFullYear();
-          const month = String(dateStr.getMonth() + 1).padStart(2, '0');
-          const day = String(dateStr.getDate()).padStart(2, '0');
-          dateStr = `${year}-${month}-${day}`;
-        } else if (typeof dateStr === "string") {
-          // Nếu là string UTC, convert sang local date
-          const date = new Date(dateStr);
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          dateStr = `${year}-${month}-${day}`;
-        }
-        const key = `${dateStr}_${slot.TimeslotID}`;
-        instructorSlotMap.set(key, true);
-        console.log(`[INSTRUCTOR SLOT MAP] Added key: ${key}`);
-      });
-
-      console.log('\n=== INSTRUCTOR SLOT MAP ===');
-      console.log('Instructor slot map keys:', Array.from(instructorSlotMap.keys()));
-
-      // Tạo map: TimeslotID -> các Date
-      const timeslotDateMap = new Map();
-      
-      allInstructorSlots.forEach((slot) => {
-        let dateStr = slot.Date;
-        if (dateStr instanceof Date) {
-          // Sử dụng local date thay vì UTC
-          const year = dateStr.getFullYear();
-          const month = String(dateStr.getMonth() + 1).padStart(2, '0');
-          const day = String(dateStr.getDate()).padStart(2, '0');
-          dateStr = `${year}-${month}-${day}`;
-        } else if (typeof dateStr === "string") {
-          // Nếu là string UTC, convert sang local date
-          const date = new Date(dateStr);
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          dateStr = `${year}-${month}-${day}`;
-        }
-        if (!timeslotDateMap.has(slot.TimeslotID)) {
-          timeslotDateMap.set(slot.TimeslotID, new Set());
-        }
-        timeslotDateMap.get(slot.TimeslotID).add(dateStr);
-      });
-
-      busySlots.forEach((slot) => {
-        let dateStr = slot.Date;
-        if (dateStr instanceof Date) {
-          const year = dateStr.getFullYear();
-          const month = String(dateStr.getMonth() + 1).padStart(2, '0');
-          const day = String(dateStr.getDate()).padStart(2, '0');
-          dateStr = `${year}-${month}-${day}`;
-        } else if (typeof dateStr === "string") {
-          const date = new Date(dateStr);
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          dateStr = `${year}-${month}-${day}`;
-        }
-        if (!timeslotDateMap.has(slot.TimeslotID)) {
-          timeslotDateMap.set(slot.TimeslotID, new Set());
-        }
-        timeslotDateMap.get(slot.TimeslotID).add(dateStr);
-      });
-
-      teachingSessions.forEach((session) => {
-        let dateStr = session.Date;
-        if (dateStr instanceof Date) {
-          const year = dateStr.getFullYear();
-          const month = String(dateStr.getMonth() + 1).padStart(2, '0');
-          const day = String(dateStr.getDate()).padStart(2, '0');
-          dateStr = `${year}-${month}-${day}`;
-        } else if (typeof dateStr === "string") {
-          const date = new Date(dateStr);
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          dateStr = `${year}-${month}-${day}`;
-        }
-        if (!timeslotDateMap.has(session.TimeslotID)) {
-          timeslotDateMap.set(session.TimeslotID, new Set());
-        }
-        timeslotDateMap.get(session.TimeslotID).add(dateStr);
-      });
-
-      console.log('\n=== TIMESLOT DATE MAP ===');
-      timeslotDateMap.forEach((dates, timeslotId) => {
-        console.log(`TimeslotID ${timeslotId}:`, Array.from(dates));
-      });
-
-      // Tạo schedule
-      for (const timeslot of allTimeslots) {
-        const datesForThisTimeslot = timeslotDateMap.get(timeslot.TimeslotID);
-
-        if (datesForThisTimeslot && datesForThisTimeslot.size > 0) {
-          datesForThisTimeslot.forEach((dateStr) => {
-            if (dateStr >= startDateStr && dateStr <= endDateStr) {
-              const key = `${dateStr}_${timeslot.TimeslotID}`;
-              const isBusy = busyMap.has(key);
-              const isTeaching = teachingMap.has(key);
-              const hasInstructorSlot = instructorSlotMap.has(key);
-
-              let startTimeStr = timeslot.StartTime;
-              let endTimeStr = timeslot.EndTime;
-
-              if (startTimeStr && typeof startTimeStr === "object") {
-                const hours = String(
-                  startTimeStr.hours || startTimeStr.getHours?.() || 0
-                ).padStart(2, "0");
-                const minutes = String(
-                  startTimeStr.minutes || startTimeStr.getMinutes?.() || 0
-                ).padStart(2, "0");
-                const seconds = String(
-                  startTimeStr.seconds || startTimeStr.getSeconds?.() || 0
-                ).padStart(2, "0");
-                startTimeStr = `${hours}:${minutes}:${seconds}`;
-              }
-
-              if (endTimeStr && typeof endTimeStr === "object") {
-                const hours = String(
-                  endTimeStr.hours || endTimeStr.getHours?.() || 0
-                ).padStart(2, "0");
-                const minutes = String(
-                  endTimeStr.minutes || endTimeStr.getMinutes?.() || 0
-                ).padStart(2, "0");
-                const seconds = String(
-                  endTimeStr.seconds || endTimeStr.getSeconds?.() || 0
-                ).padStart(2, "0");
-                endTimeStr = `${hours}:${minutes}:${seconds}`;
-              }
-
-              let status = "available";
-              if (isTeaching || isBusy) {
-                status = "busy";
-              } else if (!hasInstructorSlot) {
-                status = "empty";
-              }
-
-              schedule.push({
-                TimeslotID: timeslot.TimeslotID,
-                Day: timeslot.Day,
-                StartTime: startTimeStr,
-                EndTime: endTimeStr,
-                Date: dateStr,
-                Status: status,
-              });
-            }
-          });
-        } else {
-          const dayDate = dayDates[timeslot.Day];
-          if (!dayDate) {
-            continue;
-          }
-
-          const key = `${dayDate}_${timeslot.TimeslotID}`;
-          const isBusy = busyMap.has(key);
-          const isTeaching = teachingMap.has(key);
-          const hasInstructorSlot = instructorSlotMap.has(key);
-
-          let startTimeStr = timeslot.StartTime;
-          let endTimeStr = timeslot.EndTime;
-
-          if (startTimeStr && typeof startTimeStr === "object") {
-            const hours = String(
-              startTimeStr.hours || startTimeStr.getHours?.() || 0
-            ).padStart(2, "0");
-            const minutes = String(
-              startTimeStr.minutes || startTimeStr.getMinutes?.() || 0
-            ).padStart(2, "0");
-            const seconds = String(
-              startTimeStr.seconds || startTimeStr.getSeconds?.() || 0
-            ).padStart(2, "0");
-            startTimeStr = `${hours}:${minutes}:${seconds}`;
-          }
-
-          if (endTimeStr && typeof endTimeStr === "object") {
-            const hours = String(
-              endTimeStr.hours || endTimeStr.getHours?.() || 0
-            ).padStart(2, "0");
-            const minutes = String(
-              endTimeStr.minutes || endTimeStr.getMinutes?.() || 0
-            ).padStart(2, "0");
-            const seconds = String(
-              endTimeStr.seconds || endTimeStr.getSeconds?.() || 0
-            ).padStart(2, "0");
-            endTimeStr = `${hours}:${minutes}:${seconds}`;
-          }
-
-          let status = "available";
-          if (isTeaching || isBusy) {
-            status = "busy";
-          } else if (!hasInstructorSlot) {
-            status = "empty";
-          }
-
-          schedule.push({
-            TimeslotID: timeslot.TimeslotID,
-            Day: timeslot.Day,
-            StartTime: startTimeStr,
-            EndTime: endTimeStr,
-            Date: dayDate,
-            Status: status,
-          });
-        }
-      }
-
-      console.log('\n=== FINAL SCHEDULE ===');
-      console.log('Total schedule entries:', schedule.length);
-      console.log('Schedule by status:');
-      console.log('- Available:', schedule.filter(s => s.Status === 'available').length);
-      console.log('- Busy:', schedule.filter(s => s.Status === 'busy').length);
-      console.log('- Empty:', schedule.filter(s => s.Status === 'empty').length);
-      console.log('\nFirst 5 schedule entries:', JSON.stringify(schedule.slice(0, 5), null, 2));
-
-      return schedule;
-    } catch (error) {
-      console.error("Database error in getInstructorWeeklySchedule:", error);
-      throw error;
+    // Tính ngày cụ thể cho mỗi thứ trong tuần
+    const dayDates = {};
+    const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      const dayName = dayOrder[i];
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      dayDates[dayName] = `${year}-${month}-${day}`;
     }
+
+    // Lấy tất cả timeslots
+    const [allTimeslots] = await db.query(
+      `SELECT TimeslotID, Day, StartTime, EndTime FROM timeslot ORDER BY 
+       CASE Day
+         WHEN 'Monday' THEN 1
+         WHEN 'Tuesday' THEN 2
+         WHEN 'Wednesday' THEN 3
+         WHEN 'Thursday' THEN 4
+         WHEN 'Friday' THEN 5
+         WHEN 'Saturday' THEN 6
+         WHEN 'Sunday' THEN 7
+       END, StartTime`
+    );
+
+    // Lấy TẤT CẢ instructortimeslot
+    const [allInstructorSlots] = await db.query(
+      `SELECT TimeslotID, Date, Status 
+       FROM instructortimeslot 
+       WHERE InstructorID = ? AND Date >= ? AND Date <= ?`,
+      [instructorId, startDateStr, endDateStr]
+    );
+
+    // Lấy các session đang dạy
+    const [teachingSessions] = await db.query(
+      `SELECT s.TimeslotID, s.Date
+       FROM session s
+       LEFT JOIN class cl ON s.ClassID = cl.ClassID
+       LEFT JOIN enrollment e ON cl.ClassID = e.ClassID
+       WHERE s.InstructorID = ?
+         AND s.Date >= ?
+         AND s.Date <= ?
+         AND (
+           (e.Status = 'Enrolled')
+           OR
+           (e.EnrollmentID IS NULL AND NOT EXISTS (
+             SELECT 1 FROM enrollment e2 WHERE e2.ClassID = cl.ClassID
+           ))
+         )`,
+      [instructorId, startDateStr, endDateStr]
+    );
+
+    // Tạo Map để lưu status từ instructortimeslot (Date đã là string)
+    const instructorSlotStatusMap = new Map();
+    allInstructorSlots.forEach((slot) => {
+      const key = `${slot.Date}_${slot.TimeslotID}`;
+      instructorSlotStatusMap.set(key, slot.Status);
+    });
+
+    // Tạo Set cho teaching sessions (Date đã là string)
+    const teachingMap = new Set();
+    teachingSessions.forEach((session) => {
+      const key = `${session.Date}_${session.TimeslotID}`;
+      teachingMap.add(key);
+    });
+
+    console.log('=== STATUS MAPS ===');
+    console.log('InstructorSlot entries:', instructorSlotStatusMap.size);
+    console.log('Teaching sessions:', teachingMap.size);
+
+    // Tạo schedule
+    const schedule = [];
+    
+    for (const timeslot of allTimeslots) {
+      const dateForThisDay = dayDates[timeslot.Day];
+      
+      if (!dateForThisDay) continue;
+
+      const key = `${dateForThisDay}_${timeslot.TimeslotID}`;
+      
+      // Xác định status
+      let status = "empty";
+      
+      if (instructorSlotStatusMap.has(key)) {
+        status = instructorSlotStatusMap.get(key);
+      }
+      
+      if (teachingMap.has(key)) {
+        status = "busy";
+      }
+
+      schedule.push({
+        TimeslotID: timeslot.TimeslotID,
+        Day: timeslot.Day,
+        StartTime: timeslot.StartTime,  // Đã là string từ dateStrings: true
+        EndTime: timeslot.EndTime,      // Đã là string từ dateStrings: true
+        Date: dateForThisDay,
+        Status: status,
+      });
+    }
+
+    console.log('=== FINAL SCHEDULE ===');
+    console.log('Total entries:', schedule.length);
+    console.log('Available:', schedule.filter(s => s.Status === 'available').length);
+    console.log('Busy:', schedule.filter(s => s.Status === 'busy').length);
+    console.log('Empty:', schedule.filter(s => s.Status === 'empty').length);
+
+    return schedule;
+  } catch (error) {
+    console.error("Database error in getInstructorWeeklySchedule:", error);
+    throw error;
   }
+}
+
+// Helper functions (giữ nguyên)
+formatDateToString(date) {
+  if (!date) return "";
+  
+  let dateObj;
+  if (date instanceof Date) {
+    dateObj = date;
+  } else if (typeof date === "string") {
+    dateObj = new Date(date);
+  } else {
+    return String(date);
+  }
+  
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+formatTimeToString(time) {
+  if (!time) return "00:00:00";
+  
+  if (typeof time === "string") {
+    return time;
+  } else if (time instanceof Date) {
+    const hours = String(time.getHours()).padStart(2, "0");
+    const minutes = String(time.getMinutes()).padStart(2, "0");
+    const seconds = String(time.getSeconds()).padStart(2, "0");
+    return `${hours}:${minutes}:${seconds}`;
+  } else {
+    return "00:00:00";
+  }
+}
+
+getDayName(date) {
+  return date.toLocaleDateString("en-US", { weekday: "long" });
+}
+
+// Thêm các helper functions
+formatDateToString(date) {
+  if (!date) return "";
+  
+  let dateObj;
+  if (date instanceof Date) {
+    dateObj = date;
+  } else if (typeof date === "string") {
+    dateObj = new Date(date);
+  } else {
+    return String(date);
+  }
+  
+  // Sử dụng local date để tránh timezone issues
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+formatTimeToString(time) {
+  if (!time) return "00:00:00";
+  
+  if (typeof time === "string") {
+    return time;
+  } else if (time instanceof Date) {
+    const hours = String(time.getHours()).padStart(2, "0");
+    const minutes = String(time.getMinutes()).padStart(2, "0");
+    const seconds = String(time.getSeconds()).padStart(2, "0");
+    return `${hours}:${minutes}:${seconds}`;
+  } else if (typeof time === "object" && time.hours !== undefined) {
+    const hours = String(time.hours || 0).padStart(2, "0");
+    const minutes = String(time.minutes || 0).padStart(2, "0");
+    const seconds = String(time.seconds || 0).padStart(2, "0");
+    return `${hours}:${minutes}:${seconds}`;
+  } else {
+    return "00:00:00";
+  }
+}
+
+getDayName(date) {
+  return date.toLocaleDateString("en-US", { weekday: "long" });
+}
 
   async createOneOnOneBooking(bookingData) {
     try {
