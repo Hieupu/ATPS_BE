@@ -66,7 +66,7 @@ const createAssignmentService = async (instructorAccId, data) => {
     description: Description.trim(),
     deadline: Deadline || null,
     type: Type || "document",
-    status: Status || "draft",
+    status: Status || "active",
     unitId: resolvedUnitId,
     fileURL: FileURL || null,
     mediaURL: MediaURL || null,

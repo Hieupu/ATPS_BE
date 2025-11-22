@@ -18,7 +18,7 @@ class Assignment {
     this.Deadline = Deadline;
     this.Type = Type || "document";
     this.UnitID = UnitID ?? null;
-    this.Status = Status || "draft";
+    this.Status = Status || "active";
     this.FileURL = FileURL ?? null;
     this.MaxDuration = MaxDuration ?? null;
     this.ShowAnswersAfter = ShowAnswersAfter || "after_submission";
