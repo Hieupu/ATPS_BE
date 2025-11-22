@@ -59,17 +59,17 @@ class AssignmentRepository {
   `;
 
     const [result] = await db.query(sql, [
-      data.title,              
+      data.title,
       data.description,
       data.deadline,
       data.type,
       data.unitId,
       data.status,
       data.fileURL,
-      data.instructorId,      
+      data.instructorId,
       data.maxDuration,
       data.showAnswersAfter,
-      data.mediaURL
+      data.mediaURL,
     ]);
     return result.insertId;
   }
@@ -101,11 +101,14 @@ class AssignmentRepository {
   // Xóa mềm
   async softDeleteAssignment(assignmentId) {
     const db = await connectDB();
-    await db.query(`UPDATE assignment SET Status = 'deleted' WHERE AssignmentID = ?`, [assignmentId]);
+    await db.query(
+      `UPDATE assignment SET Status = 'deleted' WHERE AssignmentID = ?`,
+      [assignmentId]
+    );
     return this.getAssignmentById(assignmentId);
   }
 
-  // Chi tiết assignment 
+  // Chi tiết assignment
   async getAssignmentById(assignmentId) {
     const db = await connectDB();
     const [rows] = await db.query(
@@ -206,7 +209,8 @@ class AssignmentRepository {
   // ==== Questions ====
   async getAssignmentQuestions(assignmentId) {
     const db = await connectDB();
-    const [rows] = await db.query(`
+    const [rows] = await db.query(
+      `
       SELECT 
         q.QuestionID, q.Content, q.Type, q.CorrectAnswer, 
         q.Topic, q.Level, q.Point, q.Explanation
@@ -214,16 +218,21 @@ class AssignmentRepository {
       JOIN question q ON aq.QuestionID = q.QuestionID
       WHERE aq.AssignmentID = ?
       ORDER BY q.QuestionID
-    `, [assignmentId]);
+    `,
+      [assignmentId]
+    );
 
     // Lấy options cho mỗi question
     for (let i = 0; i < rows.length; i++) {
-      const [options] = await db.query(`
+      const [options] = await db.query(
+        `
         SELECT OptionID, Content, IsCorrect
         FROM question_option
         WHERE QuestionID = ?
         ORDER BY OptionID
-      `, [rows[i].QuestionID]);
+      `,
+        [rows[i].QuestionID]
+      );
       rows[i].Options = options;
     }
 
@@ -232,39 +241,48 @@ class AssignmentRepository {
 
   async addQuestionToAssignment(assignmentId, questionId) {
     const db = await connectDB();
-    await db.query(`
+    await db.query(
+      `
       INSERT INTO assignment_question (AssignmentID, QuestionID)
       VALUES (?, ?)
-    `, [assignmentId, questionId]);
+    `,
+      [assignmentId, questionId]
+    );
   }
 
   async removeQuestionFromAssignment(assignmentId, questionId) {
     const db = await connectDB();
-    await db.query(`
+    await db.query(
+      `
       DELETE FROM assignment_question 
       WHERE AssignmentID = ? AND QuestionID = ?
-    `, [assignmentId, questionId]);
+    `,
+      [assignmentId, questionId]
+    );
   }
 
   async createQuestion(instructorId, data) {
     const db = await connectDB();
 
     // Insert question
-    const [result] = await db.query(`
+    const [result] = await db.query(
+      `
       INSERT INTO question 
         (Content, Type, CorrectAnswer, InstructorID, Status, Topic, Level, Point, Explanation)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      data.content,
-      data.type || 'multiple_choice',
-      data.correctAnswer,
-      instructorId,
-      data.status || 'active',
-      data.topic || null,
-      data.level || 'Medium',
-      data.point || 1,
-      data.explanation || null
-    ]);
+    `,
+      [
+        data.content,
+        data.type || "multiple_choice",
+        data.correctAnswer,
+        instructorId,
+        data.status || "active",
+        data.topic || null,
+        data.level || "Medium",
+        data.point || 1,
+        data.explanation || null,
+      ]
+    );
 
     const questionId = result.insertId;
 
@@ -272,12 +290,12 @@ class AssignmentRepository {
     if (data.options && data.options.length > 0) {
       const optionSql = `
         INSERT INTO question_option (QuestionID, Content, IsCorrect)
-        VALUES ${data.options.map(() => '(?, ?, ?)').join(',')}
+        VALUES ${data.options.map(() => "(?, ?, ?)").join(",")}
       `;
-      const optionParams = data.options.flatMap(opt => [
+      const optionParams = data.options.flatMap((opt) => [
         questionId,
         opt.content || opt.Content,
-        opt.isCorrect ? 1 : 0
+        opt.isCorrect ? 1 : 0,
       ]);
       await db.query(optionSql, optionParams);
     }
@@ -288,10 +306,14 @@ class AssignmentRepository {
   // ==== Stats ====
   async getAssignmentStats(assignmentId, instructorAccId) {
     const db = await connectDB();
-    const canAccess = await this.canInstructorAccessAssignment(instructorAccId, assignmentId);
+    const canAccess = await this.canInstructorAccessAssignment(
+      instructorAccId,
+      assignmentId
+    );
     if (!canAccess) return null;
 
-    const [totalStudents] = await db.query(`
+    const [totalStudents] = await db.query(
+      `
   SELECT COUNT(DISTINCT e.LearnerID) AS total
   FROM assignment a
   JOIN unit u ON a.UnitID = u.UnitID
@@ -299,9 +321,12 @@ class AssignmentRepository {
   JOIN class cl ON co.CourseID = cl.CourseID
   JOIN enrollment e ON cl.ClassID = e.ClassID
   WHERE a.AssignmentID = ?
-`, [assignmentId]);
+`,
+      [assignmentId]
+    );
 
-    const [submissionStats] = await db.query(`
+    const [submissionStats] = await db.query(
+      `
       SELECT 
         COUNT(s.SubmissionID) as submitted,
         AVG(s.Score) as averageScore,
@@ -309,12 +334,15 @@ class AssignmentRepository {
         MIN(s.Score) as lowestScore
       FROM submission s
       WHERE s.AssignmentID = ?
-    `, [assignmentId]);
+    `,
+      [assignmentId]
+    );
 
     return {
       totalStudents: totalStudents[0].total || 0,
       ...submissionStats[0],
-      submissionRate: submissionStats[0].submitted / (totalStudents[0].total || 1) * 100,
+      submissionRate:
+        (submissionStats[0].submitted / (totalStudents[0].total || 1)) * 100,
     };
   }
 
@@ -322,7 +350,10 @@ class AssignmentRepository {
     const assignments = await this.getAssignmentsByInstructor(instructorAccId);
     const stats = [];
     for (const assign of assignments) {
-      const stat = await this.getAssignmentStats(assign.AssignmentID, instructorAccId);
+      const stat = await this.getAssignmentStats(
+        assign.AssignmentID,
+        instructorAccId
+      );
       stats.push({ ...assign, ...stat });
     }
     return stats;

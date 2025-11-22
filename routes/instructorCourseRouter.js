@@ -14,6 +14,7 @@ const {
   addUnit,
   updateUnit,
   deleteUnit,
+  getAssignmentsByUnitId,
   addLesson,
   updateLesson,
   deleteLesson,
@@ -101,6 +102,13 @@ router.delete(
   verifyToken,
   authorizeRole("instructor"),
   deleteUnit
+);
+
+router.get(
+  "/units/:unitId/assignments",
+  verifyToken,
+  authorizeRole("instructor", "admin", "learner"),
+  getAssignmentsByUnitId
 );
 
 // LESSON

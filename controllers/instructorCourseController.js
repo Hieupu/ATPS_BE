@@ -14,6 +14,7 @@ const {
   addUnitService,
   updateUnitService,
   deleteUnitService,
+  getAssignmentsByUnitIdService,
 
   // LESSON
   listLessonsByUnitService,
@@ -186,6 +187,16 @@ const deleteUnit = async (req, res) => {
     res.status(error.status || 400).json({ message: error.message });
   }
 };
+const getAssignmentsByUnitId = async (req, res) => {
+  try {
+    const unitId = Number(req.params.unitId);
+    const result = await getAssignmentsByUnitIdService(unitId);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("getAssignmentsByUnitId error:", error);
+    res.status(error.status || 404).json({ message: error.message });
+  }
+};
 
 /* ======================= LESSON ======================= */
 const listLessonsByUnit = async (req, res) => {
@@ -310,6 +321,7 @@ module.exports = {
   addUnit,
   updateUnit,
   deleteUnit,
+  getAssignmentsByUnitId,
 
   listLessonsByUnit,
   addLesson,

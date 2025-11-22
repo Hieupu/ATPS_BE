@@ -7,7 +7,7 @@ class Course {
     Description,
     Image,
     Duration,
-    Ojectives,
+    Objectives,
     Requirements,
     Level, // 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED'
     Status, // 'DRAFT' | 'IN_REVIEW' | 'APPROVED' | 'PUBLISHED' | 'DELETED'
@@ -20,7 +20,7 @@ class Course {
     this.Description = Description;
     this.Image = Image;
     this.Duration = Duration;
-    this.Ojectives = Ojectives;
+    this.Objectives = Objectives;
     this.Requirements = Requirements;
     this.Level = Level;
     this.Status = Status || "DRAFT";
