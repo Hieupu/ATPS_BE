@@ -48,9 +48,6 @@ class AssignmentRepository {
   // Tạo assignment
   async createAssignment(data) {
     const db = await connectDB();
-
-    console.log("📦 Repository received data:", data);
-
     const sql = `
     INSERT INTO assignment
       (Title, Description, Deadline, Type, UnitID, Status, FileURL, InstructorID, 
