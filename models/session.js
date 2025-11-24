@@ -1,9 +1,25 @@
 class Session {
-  constructor({ SessionID, Title, Description, InstructorID }) {
-    this.SessionID = SessionID;
-    this.Title = Title;
-    this.Description = Description;
-    this.InstructorID = InstructorID;
+  constructor({
+    SessionID,
+    Title,
+    Date,
+    ZoomUUID,
+    StartTime,
+    EndTime,
+    Day,
+    attendedCount = 0,
+    totalStudents = 0,
+  }) {
+    this.sessionId = SessionID;
+    this.title = Title;
+    this.date = Date;
+    this.zoomLink = ZoomUUID;
+    this.startTime = StartTime;
+    this.endTime = EndTime;
+    this.dayOfWeek = Day;
+    this.attendedCount = Number(attendedCount);
+    this.totalStudents = Number(totalStudents);
+    this.isFullyMarked = Number(attendedCount) === Number(totalStudents);
   }
 }
 

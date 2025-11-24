@@ -18,8 +18,8 @@ class InstructorCourseRepository {
         c.Status,
         c.Code,
         i.FullName AS InstructorName
-     FROM atps.course c
-     LEFT JOIN atps.instructor i 
+     FROM course c
+     LEFT JOIN instructor i 
         ON c.InstructorID = i.InstructorID
      WHERE c.CourseID = ?`,
       [courseId]
@@ -33,7 +33,7 @@ class InstructorCourseRepository {
     const db = await connectDB();
     const [rows] = await db.query(
       `SELECT InstructorID 
-       FROM atps.instructor 
+       FROM instructor 
        WHERE AccID = ? 
        LIMIT 1`,
       [accId]
@@ -59,8 +59,8 @@ class InstructorCourseRepository {
         c.Status,
         c.Code,
         i.FullName AS InstructorName
-     FROM atps.course c
-     LEFT JOIN atps.instructor i 
+     FROM course c
+     LEFT JOIN instructor i 
         ON c.InstructorID = i.InstructorID
      WHERE c.InstructorID = ?
        AND c.Status <> 'DELETED'

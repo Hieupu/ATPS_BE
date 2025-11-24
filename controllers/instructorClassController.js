@@ -2,42 +2,55 @@ const {
   listInstructorClassesService,
   getInstructorClassDetailService,
   getInstructorClassRosterService,
+  getInstructorClassScheduleService,
+  getAttendanceSheetService,
+  saveAttendanceService,
 } = require("../services/instructorClassService");
+const courseRepository = require("../repositories/instructorCourseRepository");
 
-// GET /instructor/classes
+const getInstructorId = async (accId) => {
+  const instructorId = await courseRepository.findInstructorIdByAccountId(
+    accId
+  );
+  if (!instructorId) {
+    throw new Error("Instructor không tồn tại");
+  }
+  return instructorId;
+};
+
 const listInstructorClasses = async (req, res) => {
   try {
-    const instructorId = Number(req.user.id);
+    const instructorId = await getInstructorId(Number(req.user.id));
     const result = await listInstructorClassesService(instructorId);
     res.status(200).json(result);
   } catch (error) {
     console.error("listInstructorClasses error:", error);
-    res
-      .status(error.status || 500)
-      .json({ message: error.message || "Lỗi khi lấy danh sách lớp" });
+    res.status(error.status || 500).json({
+      message: error.message || "Lỗi khi lấy danh sách lớp",
+    });
   }
 };
 
-// GET /instructor/classes/:classId
+// chi tiết lớp + StudentCount
 const getInstructorClassDetail = async (req, res) => {
   try {
-    const instructorId = Number(req.user.id);
+    const instructorId = await getInstructorId(Number(req.user.id));
     const classId = Number(req.params.classId);
 
     const result = await getInstructorClassDetailService(classId, instructorId);
     res.status(200).json(result);
   } catch (error) {
     console.error("getInstructorClassDetail error:", error);
-    res
-      .status(error.status || 500)
-      .json({ message: error.message || "Lỗi khi lấy chi tiết lớp" });
+    res.status(error.status || 500).json({
+      message: error.message || "Lỗi khi lấy chi tiết lớp",
+    });
   }
 };
 
-// GET /instructor/classes/:classId/students
+// tab Danh sách học viên
 const getInstructorClassRoster = async (req, res) => {
   try {
-    const instructorId = Number(req.user.id);
+    const instructorId = await getInstructorId(Number(req.user.id));
     const classId = Number(req.params.classId);
 
     const result = await getInstructorClassRosterService(classId, instructorId);
@@ -45,7 +58,77 @@ const getInstructorClassRoster = async (req, res) => {
   } catch (error) {
     console.error("getInstructorClassRoster error:", error);
     res.status(error.status || 500).json({
-      message: error.message || "Lỗi khi lấy danh sách học viên của lớp",
+      message: error.message || "Lỗi khi lấy danh sách học viên",
+    });
+  }
+};
+
+// lịch các buổi học (vào Zoom)
+const getInstructorClassSchedule = async (req, res) => {
+  try {
+    const instructorId = await getInstructorId(Number(req.user.id));
+    const classId = Number(req.params.classId);
+
+    const result = await getInstructorClassScheduleService(
+      classId,
+      instructorId
+    );
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("getInstructorClassSchedule error:", error);
+    res.status(error.status || 500).json({
+      message: error.message || "Lỗi khi lấy lịch học",
+    });
+  }
+};
+
+// mở form điểm danh
+const getAttendanceSheet = async (req, res) => {
+  try {
+    const instructorId = await getInstructorId(Number(req.user.id));
+    const classId = Number(req.params.classId);
+    const sessionId = Number(req.params.sessionId);
+
+    const result = await getAttendanceSheetService(
+      sessionId,
+      classId,
+      instructorId
+    );
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("getAttendanceSheet error:", error);
+    res.status(error.status || 500).json({
+      message: error.message || "Lỗi khi lấy danh sách điểm danh",
+    });
+  }
+};
+
+//  lưu điểm danh
+const saveAttendance = async (req, res) => {
+  try {
+    const instructorId = await getInstructorId(Number(req.user.id));
+    const classId = Number(req.params.classId);
+    const sessionId = Number(req.params.sessionId);
+    const attendanceData = req.body;
+
+    if (!Array.isArray(attendanceData) || attendanceData.length === 0) {
+      return res
+        .status(400)
+        .json({ message: "Dữ liệu điểm danh không hợp lệ" });
+    }
+
+    const result = await saveAttendanceService(
+      sessionId,
+      classId,
+      instructorId,
+      attendanceData
+    );
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("saveAttendance error:", error);
+    res.status(error.status || 500).json({
+      message: error.message || "Lỗi khi lưu điểm danh",
     });
   }
 };
@@ -54,4 +137,7 @@ module.exports = {
   listInstructorClasses,
   getInstructorClassDetail,
   getInstructorClassRoster,
+  getInstructorClassSchedule,
+  getAttendanceSheet,
+  saveAttendance,
 };

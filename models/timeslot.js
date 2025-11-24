@@ -1,11 +1,9 @@
 class Timeslot {
-  constructor({ TimeslotID, CourseID, LessonID, Date, StartTime, EndTime }) {
+  constructor({ TimeslotID, StartTime, EndTime, Day }) {
     this.TimeslotID = TimeslotID;
-    this.CourseID = CourseID;
-    this.LessonID = LessonID;
-    this.Date = Date;
     this.StartTime = StartTime;
     this.EndTime = EndTime;
+    this.Day = Day;
   }
 }
 

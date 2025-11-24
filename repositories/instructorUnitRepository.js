@@ -103,7 +103,7 @@ class InstructorUnitRepository {
       SELECT 
         AssignmentID, InstructorID, UnitID, Title, Description, Deadline,
         FileURL, Status, Type, ShowAnswersAfter, MaxDuration, MediaURL
-      FROM atps.assignment
+      FROM assignment
       WHERE UnitID = ?
         AND Status != 'deleted'
       ORDER BY AssignmentID ASC

@@ -3,12 +3,15 @@ const {
   listInstructorClasses,
   getInstructorClassDetail,
   getInstructorClassRoster,
+  getInstructorClassSchedule,
+  getAttendanceSheet,
+  saveAttendance,
 } = require("../controllers/instructorClassController");
 
 const { verifyToken, authorizeRole } = require("../middlewares/middware");
 
 const router = express.Router();
-
+// 1. Danh sách lớp của instructor
 router.get(
   "/classes",
   verifyToken,
@@ -16,6 +19,7 @@ router.get(
   listInstructorClasses
 );
 
+// 2. Chi tiết 1 lớp (header + StudentCount)
 router.get(
   "/classes/:classId",
   verifyToken,
@@ -23,11 +27,36 @@ router.get(
   getInstructorClassDetail
 );
 
+// 3. Tab Danh sách học viên
 router.get(
   "/classes/:classId/students",
   verifyToken,
   authorizeRole("instructor"),
   getInstructorClassRoster
+);
+
+// 4. Lịch các buổi học (thời khóa biểu + vào Zoom)
+router.get(
+  "/classes/:classId/schedule",
+  verifyToken,
+  authorizeRole("instructor"),
+  getInstructorClassSchedule
+);
+
+// 5. Mở form điểm danh buổi học
+router.get(
+  "/classes/:classId/sessions/:sessionId/attendance",
+  verifyToken,
+  authorizeRole("instructor"),
+  getAttendanceSheet
+);
+
+// 6. Lưu điểm danh buổi học
+router.post(
+  "/classes/:classId/sessions/:sessionId/attendance",
+  verifyToken,
+  authorizeRole("instructor"),
+  saveAttendance
 );
 
 module.exports = router;
