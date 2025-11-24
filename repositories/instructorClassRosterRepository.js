@@ -4,57 +4,6 @@ const Learner = require("../models/learner");
 const Session = require("../models/session");
 
 class InstructorClassRosterRepository {
-  async listByClassId(classId) {
-    const db = await connectDB();
-
-    const [rows] = await db.query(
-      `SELECT
-          e.EnrollmentID,
-          e.EnrollmentDate,
-          e.Status AS EnrollmentStatus,
-          e.LearnerID,
-          e.ClassID,
-          e.OrderCode,
-
-          l.LearnerID AS LearnerID_Learner,
-          l.FullName,
-          l.DateOfBirth,
-          l.ProfilePicture,
-          l.Job,
-          l.Address,
-          l.AccID
-
-       FROM enrollment e
-       JOIN learner l ON e.LearnerID = l.LearnerID
-       WHERE e.ClassID = ?
-       ORDER BY l.FullName ASC`,
-      [classId]
-    );
-
-    return rows.map((row) => {
-      const enrollment = new Enrollment({
-        EnrollmentID: row.EnrollmentID,
-        EnrollmentDate: row.EnrollmentDate,
-        Status: row.EnrollmentStatus,
-        LearnerID: row.LearnerID,
-        ClassID: row.ClassID,
-        OrderCode: row.OrderCode,
-      });
-
-      const learner = new Learner({
-        LearnerID: row.LearnerID_Learner,
-        FullName: row.FullName,
-        DateOfBirth: row.DateOfBirth,
-        ProfilePicture: row.ProfilePicture,
-        Job: row.Job,
-        Address: row.Address,
-        AccID: row.AccID,
-      });
-
-      return { enrollment, learner };
-    });
-  }
-
   async getStudents(classId) {
     const db = await connectDB();
     const [rows] = await db.query(
@@ -78,37 +27,56 @@ class InstructorClassRosterRepository {
     );
   }
 
-  // === MỚI: Lịch buổi học – chỉ để hiển thị thời khóa biểu và vào Zoom ===
+  //Lịch buổi học – chỉ để hiển thị thời khóa biểu
   async getSessions(classId) {
     const db = await connectDB();
     const [rows] = await db.query(
-      `SELECT 
-          s.SessionID,
-          s.Title,
-          s.Date,
-          s.ZoomUUID,
-          t.StartTime,
-          t.EndTime,
-          t.Day
-       FROM session s
-       JOIN timeslot t ON s.TimeslotID = t.TimeslotID
-       WHERE s.ClassID = ?
-       ORDER BY s.Date ASC, t.StartTime ASC`,
+      `SELECT
+        s.SessionID,
+        s.Title,
+        s.Date,
+        s.ZoomUUID,
+        t.StartTime,
+        t.EndTime,
+        t.Day
+     FROM session s
+     JOIN timeslot t ON s.TimeslotID = t.TimeslotID
+     WHERE s.ClassID = ?
+     ORDER BY s.Date ASC, t.StartTime ASC`,
       [classId]
     );
 
-    return rows.map(
-      (row) =>
-        new Session({
-          SessionID: row.SessionID,
-          Title: row.Title,
-          Date: row.Date,
-          ZoomUUID: row.ZoomUUID,
-          StartTime: row.StartTime,
-          EndTime: row.EndTime,
-          Day: row.Day,
-        })
+    return rows.map((row) => ({
+      SessionID: row.SessionID,
+      sessionId: row.SessionID,
+      title: row.Title,
+      date: row.Date,
+      zoomLink: row.ZoomUUID || null,
+      startTime: row.StartTime,
+      endTime: row.EndTime,
+      dayOfWeek: row.Day,
+    }));
+  }
+  async getTotalEnrolledStudents(classId) {
+    const db = await connectDB();
+    const [[row]] = await db.query(
+      `SELECT COUNT(*) AS total 
+       FROM enrollment 
+       WHERE ClassID = ? AND Status = 'Enrolled'`,
+      [classId]
     );
+    return Number(row.total) || 0;
+  }
+
+  async getAttendedCount(sessionId) {
+    const db = await connectDB();
+    const [[row]] = await db.query(
+      `SELECT COUNT(*) AS count 
+       FROM attendance 
+       WHERE SessionID = ? AND Status = 'PRESENT'`,
+      [sessionId]
+    );
+    return Number(row.count) || 0;
   }
 }
 
