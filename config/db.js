@@ -1,4 +1,5 @@
 const mysql = require("mysql2/promise");
+const fs = require("fs");
 require("dotenv").config();
 
 let pool;
@@ -7,18 +8,24 @@ const connectDB = async () => {
   if (!pool) {
     try {
       pool = mysql.createPool({
-        host: process.env.DB_HOST || "localhost",
-        port: process.env.DB_PORT || 14759,
+        host: process.env.DB_HOST,
+        port: Number(process.env.DB_PORT),
         user: process.env.DB_USER,
         password: process.env.DB_PASSWORD,
         database: process.env.DB_NAME,
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0,
-        timezone: "Z", // hoặc '+00:00'
-        dateStrings: true, // rất quan trọng!
+        timezone: "Z",
+        dateStrings: true,
+        ssl: {
+          ca: fs.readFileSync("./config/ca.pem"),
+        },
       });
-      console.log("✅ MySQL connected successfully (using pool)");
+
+      const connection = await pool.getConnection();
+      connection.release();
+      console.log("✅ MySQL connected successfully (pool + SSL)");
     } catch (error) {
       console.error("❌ MySQL connection failed:", error.message);
       process.exit(1);
