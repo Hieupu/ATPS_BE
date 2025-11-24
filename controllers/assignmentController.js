@@ -172,7 +172,7 @@ const createAndAddQuestion = async (req, res) => {
     const questions = Array.isArray(req.body.questions)
       ? req.body.questions
       : [req.body];
-
+      console.log(questions);
     if (!questions.length) {
       return res.status(400).json({ message: "Danh sách câu hỏi trống" });
     }
