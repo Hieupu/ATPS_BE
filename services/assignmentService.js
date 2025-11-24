@@ -9,7 +9,7 @@ class ServiceError extends Error {
 }
 
 const ALLOWED_TYPES = ["quiz", "audio", "video", "document"];
-const ALLOWED_STATUSES = ["draft", "published", "scheduled", "archived", "deleted"];
+const ALLOWED_STATUSES = ["draft", "active", "deleted"];
 const ALLOWED_SHOW_ANSWERS = ['after_submission', 'after_deadline', 'never'];
 
 function assertValidDateStr(dateStr) {
@@ -78,7 +78,8 @@ const createAssignmentService = async (instructorAccId, data) => {
   validatedData.instructorId = instructorId;
 
   const assignmentId = await assignmentRepository.createAssignment(validatedData);
-  if (Type === 'quiz' && questions.length > 0) {
+  const TYPES_WITH_QUESTIONS = ['quiz', 'video', 'document'];
+  if (TYPES_WITH_QUESTIONS.includes(Type) && questions.length > 0) {
     for (const qData of questions) {
       const questionId = await assignmentRepository.createQuestion(instructorId, qData);
       await assignmentRepository.addQuestionToAssignment(assignmentId, questionId);
@@ -106,7 +107,6 @@ const updateAssignmentService = async (instructorAccId, assignmentId, payload) =
   const canAccess = await assignmentRepository.canInstructorAccessAssignment(instructorAccId, assignmentId);
   if (!canAccess) throw new ServiceError("Không có quyền cập nhật bài tập này", 403);
 
-  // Destructure với cả UPPERCASE và lowercase để support cả 2 format
   const Title = payload.Title || payload.title;
   const Description = payload.Description || payload.description;
   const Type = payload.Type || payload.type;
@@ -121,10 +121,16 @@ const updateAssignmentService = async (instructorAccId, assignmentId, payload) =
   if (Type && !ALLOWED_TYPES.includes(Type)) {
     throw new ServiceError("Loại bài tập không hợp lệ");
   }
+  
   assertValidDateStr(Deadline);
+  
+  // ✅ Validation status
   if (Status && !ALLOWED_STATUSES.includes(Status)) {
-    throw new ServiceError("Trạng thái không hợp lệ");
+    throw new ServiceError(
+      `Trạng thái không hợp lệ. Chỉ chấp nhận: ${ALLOWED_STATUSES.join(", ")}`
+    );
   }
+  
   if (ShowAnswersAfter && !ALLOWED_SHOW_ANSWERS.includes(ShowAnswersAfter)) {
     throw new ServiceError("ShowAnswersAfter không hợp lệ");
   }
@@ -153,7 +159,35 @@ const updateAssignmentService = async (instructorAccId, assignmentId, payload) =
     mediaURL: MediaURL
   };
 
-  return assignmentRepository.updateAssignment(assignmentId, updates);
+  await assignmentRepository.updateAssignment(assignmentId, updates);
+
+  // ✅ Xử lý questions mới - KIỂM TRA KỸ HƠN
+  const questions = payload.questions || [];
+  const TYPES_WITH_QUESTIONS = ['quiz', 'video', 'document'];
+  const currentType = (Type || payload.type || "").toLowerCase();
+  
+  if (TYPES_WITH_QUESTIONS.includes(currentType) && questions.length > 0) {
+    const instructorId = await getInstructorIdByAccId(instructorAccId);
+    
+    // Lấy danh sách câu hỏi hiện tại của assignment
+    const existingQuestions = await assignmentRepository.getAssignmentQuestions(assignmentId);
+    const existingQuestionIds = new Set(
+      existingQuestions.map(q => Number(q.QuestionID || q.questionId))
+    );
+    
+    for (const qData of questions) {
+      const qId = Number(qData.QuestionID || qData.questionId || 0);
+      
+      // ✅ CHỈ thêm câu hỏi MỚI (không có ID HOẶC ID không tồn tại trong DB)
+      if (!qId || !existingQuestionIds.has(qId)) {
+        const questionId = await assignmentRepository.createQuestion(instructorId, qData);
+        await assignmentRepository.addQuestionToAssignment(assignmentId, questionId);
+      }
+      // Câu cũ (có ID trong DB) -> BỎ QUA, không làm gì
+    }
+  }
+
+  return assignmentRepository.getAssignmentById(assignmentId);
 };
 
 // Xóa mềm
