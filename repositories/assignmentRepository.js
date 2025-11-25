@@ -210,7 +210,7 @@ class AssignmentRepository {
       `
       SELECT 
         q.QuestionID, q.Content, q.Type, q.CorrectAnswer, 
-        q.Topic, q.Level, q.Point, q.Explanation
+        q.Topic, q.Level, q.Point
       FROM assignment_question aq
       JOIN question q ON aq.QuestionID = q.QuestionID
       WHERE aq.AssignmentID = ?
@@ -265,8 +265,8 @@ class AssignmentRepository {
     const [result] = await db.query(
       `
       INSERT INTO question 
-        (Content, Type, CorrectAnswer, InstructorID, Status, Topic, Level, Point, Explanation)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (Content, Type, CorrectAnswer, InstructorID, Status, Topic, Level, Point)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `,
       [
         data.content,
@@ -277,7 +277,6 @@ class AssignmentRepository {
         data.topic || null,
         data.level || "Medium",
         data.point || 1,
-        data.explanation || null,
       ]
     );
 
