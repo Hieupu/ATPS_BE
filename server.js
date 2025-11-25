@@ -27,6 +27,7 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:3000",
   "https://atps-fe-deploy.vercel.app",
+  "https://marketplace.zoom.us/api/v1/apps/validateEndpointUrl/xI4Ki5LnTUOd1ZoGq9jptw/check",
 ];
 
 const corsOptions = {
