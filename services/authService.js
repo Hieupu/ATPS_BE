@@ -12,22 +12,16 @@ class ServiceError extends Error {
 }
 
 // services/authService.js
-// services/authService.js
 const loginService = async (email, password, provider = "local") => {
-  console.log("Login attempt for email:", email, "with provider:", provider);
-  console.log("Password:", bcrypt.hashSync("123456", 10));
-
   const user = await accountRepository.findAccountByEmail(email);
-  console.log("User found:", user);
+
   if (!user) {
     throw new ServiceError("User not found", 401);
   }
 
-  // Normalize provider case for comparison
   const userProvider = user.Provider.toLowerCase();
   const loginProvider = provider.toLowerCase();
 
-  // Kiểm tra provider consistency
   if (userProvider !== loginProvider) {
     if (userProvider === "local") {
       throw new ServiceError("This account requires password login", 401);
@@ -49,7 +43,6 @@ const loginService = async (email, password, provider = "local") => {
     if (!match) throw new ServiceError("Invalid credentials", 401);
   }
 
-  // LUÔN xác định role cho cả local và social
   const role = await determineUserRole(user.AccID);
 
   const featureNames = await accountRepository.getFeaturesByAccountId(
@@ -62,7 +55,7 @@ const loginService = async (email, password, provider = "local") => {
       email: user.Email,
       username: user.Username,
       features: featureNames,
-      role: role, // Đảm bảo role được thêm vào token
+      role: role,
     },
     process.env.JWT_SECRET,
     { expiresIn: "1h" }
@@ -72,7 +65,7 @@ const loginService = async (email, password, provider = "local") => {
     token,
     user: {
       ...user,
-      role: role, // Đảm bảo role được thêm vào user object
+      role: role,
     },
   };
 };

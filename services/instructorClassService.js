@@ -20,20 +20,98 @@ const listInstructorClassesService = async (instructorId) => {
 
 //2. Lấy chi tiết 1 lớp (kèm info course/instructor)
 const getInstructorClassDetailService = async (classId, instructorId) => {
-  const classObj = await instructorClassRepository.findById(classId);
+  const raw = await instructorClassRepository.findById(classId);
 
-  if (!classObj) {
+  if (!raw) {
     throw new ServiceError("Class không tồn tại", 404);
   }
 
-  if (classObj.InstructorID !== instructorId) {
+  if (raw.InstructorID !== instructorId) {
     throw new ServiceError("Bạn không có quyền truy cập lớp này", 403);
   }
 
   const students = await instructorClassRosterRepository.getStudents(classId);
+
+  const totalSessions = Number(raw.Numofsession) || 0;
+  const completedSessions = Number(raw.completedSessions) || 0;
+  const progress =
+    totalSessions > 0
+      ? Math.round((completedSessions / totalSessions) * 100)
+      : 0;
+
+  let nextSession = "Chưa xếp lịch";
+  if (raw.NextSessionDate) {
+    const date = new Date(raw.NextSessionDate);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const targetDate = new Date(date);
+    targetDate.setHours(0, 0, 0, 0);
+
+    if (targetDate.getTime() === today.getTime()) {
+      nextSession = "Hôm nay";
+    } else if (targetDate.getTime() === tomorrow.getTime()) {
+      nextSession = "Ngày mai";
+    } else {
+      nextSession = targetDate.toLocaleDateString("vi-VN", {
+        weekday: "long",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      });
+    }
+  }
+
   return {
-    ...classObj,
-    StudentCount: students.length,
+    classId: raw.ClassID,
+    className: raw.Name,
+    status: raw.Status,
+    fee: Number(raw.Fee) || 0,
+    zoomMeetingId: raw.ZoomID,
+    zoomPassword: raw.Zoompass,
+
+    course: {
+      id: raw.CourseID,
+      title: raw.CourseTitle || "Chưa có khóa học",
+      image: raw.CourseImage || "/images/default-class.jpg",
+      level: raw.CourseLevel || null,
+    },
+
+    instructor: {
+      id: raw.InstructorID,
+      fullName: raw.InstructorName || "Chưa có giảng viên",
+      avatar: raw.ProfilePicture || null,
+    },
+
+    currentStudents: raw.currentStudents,
+    maxStudents: raw.Maxstudent,
+    remainingSlots: raw.Maxstudent - raw.currentStudents,
+
+    students: students.map((s) => ({
+      learnerId: s.LearnerID,
+      fullName: s.FullName,
+      avatar: s.ProfilePicture || null,
+      email: s.Email,
+      phone: s.Phone,
+    })),
+
+    dates: {
+      openPlan: raw.OpendatePlan,
+      openActual: raw.Opendate,
+      endPlan: raw.EnddatePlan,
+      endActual: raw.Enddate,
+    },
+
+    totalSessions,
+    completedSessions,
+    progress,
+
+    scheduleSummary: raw.ScheduleSummary || "Chưa có lịch cố định",
+    hasSessionToday: !!raw.HasSessionToday,
+    nextSession,
   };
 };
 
@@ -52,28 +130,43 @@ const getInstructorClassRosterService = async (classId, instructorId) => {
   const students = await instructorClassRosterRepository.getStudents(classId);
 
   return {
-    Class: classObj,
     Students: students,
   };
 };
 
-// 4. Lấy lịch các buổi học (dùng cho thời khóa biểu T2-CN và vào Zoom)
+// 4. Lấy lịch các buổi học
 const getInstructorClassScheduleService = async (classId, instructorId) => {
   const classObj = await instructorClassRepository.findById(classId);
-
-  if (!classObj) {
-    throw new ServiceError("Lớp học không tồn tại", 404);
-  }
-
+  if (!classObj) throw new ServiceError("Lớp học không tồn tại", 404);
   if (classObj.InstructorID !== instructorId) {
     throw new ServiceError("Bạn không có quyền truy cập lớp này", 403);
   }
 
   const sessions = await instructorClassRosterRepository.getSessions(classId);
 
+  const totalStudents =
+    await instructorClassRosterRepository.getTotalEnrolledStudents(classId);
+
+  const enrichedSessions = await Promise.all(
+    sessions.map(async (session) => {
+      const attendedCount =
+        await instructorClassRosterRepository.getAttendedCount(
+          session.SessionID
+        );
+      const isFullyMarked =
+        totalStudents > 0 && attendedCount === totalStudents;
+
+      return {
+        ...session,
+        attendedCount,
+        totalStudents,
+        isFullyMarked,
+      };
+    })
+  );
+
   return {
-    Class: classObj,
-    Sessions: sessions, // mảng Session object
+    Sessions: enrichedSessions,
   };
 };
 

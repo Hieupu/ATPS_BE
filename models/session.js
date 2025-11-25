@@ -19,7 +19,7 @@ class Session {
     this.dayOfWeek = Day;
     this.attendedCount = Number(attendedCount);
     this.totalStudents = Number(totalStudents);
-    this.isFullyMarked = Number(attendedCount) === Number(totalStudents);
+    this.isFullyMarked = false;
   }
 }
 

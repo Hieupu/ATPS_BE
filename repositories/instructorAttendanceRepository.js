@@ -1,33 +1,34 @@
 const connectDB = require("../config/db");
-const AttendanceRecord = require("../models/attendanceRecord");
 
 class InstructorAttendanceRepository {
   async getAttendanceSheet(sessionId, classId) {
     const db = await connectDB();
+
     const [rows] = await db.query(
       `SELECT 
           l.LearnerID,
           l.FullName,
           l.ProfilePicture,
-          COALESCE(att.Status, 'ABSENT') AS Status
+          att.Status,
+          att.Note
        FROM enrollment e
        JOIN learner l ON e.LearnerID = l.LearnerID
        LEFT JOIN attendance att 
-              ON att.LearnerID = l.LearnerID AND att.SessionID = ?
-       WHERE e.ClassID = ? AND e.Status = 'Enrolled'
+             ON att.LearnerID = l.LearnerID AND att.SessionID = ?
+       WHERE e.ClassID = ? 
+  
+       AND e.Status = 'Enrolled' 
        ORDER BY l.FullName ASC`,
       [sessionId, classId]
     );
 
-    return rows.map(
-      (row) =>
-        new AttendanceRecord({
-          LearnerID: row.LearnerID,
-          FullName: row.FullName,
-          ProfilePicture: row.ProfilePicture,
-          Status: row.Status,
-        })
-    );
+    return rows.map((row) => ({
+      learnerId: row.LearnerID,
+      fullName: row.FullName,
+      avatar: row.ProfilePicture,
+      status: row.Status || "PRESENT",
+      note: row.Note || "",
+    }));
   }
 
   async saveAttendance(sessionId, attendanceData) {
@@ -46,14 +47,18 @@ class InstructorAttendanceRepository {
 
     await db.query(`DELETE FROM attendance WHERE SessionID = ?`, [sessionId]);
 
-    const presentList = attendanceData
-      .filter((r) => r.Status === "PRESENT")
-      .map((r) => [r.LearnerID, sessionId, "PRESENT", sessionDate]);
+    const insertData = attendanceData.map((r) => [
+      r.LearnerID,
+      sessionId,
+      r.Status,
+      sessionDate,
+      r.note || null,
+    ]);
 
-    if (presentList.length > 0) {
+    if (insertData.length > 0) {
       await db.query(
-        `INSERT INTO attendance (LearnerID, SessionID, Status, Date) VALUES ?`,
-        [presentList]
+        `INSERT INTO attendance (LearnerID, SessionID, Status, Date, note) VALUES ?`,
+        [insertData]
       );
     }
 
