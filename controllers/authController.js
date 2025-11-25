@@ -17,25 +17,32 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, rememberMe = false } = req.body;
 
-    const { token, user } = await loginService(email, password);
-    const { AccID, Username, Email, Phone, role } = user;
+    const result = await loginService(email, password, "local", rememberMe);
+
+    const { token, expiresIn, user } = result;
+    const { id, email: userEmail, username, role } = user;
 
     res.json({
-      message: "Login successful",
+      message: "Đăng nhập thành công",
       token,
+      expiresIn,
       user: {
-        AccID,
-        Username,
-        Email,
-        Phone,
+        id,
+        username,
+        email: userEmail,
         role,
       },
     });
   } catch (error) {
     console.error("Login error:", error);
-    res.status(401).json({ message: error.message });
+
+    if (error instanceof ServiceError) {
+      res.status(error.statusCode).json({ message: error.message });
+    } else {
+      res.status(500).json({ message: "Đã có lỗi xảy ra" });
+    }
   }
 };
 
