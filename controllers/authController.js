@@ -28,12 +28,7 @@ const login = async (req, res) => {
       message: "Đăng nhập thành công",
       token,
       expiresIn,
-      user: {
-        id,
-        username,
-        email: userEmail,
-        role,
-      },
+      user,
     });
   } catch (error) {
     console.error("Login error:", error);

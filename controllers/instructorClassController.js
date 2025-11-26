@@ -6,6 +6,8 @@ const {
   getAttendanceSheetService,
   saveAttendanceService,
   getInstructorScheduleService,
+  getInstructorAvailabilityService,
+  saveInstructorAvailabilityService,
 } = require("../services/instructorClassService");
 const courseRepository = require("../repositories/instructorCourseRepository");
 
@@ -150,6 +152,56 @@ const getInstructorSchedule = async (req, res) => {
   }
 };
 
+//  Lấy danh sách lịch rảnh (Availability)
+const getInstructorAvailability = async (req, res) => {
+  try {
+  
+    const instructorId = await getInstructorId(Number(req.user.id));
+
+ 
+    const { startDate, endDate } = req.query;
+
+  
+    const result = await getInstructorAvailabilityService(
+      instructorId,
+      startDate,
+      endDate
+    );
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("getInstructorAvailability error:", error);
+    res.status(error.status || 500).json({
+      message: error.message || "Lỗi khi lấy lịch rảnh",
+    });
+  }
+};
+
+// Lưu/Cập nhật lịch rảnh
+const saveInstructorAvailability = async (req, res) => {
+  try {
+    const instructorId = await getInstructorId(Number(req.user.id));
+
+    // Lấy dữ liệu từ Body
+    const { startDate, endDate, slots } = req.body;
+
+    // Gọi Service xử lý (Logic Diff & Transaction nằm ở đây)
+    const result = await saveInstructorAvailabilityService(
+      instructorId,
+      startDate,
+      endDate,
+      slots
+    );
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("saveInstructorAvailability error:", error);
+    res.status(error.status || 500).json({
+      message: error.message || "Lỗi khi cập nhật lịch rảnh",
+    });
+  }
+};
+
 module.exports = {
   listInstructorClasses,
   getInstructorClassDetail,
@@ -158,4 +210,6 @@ module.exports = {
   getAttendanceSheet,
   saveAttendance,
   getInstructorSchedule,
+  getInstructorAvailability,
+  saveInstructorAvailability,
 };

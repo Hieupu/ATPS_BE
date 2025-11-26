@@ -2,7 +2,21 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const connectDB = require("../config/db");
 const accountRepository = require("../repositories/accountRepository");
+const instructorRepository = require("../repositories/instructorRepository");
 require("dotenv").config();
+
+const courseRepository = require("../repositories/instructorCourseRepository");
+
+const getInstructorId = async (accId) => {
+  const instructorId = await courseRepository.findInstructorIdByAccountId(
+    accId
+  );
+
+  if (!instructorId) {
+    throw new Error("Instructor không tồn tại");
+  }
+  return instructorId;
+};
 
 class ServiceError extends Error {
   constructor(message, status = 400) {
@@ -64,6 +78,18 @@ const loginService = async (
 
   const role = await determineUserRole(user.AccID);
 
+  let profilePicture = null;
+
+  if (role === "instructor") {
+    const instructorId = await getInstructorId(user.AccID);
+
+    const instructor = await instructorRepository.getInstructorById(
+      instructorId
+    );
+
+    profilePicture = instructor?.ProfilePicture || null;
+  }
+
   const expiresIn = rememberMe ? "30d" : "1h";
   const expiresInSeconds = rememberMe ? 30 * 24 * 60 * 60 : 3600;
 
@@ -86,6 +112,7 @@ const loginService = async (
       email: user.Email,
       username: user.Username,
       role: role,
+      ProfilePicture: profilePicture,
     },
   };
 };

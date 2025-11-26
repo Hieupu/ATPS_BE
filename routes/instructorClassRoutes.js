@@ -7,6 +7,8 @@ const {
   getAttendanceSheet,
   saveAttendance,
   getInstructorSchedule,
+  getInstructorAvailability,
+  saveInstructorAvailability,
 } = require("../controllers/instructorClassController");
 
 const { verifyToken, authorizeRole } = require("../middlewares/middware");
@@ -65,6 +67,22 @@ router.get(
   verifyToken,
   authorizeRole("instructor"),
   getInstructorSchedule
+);
+
+// 8. Lấy danh sách lịch rảnh đã đăng ký
+router.get(
+  "/availability",
+  verifyToken,
+  authorizeRole("instructor"),
+  getInstructorAvailability
+);
+
+// 9. Đăng ký/Cập nhật lịch rảnh
+router.post(
+  "/availability",
+  verifyToken,
+  authorizeRole("instructor"),
+  saveInstructorAvailability
 );
 
 module.exports = router;
