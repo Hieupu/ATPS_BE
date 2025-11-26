@@ -233,6 +233,56 @@ const saveAttendanceService = async (
   return { success: true, message: "Điểm danh đã được lưu thành công" };
 };
 
+// Lấy thời khóa biểu của instructor (tất cả các lớp)
+const getInstructorScheduleService = async (instructorId) => {
+  const sessions =
+    await instructorClassRosterRepository.getSessionsByInstructor(instructorId);
+
+  if (!sessions || sessions.length === 0) {
+    return {
+      Sessions: [],
+      message: "Không có buổi học nào",
+    };
+  }
+
+  const classIds = [...new Set(sessions.map((s) => s.classId))];
+
+  const classStudentCounts = await Promise.all(
+    classIds.map(async (classId) => {
+      const count =
+        await instructorClassRosterRepository.getTotalEnrolledStudents(classId);
+      return { classId, count };
+    })
+  );
+
+  const studentCountMap = Object.fromEntries(
+    classStudentCounts.map((item) => [item.classId, item.count])
+  );
+
+  const enrichedSessions = await Promise.all(
+    sessions.map(async (session) => {
+      const totalStudents = studentCountMap[session.classId] || 0;
+      const attendedCount =
+        await instructorClassRosterRepository.getAttendedCount(
+          session.sessionId
+        );
+      const isFullyMarked =
+        totalStudents > 0 && attendedCount === totalStudents;
+
+      return {
+        ...session,
+        attendedCount,
+        totalStudents,
+        isFullyMarked,
+      };
+    })
+  );
+
+  return {
+    Sessions: enrichedSessions,
+  };
+};
+
 module.exports = {
   listInstructorClassesService,
   getInstructorClassDetailService,
@@ -240,4 +290,5 @@ module.exports = {
   getInstructorClassScheduleService,
   getAttendanceSheetService,
   saveAttendanceService,
+  getInstructorScheduleService,
 };

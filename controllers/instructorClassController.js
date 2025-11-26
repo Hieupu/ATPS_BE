@@ -5,6 +5,7 @@ const {
   getInstructorClassScheduleService,
   getAttendanceSheetService,
   saveAttendanceService,
+  getInstructorScheduleService,
 } = require("../services/instructorClassService");
 const courseRepository = require("../repositories/instructorCourseRepository");
 
@@ -133,6 +134,22 @@ const saveAttendance = async (req, res) => {
   }
 };
 
+// lịch tất cả các buổi học của giảng viên
+const getInstructorSchedule = async (req, res) => {
+  try {
+    const instructorId = await getInstructorId(Number(req.user.id));
+
+    const result = await getInstructorScheduleService(instructorId);
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("getInstructorSchedule error:", error);
+    res.status(error.status || 500).json({
+      message: error.message || "Lỗi khi lấy lịch giảng dạy",
+    });
+  }
+};
+
 module.exports = {
   listInstructorClasses,
   getInstructorClassDetail,
@@ -140,4 +157,5 @@ module.exports = {
   getInstructorClassSchedule,
   getAttendanceSheet,
   saveAttendance,
+  getInstructorSchedule,
 };

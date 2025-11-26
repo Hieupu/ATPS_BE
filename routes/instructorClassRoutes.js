@@ -6,6 +6,7 @@ const {
   getInstructorClassSchedule,
   getAttendanceSheet,
   saveAttendance,
+  getInstructorSchedule,
 } = require("../controllers/instructorClassController");
 
 const { verifyToken, authorizeRole } = require("../middlewares/middware");
@@ -57,6 +58,13 @@ router.post(
   verifyToken,
   authorizeRole("instructor"),
   saveAttendance
+);
+
+router.get(
+  "/schedule",
+  verifyToken,
+  authorizeRole("instructor"),
+  getInstructorSchedule
 );
 
 module.exports = router;

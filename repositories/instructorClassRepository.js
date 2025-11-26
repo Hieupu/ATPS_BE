@@ -91,7 +91,35 @@ class InstructorClassRepository {
     COALESCE(SUM(CASE WHEN s.Date <= CURDATE() THEN 1 ELSE 0 END), 0) AS CompletedSessions,
     MAX(CASE WHEN s.Date = CURDATE() THEN 1 ELSE 0 END) AS HasSessionToday,
     MIN(CASE WHEN s.Date >= CURDATE() THEN s.Date END) AS NextSessionDate,
-    GROUP_CONCAT(DISTINCT CONCAT(CASE ts.Day WHEN 'Monday' THEN 'T2' WHEN 'Tuesday' THEN 'T3' WHEN 'Wednesday' THEN 'T4' WHEN 'Thursday' THEN 'T5' WHEN 'Friday' THEN 'T6' WHEN 'Saturday' THEN 'T7' WHEN 'Sunday' THEN 'CN' ELSE LEFT(ts.Day, 3) END, ' ', TIME_FORMAT(ts.StartTime, '%H:%i'), '-', TIME_FORMAT(ts.EndTime, '%H:%i')) SEPARATOR ' | ') AS ScheduleSummary
+    (
+        SELECT GROUP_CONCAT(
+            CONCAT(days, ': ', time_range) 
+            SEPARATOR ' | '
+        )
+        FROM (
+            SELECT 
+                GROUP_CONCAT(
+                    CASE ts.Day 
+                        WHEN 'Monday' THEN 'T2' 
+                        WHEN 'Tuesday' THEN 'T3' 
+                        WHEN 'Wednesday' THEN 'T4' 
+                        WHEN 'Thursday' THEN 'T5' 
+                        WHEN 'Friday' THEN 'T6' 
+                        WHEN 'Saturday' THEN 'T7' 
+                        WHEN 'Sunday' THEN 'CN' 
+                        ELSE LEFT(ts.Day, 3) 
+                    END 
+                    ORDER BY FIELD(ts.Day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
+                    SEPARATOR ','
+                ) AS days,
+                CONCAT(TIME_FORMAT(ts.StartTime, '%H:%i'), '-', TIME_FORMAT(ts.EndTime, '%H:%i')) AS time_range
+            FROM session s2
+            JOIN timeslot ts ON s2.TimeslotID = ts.TimeslotID
+            WHERE s2.ClassID = c.ClassID
+            GROUP BY ts.StartTime, ts.EndTime
+            ORDER BY ts.StartTime
+        ) AS grouped_schedule
+    ) AS ScheduleSummary
 FROM class c
 LEFT JOIN course co ON c.CourseID = co.CourseID
 LEFT JOIN session s ON s.ClassID = c.ClassID
