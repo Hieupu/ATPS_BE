@@ -98,7 +98,6 @@ const loginService = async (
       id: user.AccID,
       email: user.Email,
       Username: user.Username,
-      features: featureNames,
       role: role, // Đảm bảo role được thêm vào token
     },
     process.env.JWT_SECRET,
