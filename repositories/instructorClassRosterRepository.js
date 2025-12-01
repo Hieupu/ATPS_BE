@@ -65,18 +65,19 @@ class InstructorClassRosterRepository {
         s.SessionID,
         s.Title,
         s.Date,
-        s.ZoomUUID,
         t.StartTime,
         t.EndTime,
         t.Day,
         c.ClassID,
         c.Name,
-        c.CourseID
-     FROM session s
-     JOIN timeslot t ON s.TimeslotID = t.TimeslotID
-     JOIN class c ON s.ClassID = c.ClassID
-     WHERE s.InstructorID = ?
-     ORDER BY s.Date ASC, t.StartTime ASC`,
+        c.CourseID,
+        c.ZoomID, 
+        c.Zoompass   
+      FROM session s
+      JOIN timeslot t ON s.TimeslotID = t.TimeslotID
+      JOIN class c ON s.ClassID = c.ClassID
+      WHERE s.InstructorID = ?
+      ORDER BY s.Date ASC, t.StartTime ASC`,
       [instructorId]
     );
 
@@ -84,13 +85,15 @@ class InstructorClassRosterRepository {
       sessionId: row.SessionID,
       title: row.Title,
       date: row.Date,
-      zoomLink: row.ZoomUUID || null,
       startTime: row.StartTime,
       endTime: row.EndTime,
       dayOfWeek: row.Day,
       classId: row.ClassID,
       className: row.Name,
       courseId: row.CourseID,
+
+      ZoomID: row.ZoomID,
+      ZoomPass: row.Zoompass,
     }));
   }
   async getTotalEnrolledStudents(classId) {
