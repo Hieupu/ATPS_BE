@@ -60,7 +60,7 @@ const loginService = async (email, password, provider = "local") => {
     {
       id: user.AccID,
       email: user.Email,
-      username: user.Username,
+      Username: user.Username,
       features: featureNames,
       role: role, // Đảm bảo role được thêm vào token
     },

@@ -775,7 +775,7 @@ console.log("Parameters:", [
 
 const [classInsert] = await connection.query(
   `INSERT INTO class (ZoomID, Zoompass, Status, CourseID, InstructorID, Name, Fee, Maxstudent, OpendatePlan, EnddatePlan, Numofsession)
-   VALUES (?, ?, 'Open', ?, ?, ?, ?, 1, ?, ?, ?)`,
+   VALUES (?, ?, 'WAITING', ?, ?, ?, ?, 1, ?, ?, ?)`,
   [
     zoomMeetingData?.id?.toString() || null, // ZoomID (varchar(11))
     zoomMeetingData?.password || null, // Zoompass (varchar(6))

@@ -15,6 +15,7 @@ const examRoutes = require("./routes/examRoutes");
 const assignmentRoutes = require("./routes/assignmentRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const zoomRoutes = require("./routes/zoomRoutes");
+const learnerassignmentRoutes = require("./routes/learnerassignmentRoutes");
 const passport = require("passport");
 const cors = require("cors");
 // const paymentRoutes = require("./routes/paymentRoutes");
@@ -58,6 +59,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/exams", examRoutes);
 app.use("/api/instructor", assignmentRoutes);
 app.use("/api/zoom", zoomRoutes);
+app.use("/api/learnerassignments", learnerassignmentRoutes);
 
 const PORT = process.env.PORT || 9999;
 connectDB().then(() => {

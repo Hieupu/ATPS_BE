@@ -51,6 +51,16 @@ class InstructorService {
       throw error;
     }
   }
+
+  async getFeaturedInstructors(limit = 4) {
+    try {
+      const instructors = await instructorRepository.getFeaturedInstructors(limit);
+      return instructors;
+    } catch (error) {
+      console.error("Error in getFeaturedInstructors service:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new InstructorService();
