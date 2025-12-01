@@ -6,25 +6,106 @@ const Session = require("../models/session");
 class InstructorClassRosterRepository {
   async getStudents(classId) {
     const db = await connectDB();
+
+    // BƯỚC 1: Lấy thông tin Lớp & Thống kê Session
+    // Logic: Query bảng Class để lấy InstructorID chuẩn, sau đó dùng subquery để đếm session.
+    const [classStats] = await db.query(
+      `SELECT
+            c.InstructorID,
+            c.Numofsession, -- Số buổi dự kiến (theo giáo trình)
+            
+            -- Đếm session thực tế (Phải khớp cả ClassID lẫn InstructorID)
+            (SELECT COUNT(DISTINCT SessionID) 
+             FROM session s 
+             WHERE s.ClassID = c.ClassID AND s.InstructorID = c.InstructorID) as RealSessionCount,
+
+            -- Đếm session đã diễn ra (Date <= Hôm nay)
+            (SELECT COUNT(DISTINCT SessionID) 
+             FROM session s 
+             WHERE s.ClassID = c.ClassID AND s.InstructorID = c.InstructorID AND s.Date <= CURDATE()) as TotalOccurred
+         FROM class c
+         WHERE c.ClassID = ?`,
+      [classId]
+    );
+
+    // Kiểm tra nếu lớp không tồn tại
+    if (classStats.length === 0) return [];
+
+    const info = classStats[0];
+    const realSessions = info.RealSessionCount || 0;
+    const plannedSessions = info.Numofsession || 0;
+    const totalOccurred = info.TotalOccurred || 0;
+    const instructorId = info.InstructorID; // <--- Lấy ID giảng viên để dùng cho query dưới
+
+    // Logic Fallback: Ưu tiên đếm thực tế, nếu chưa có thì lấy dự kiến
+    // (Giúp hiển thị đúng "0/20" khi lớp mới tạo chưa xếp lịch)
+    const totalCurriculum = realSessions > 0 ? realSessions : plannedSessions;
+
+    // BƯỚC 2: Lấy danh sách sinh viên
+    // FIX: Thêm điều kiện s.InstructorID = ? vào subquery đếm vắng
     const [rows] = await db.query(
-      `SELECT l.LearnerID, l.FullName, l.ProfilePicture, a.Email, a.Phone
+      `SELECT
+        l.LearnerID,
+        l.FullName,
+        l.ProfilePicture,
+        a.Email,
+        a.Phone,
+        (
+            SELECT COUNT(DISTINCT atd.SessionID)
+            FROM attendance atd
+            JOIN session s ON atd.SessionID = s.SessionID
+            WHERE atd.LearnerID = l.LearnerID
+            AND s.ClassID = e.ClassID
+            AND s.InstructorID = ?  -- <--- QUAN TRỌNG: Chỉ đếm vắng các buổi của GV này
+            AND atd.Status = 'absent'
+            AND s.Date <= CURDATE()
+        ) AS AbsentCount
        FROM enrollment e
        JOIN learner l ON e.LearnerID = l.LearnerID
        JOIN account a ON l.AccID = a.AccID
        WHERE e.ClassID = ? AND e.Status = 'Enrolled'
        ORDER BY l.FullName ASC`,
-      [classId]
+      [instructorId, classId] // Lưu ý thứ tự tham số: InstructorID trước (cho subquery), ClassID sau (cho WHERE chính)
     );
-    return rows.map(
-      (row) =>
-        new Learner({
-          LearnerID: row.LearnerID,
-          FullName: row.FullName,
-          ProfilePicture: row.ProfilePicture,
-          Email: row.Email || null,
-          Phone: row.Phone || null,
-        })
-    );
+
+    // BƯỚC 3: Map dữ liệu
+    return rows.map((row) => {
+      const absentCount = row.AbsentCount || 0;
+
+      // Present = Tổng đã diễn ra - Số vắng
+      // Math.max(0) để đảm bảo an toàn tuyệt đối
+      const presentCount = Math.max(0, totalOccurred - absentCount);
+
+      // Tính % Tiến độ (So với tổng khóa)
+      const courseProgress =
+        totalCurriculum > 0
+          ? Math.round((presentCount / totalCurriculum) * 100)
+          : 0;
+
+      // Tính % Chuyên cần (So với số buổi đã qua)
+      const attendanceRate =
+        totalOccurred > 0
+          ? Math.round((presentCount / totalOccurred) * 100)
+          : 100;
+
+      return {
+        LearnerID: row.LearnerID,
+        FullName: row.FullName,
+        ProfilePicture: row.ProfilePicture,
+        Contact: {
+          Email: row.Email || "",
+          Phone: row.Phone || "",
+        },
+        Attendance: {
+          Absent: absentCount,
+          Present: presentCount,
+          TotalOccurred: totalOccurred,
+          TotalCurriculum: totalCurriculum,
+          Rate: attendanceRate,
+          Progress: courseProgress,
+        },
+      };
+    });
   }
 
   //Lịch buổi học theo classid va instructorid
