@@ -12,14 +12,14 @@ class InstructorCourseRepository {
         c.Description,
         c.Image,
         c.Duration,
-        c.Ojectives,
+        c.Objectives,
         c.Requirements,
         c.Level,
         c.Status,
         c.Code,
         i.FullName AS InstructorName
-     FROM atps.course c
-     LEFT JOIN atps.instructor i 
+     FROM course c
+     LEFT JOIN instructor i 
         ON c.InstructorID = i.InstructorID
      WHERE c.CourseID = ?`,
       [courseId]
@@ -33,7 +33,7 @@ class InstructorCourseRepository {
     const db = await connectDB();
     const [rows] = await db.query(
       `SELECT InstructorID 
-       FROM atps.instructor 
+       FROM instructor 
        WHERE AccID = ? 
        LIMIT 1`,
       [accId]
@@ -53,14 +53,14 @@ class InstructorCourseRepository {
         c.Description,
         c.Image,
         c.Duration,
-        c.Ojectives,
+        c.Objectives,
         c.Requirements,
         c.Level,
         c.Status,
         c.Code,
         i.FullName AS InstructorName
-     FROM atps.course c
-     LEFT JOIN atps.instructor i 
+     FROM course c
+     LEFT JOIN instructor i 
         ON c.InstructorID = i.InstructorID
      WHERE c.InstructorID = ?
        AND c.Status <> 'DELETED'
@@ -78,7 +78,7 @@ class InstructorCourseRepository {
       Description,
       Image,
       Duration,
-      Ojectives,
+      Objectives,
       Requirements,
       Level,
       Status,
@@ -89,7 +89,7 @@ class InstructorCourseRepository {
     const _Description = Description ?? "";
     const _Image = Image ?? "";
     const _Duration = Duration ?? 0;
-    const _Ojectives = Ojectives ?? "";
+    const _Objectives = Objectives ?? "";
     const _Requirements = Requirements ?? "";
     const _Level = Level ?? "BEGINNER";
     const _Status = Status ?? "DRAFT";
@@ -97,7 +97,7 @@ class InstructorCourseRepository {
 
     const [result] = await db.query(
       `INSERT INTO course
-        (InstructorID, Title, Description, Image, Duration, Ojectives, Requirements, Level, Status, Code)
+        (InstructorID, Title, Description, Image, Duration, Objectives, Requirements, Level, Status, Code)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         InstructorID,
@@ -105,7 +105,7 @@ class InstructorCourseRepository {
         _Description,
         _Image,
         _Duration,
-        _Ojectives,
+        _Objectives,
         _Requirements,
         _Level,
         _Status,
@@ -120,7 +120,7 @@ class InstructorCourseRepository {
       Description: _Description,
       Image: _Image,
       Duration: _Duration,
-      Ojectives: _Ojectives,
+      Objectives: _Objectives,
       Requirements: _Requirements,
       Level: _Level,
       Status: _Status,
@@ -136,7 +136,7 @@ class InstructorCourseRepository {
       "Description",
       "Image",
       "Duration",
-      "Ojectives",
+      "Objectives",
       "Requirements",
       "Level",
       "Status",

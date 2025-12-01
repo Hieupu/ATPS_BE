@@ -104,7 +104,7 @@ const createCourseService = async (data, file) => {
     Description,
     Image,
     Duration,
-    Ojectives,
+    Objectives,
     Requirements,
     Level,
     Status,
@@ -148,7 +148,7 @@ const createCourseService = async (data, file) => {
     Description: Description ?? "",
     Image: imagePath,
     Duration: durationDec,
-    Ojectives: (Ojectives ?? "") + "",
+    Objectives: (Objectives ?? "") + "",
     Requirements: (Requirements ?? "") + "",
     Level: levelUp,
     Status: statusUp,
@@ -184,7 +184,7 @@ const updateCourseService = async (courseId, data, file) => {
     Description: data?.Description,
     Duration:
       data?.Duration !== undefined ? toDecimal2(data.Duration, 0) : undefined,
-    Ojectives: data?.Ojectives,
+    Objectives: data?.Objectives,
     Requirements: data?.Requirements,
     Level: data?.Level ? upper(data.Level) : undefined,
     Status: data?.Status ? upper(data.Status) : undefined,
@@ -316,6 +316,21 @@ const deleteUnitService = async (unitId) => {
 
   await unitRepository.markAsDeleted(unitId);
   return { message: "Đã chuyển Unit sang trạng thái DELETED" };
+};
+
+const getAssignmentsByUnitIdService = async (unitId) => {
+  const unit = await unitRepository.findById(unitId);
+  if (!unit) throw new ServiceError("Unit không tồn tại", 404);
+  if (unit.Status === "DELETED") throw new ServiceError("Unit đã bị xóa", 404);
+
+  const assignments = await unitRepository.getAssignmentsByUnitId(unitId);
+
+  return {
+    message: "Danh sách Assignment của Unit",
+    unit: { UnitID: unit.UnitID, Title: unit.Title, Status: unit.Status },
+    total: assignments.length,
+    assignments,
+  };
 };
 
 // ======================= LESSON =======================
@@ -603,6 +618,7 @@ module.exports = {
   addUnitService,
   updateUnitService,
   deleteUnitService,
+  getAssignmentsByUnitIdService,
 
   listLessonsByUnitService,
   addLessonService,

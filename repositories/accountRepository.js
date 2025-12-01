@@ -54,9 +54,9 @@ class AccountRepository {
     const [rows] = await db.query(
       `
       SELECT f.Name
-      FROM atps.feature f
-      JOIN atps.accountfeature af ON f.FeatureID = af.FeatureID
-      WHERE af.AccountID = ?  -- SỬA Ở ĐÂY: AccID → AccountID
+      FROM feature f
+      JOIN accountfeature af ON f.FeatureID = af.FeatureID
+      WHERE af.AccountID = ?  
       `,
       [accountId]
     );

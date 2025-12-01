@@ -1,5 +1,6 @@
 const connectDB = require("../config/db");
 const Unit = require("../models/unit");
+const Assignment = require("../models/assignmentfix");
 
 class InstructorUnitRepository {
   async listByCourse(courseId) {
@@ -93,6 +94,24 @@ class InstructorUnitRepository {
   async delete(unitId) {
     const db = await connectDB();
     await db.query("DELETE FROM unit WHERE UnitID = ?", [unitId]);
+  }
+
+  async getAssignmentsByUnitId(unitId) {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      `
+      SELECT 
+        AssignmentID, InstructorID, UnitID, Title, Description, Deadline,
+        FileURL, Status, Type, ShowAnswersAfter, MaxDuration, MediaURL
+      FROM assignment
+      WHERE UnitID = ?
+        AND Status != 'deleted'
+      ORDER BY AssignmentID ASC
+      `,
+      [unitId]
+    );
+
+    return rows.map((row) => new Assignment(row));
   }
 }
 

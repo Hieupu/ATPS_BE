@@ -10,7 +10,7 @@ class Instructor {
     CV,
     AccID,
     Major,
-    Type, // 'fulltime' | 'parttime'
+    Type,
   }) {
     this.InstructorID = InstructorID;
     this.FullName = FullName;

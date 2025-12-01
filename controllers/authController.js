@@ -15,28 +15,29 @@ const connectDB = require("../config/db");
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
-// controllers/authController.js
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, rememberMe = false } = req.body;
 
-    const { token, user } = await loginService(email, password);
-    const { AccID, Username, Email, Phone, role } = user;
+    const result = await loginService(email, password, "local", rememberMe);
+
+    const { token, expiresIn, user } = result;
+    const { id, email: userEmail, username, role } = user;
 
     res.json({
-      message: "Login successful",
+      message: "Đăng nhập thành công",
       token,
-      user: {
-        AccID, // Thêm AccID
-        Username,
-        Email,
-        Phone,
-        role,
-      },
+      expiresIn,
+      user,
     });
   } catch (error) {
     console.error("Login error:", error);
-    res.status(401).json({ message: error.message });
+
+    if (error instanceof ServiceError) {
+      res.status(error.statusCode).json({ message: error.message });
+    } else {
+      res.status(500).json({ message: "Đã có lỗi xảy ra" });
+    }
   }
 };
 
@@ -86,7 +87,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "http://localhost:9999/api/google/callback",
+      callbackURL: "https://atps-be.onrender.com/api/google/callback",
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -160,18 +161,23 @@ const googleAuthCallback = (req, res, next) => {
 
       try {
         // ✅ Sửa: Lấy cả token và user từ loginService
-        const { token, user: userWithRole } = await loginService(user.Email, null, "google");
-        
+        const { token, user: userWithRole } = await loginService(
+          user.Email,
+          null,
+          "google"
+        );
+
         const safeUser = {
-           AccID: userWithRole.AccID || userWithRole.id || userWithRole.AccountID,
+          AccID:
+            userWithRole.AccID || userWithRole.id || userWithRole.AccountID,
           Username: userWithRole.Username,
           Email: userWithRole.Email,
           Provider: "google",
-          role: userWithRole.role // ✅ Thêm role vào response
+          role: userWithRole.role, // ✅ Thêm role vào response
         };
-        
+
         console.log("Google login - User with role:", safeUser); // Debug
-        
+
         return res.redirect(buildOAuthRedirect("google", token, safeUser));
       } catch (e) {
         console.error("Error in Google callback:", e);
@@ -186,7 +192,7 @@ passport.use(
     {
       clientID: process.env.FACEBOOK_CLIENT_ID,
       clientSecret: process.env.FACEBOOK_CLIENT_SECRET,
-      callbackURL: "http://localhost:9999/api/facebook/callback",
+      callbackURL: "https://atps-be.onrender.com/api/facebook/callback",
       profileFields: ["id", "displayName", "emails"],
     },
     async (accessToken, refreshToken, profile, done) => {
@@ -269,17 +275,21 @@ const facebookAuthCallback = (req, res, next) => {
 
       try {
         // ✅ Sửa: Lấy cả token và user từ loginService
-        const { token, user: userWithRole } = await loginService(user.Email, null, "facebook");
-        
+        const { token, user: userWithRole } = await loginService(
+          user.Email,
+          null,
+          "facebook"
+        );
+
         const safeUser = {
           Username: userWithRole.Username,
           Email: userWithRole.Email,
           Provider: "facebook",
-          role: userWithRole.role // ✅ Thêm role vào response
+          role: userWithRole.role, // ✅ Thêm role vào response
         };
-        
+
         console.log("Facebook login - User with role:", safeUser); // Debug
-        
+
         return res.redirect(buildOAuthRedirect("facebook", token, safeUser));
       } catch (e) {
         console.error("Error in Facebook callback:", e);

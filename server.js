@@ -18,29 +18,40 @@ const zoomRoutes = require("./routes/zoomRoutes");
 const learnerassignmentRoutes = require("./routes/learnerassignmentRoutes");
 const passport = require("passport");
 const cors = require("cors");
-// const paymentRoutes = require("./routes/paymentRoutes");
 const instructorCourseRoutes = require("./routes/instructorCourseRouter");
 const instructorClassRoutes = require("./routes/instructorClassRoutes");
+const instructorExamRoutes = require("./routes/instructorExamRoutes");
 
 dotenv.config();
 const app = express();
 
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://atps-fe-deploy.vercel.app",
+  "https://marketplace.zoom.us/api/v1/apps/validateEndpointUrl/xI4Ki5LnTUOd1ZoGq9jptw/check",
+];
+
 const corsOptions = {
-  origin: FRONTEND_URL,
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS: " + origin));
+    }
+  },
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
 };
-app.use((req, res, next) => {
-  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
-  res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  next();
-});
 
 app.use(cors(corsOptions));
 app.options(/.*/, cors(corsOptions));
+
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
+  next();
+});
 app.use(express.json());
 app.use(passport.initialize());
 
@@ -58,6 +69,7 @@ app.use("/api/payment", paymentRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/exams", examRoutes);
 app.use("/api/instructor", assignmentRoutes);
+app.use("/api/instructor", instructorExamRoutes);
 app.use("/api/zoom", zoomRoutes);
 app.use("/api/learnerassignments", learnerassignmentRoutes);
 
