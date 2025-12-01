@@ -283,6 +283,84 @@ const getInstructorScheduleService = async (instructorId) => {
   };
 };
 
+// 8. Lấy danh sách lịch rảnh của giảng viên
+
+const getInstructorAvailabilityService = async (
+  instructorId,
+  startDate,
+  endDate
+) => {
+  if (!startDate || !endDate) {
+    throw new ServiceError(
+      "Vui lòng cung cấp ngày bắt đầu và ngày kết thúc",
+      400
+    );
+  }
+
+  // Sử dụng Promise.all để chạy song song 2 câu lệnh (Tối ưu tốc độ)
+  const [availabilityData, occupiedData] = await Promise.all([
+    // 1. Lấy những slot đã tick "Rảnh" (Màu xanh)
+    instructorClassRosterRepository.getInstructorAvailability(
+      instructorId,
+      startDate,
+      endDate
+    ),
+
+    instructorClassRosterRepository.getInstructorOccupiedSlots(
+      instructorId,
+      startDate,
+      endDate
+    ),
+  ]);
+
+  return {
+    availability: availabilityData,
+    occupied: occupiedData,
+  };
+};
+
+// 9. Cập nhật lịch rảnh (Save Availability)
+const saveInstructorAvailabilityService = async (
+  instructorId,
+  startDate,
+  endDate,
+  slots
+) => {
+  if (!startDate || !endDate) {
+    throw new ServiceError(
+      "Vui lòng cung cấp ngày bắt đầu và ngày kết thúc",
+      400
+    );
+  }
+
+  if (!Array.isArray(slots)) {
+    throw new ServiceError(
+      "Dữ liệu lịch đăng ký (slots) phải là một danh sách",
+      400
+    );
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  if (startDate < today) {
+    throw new ServiceError(
+      "Không thể cập nhật lịch cho ngày trong quá khứ",
+      400
+    );
+  }
+
+  await instructorClassRosterRepository.saveInstructorAvailability(
+    instructorId,
+    startDate,
+    endDate,
+    slots
+  );
+
+  return {
+    success: true,
+    message: "Cập nhật lịch rảnh thành công",
+  };
+};
+
 module.exports = {
   listInstructorClassesService,
   getInstructorClassDetailService,
@@ -291,4 +369,6 @@ module.exports = {
   getAttendanceSheetService,
   saveAttendanceService,
   getInstructorScheduleService,
+  getInstructorAvailabilityService,
+  saveInstructorAvailabilityService,
 };
