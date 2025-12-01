@@ -27,8 +27,8 @@ class InstructorClassRosterRepository {
     );
   }
 
-  //Lịch buổi học – chỉ để hiển thị thời khóa biểu
-  async getSessions(classId) {
+  //Lịch buổi học theo classid va instructorid
+  async getSessions(classId, instructorId) {
     const db = await connectDB();
     const [rows] = await db.query(
       `SELECT
@@ -42,12 +42,12 @@ class InstructorClassRosterRepository {
      FROM session s
      JOIN timeslot t ON s.TimeslotID = t.TimeslotID
      WHERE s.ClassID = ?
+     AND s.InstructorID = ?
      ORDER BY s.Date ASC, t.StartTime ASC`,
-      [classId]
+      [classId, instructorId]
     );
 
     return rows.map((row) => ({
-      SessionID: row.SessionID,
       sessionId: row.SessionID,
       title: row.Title,
       date: row.Date,
@@ -249,7 +249,7 @@ class InstructorClassRosterRepository {
                SELECT TimeslotID, ?, ?, 'AVAILABLE', 'Đăng ký rảnh'
                FROM timeslot
                WHERE StartTime = ? 
-                 AND Day = DAYNAME(?) -- Hàm này trả về Monday, Tuesday... khớp với ngày truyền vào
+                 AND Day = DAYNAME(?) 
                LIMIT 1`,
               [instructorId, slot.date, startTime, slot.date]
             );

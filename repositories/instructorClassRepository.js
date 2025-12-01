@@ -74,59 +74,65 @@ class InstructorClassRepository {
 
     const [rows] = await db.query(
       `SELECT 
-    c.ClassID,
-    c.Name AS ClassName,
-    c.InstructorID,
-    c.Status AS ClassStatus,
-    c.Fee,
-    c.Maxstudent AS MaxStudents,
-    c.OpendatePlan,
-    c.Opendate,
-    c.Numofsession AS TotalSessions,
-    co.CourseID,
-    COALESCE(co.Title, 'Lớp học tự do') AS CourseTitle,
-    COALESCE(co.Image, '/images/default-course.jpg') AS CourseImage,
-    co.Level AS CourseLevel,
-    (SELECT COUNT(*) FROM enrollment e WHERE e.ClassID = c.ClassID AND e.Status = 'Enrolled') AS CurrentStudents,
-    COALESCE(SUM(CASE WHEN s.Date <= CURDATE() THEN 1 ELSE 0 END), 0) AS CompletedSessions,
-    MAX(CASE WHEN s.Date = CURDATE() THEN 1 ELSE 0 END) AS HasSessionToday,
-    MIN(CASE WHEN s.Date >= CURDATE() THEN s.Date END) AS NextSessionDate,
-    (
-        SELECT GROUP_CONCAT(
-            CONCAT(days, ': ', time_range) 
-            SEPARATOR ' | '
-        )
-        FROM (
-            SELECT 
-                GROUP_CONCAT(
-                    CASE ts.Day 
-                        WHEN 'Monday' THEN 'T2' 
-                        WHEN 'Tuesday' THEN 'T3' 
-                        WHEN 'Wednesday' THEN 'T4' 
-                        WHEN 'Thursday' THEN 'T5' 
-                        WHEN 'Friday' THEN 'T6' 
-                        WHEN 'Saturday' THEN 'T7' 
-                        WHEN 'Sunday' THEN 'CN' 
-                        ELSE LEFT(ts.Day, 3) 
-                    END 
-                    ORDER BY FIELD(ts.Day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
-                    SEPARATOR ','
-                ) AS days,
-                CONCAT(TIME_FORMAT(ts.StartTime, '%H:%i'), '-', TIME_FORMAT(ts.EndTime, '%H:%i')) AS time_range
-            FROM session s2
-            JOIN timeslot ts ON s2.TimeslotID = ts.TimeslotID
-            WHERE s2.ClassID = c.ClassID
-            GROUP BY ts.StartTime, ts.EndTime
-            ORDER BY ts.StartTime
-        ) AS grouped_schedule
-    ) AS ScheduleSummary
-FROM class c
-LEFT JOIN course co ON c.CourseID = co.CourseID
-LEFT JOIN session s ON s.ClassID = c.ClassID
-LEFT JOIN timeslot ts ON s.TimeslotID = ts.TimeslotID
-WHERE c.InstructorID = ? AND c.Status != 'DELETED'
-GROUP BY c.ClassID, co.CourseID, co.Title, co.Image, co.Level
-ORDER BY COALESCE(c.Opendate, c.OpendatePlan) DESC, c.ClassID DESC`,
+        c.ClassID,
+        c.Name AS ClassName,
+        c.Status AS ClassStatus,
+        c.Fee,
+        c.Maxstudent AS MaxStudents,
+        c.OpendatePlan,
+        c.Opendate,
+        c.EnddatePlan,
+        c.Enddate,
+        c.Numofsession AS PlanSessions,
+        COUNT(s.SessionID) AS TotalSessions,
+        co.CourseID,
+        COALESCE(co.Title, 'Lớp học tự do') AS CourseTitle,
+        COALESCE(co.Image, '/images/default-course.jpg') AS CourseImage,
+        co.Level AS CourseLevel,
+        (SELECT COUNT(*) FROM enrollment e WHERE e.ClassID = c.ClassID AND e.Status = 'Enrolled') AS CurrentStudents,
+        COALESCE(SUM(CASE 
+            WHEN s.Date < CURDATE() THEN 1 
+            WHEN s.Date = CURDATE() AND ts.EndTime < CURTIME() THEN 1 
+            ELSE 0 
+        END), 0) AS FinishedSessions,
+        MAX(CASE WHEN s.Date = CURDATE() THEN 1 ELSE 0 END) AS HasSessionToday,
+        MIN(CASE WHEN s.Date >= CURDATE() THEN s.Date END) AS NextSessionDate,
+        (
+            SELECT GROUP_CONCAT(
+                CONCAT(days, ': ', time_range) 
+                SEPARATOR ' | '
+            )
+            FROM (
+                SELECT 
+                    GROUP_CONCAT(
+                        CASE ts.Day 
+                            WHEN 'Monday' THEN 'T2' 
+                            WHEN 'Tuesday' THEN 'T3' 
+                            WHEN 'Wednesday' THEN 'T4' 
+                            WHEN 'Thursday' THEN 'T5' 
+                            WHEN 'Friday' THEN 'T6' 
+                            WHEN 'Saturday' THEN 'T7' 
+                            WHEN 'Sunday' THEN 'CN' 
+                            ELSE LEFT(ts.Day, 3) 
+                        END 
+                        ORDER BY FIELD(ts.Day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday')
+                        SEPARATOR ','
+                    ) AS days,
+                    CONCAT(TIME_FORMAT(ts.StartTime, '%H:%i'), '-', TIME_FORMAT(ts.EndTime, '%H:%i')) AS time_range
+                FROM session s2
+                JOIN timeslot ts ON s2.TimeslotID = ts.TimeslotID
+                WHERE s2.ClassID = c.ClassID
+                GROUP BY ts.StartTime, ts.EndTime
+                ORDER BY ts.StartTime
+            ) AS grouped_schedule
+        ) AS ScheduleSummary
+      FROM class c
+      LEFT JOIN course co ON c.CourseID = co.CourseID
+      LEFT JOIN session s ON s.ClassID = c.ClassID
+      LEFT JOIN timeslot ts ON s.TimeslotID = ts.TimeslotID
+      WHERE c.InstructorID = ? AND c.Status != 'DELETED'
+      GROUP BY c.ClassID, co.CourseID, co.Title, co.Image, co.Level
+      ORDER BY COALESCE(c.Opendate, c.OpendatePlan) DESC, c.ClassID DESC`,
       [instructorId]
     );
 
@@ -139,14 +145,19 @@ ORDER BY COALESCE(c.Opendate, c.OpendatePlan) DESC, c.ClassID DESC`,
       currentStudents: row.CurrentStudents || 0,
       openDatePlan: row.OpendatePlan,
       openDate: row.Opendate,
+      endDatePlan: row.EnddatePlan,
+      endDate: row.Enddate,
+      planSessions: row.PlanSessions,
       totalSessions: row.TotalSessions,
-
+      finishedSessions: row.FinishedSessions,
+      progressPercent:
+        row.TotalSessions > 0
+          ? Math.round((row.FinishedSessions / row.TotalSessions) * 100)
+          : 0,
       courseId: row.CourseID,
       courseTitle: row.CourseTitle,
       courseImage: row.CourseImage,
       courseLevel: row.CourseLevel,
-
-      completedSessions: row.CompletedSessions,
       hasSessionToday: !!row.HasSessionToday,
       nextSessionDate: row.NextSessionDate,
       scheduleSummary: row.ScheduleSummary || "Chưa có lịch cố định",
