@@ -757,7 +757,7 @@ async getPopularCourses() {
   /**
    * Lấy danh sách assignments của khóa học kèm trạng thái nộp bài của learner
    */
-  async getAssignmentsWithSubmissions(courseId, learnerId) {
+  async getCourseAssignments(courseId, learnerId) {
     try {
       const db = await connectDB();
 
@@ -787,7 +787,7 @@ async getPopularCourses() {
        INNER JOIN unit u ON a.UnitID = u.UnitID
        LEFT JOIN submission s ON a.AssignmentID = s.AssignmentID AND s.LearnerID = ?
        WHERE u.CourseID = ? 
-         AND a.Status IN ('published', 'scheduled')
+         AND a.Status IN ('active')
          AND u.Status = 'VISIBLE'
        ORDER BY a.Deadline ASC, a.AssignmentID ASC`,
         [learnerId, courseId]
@@ -819,7 +819,39 @@ async getPopularCourses() {
           : null,
       }));
     } catch (error) {
-      console.error("Database error in getAssignmentsWithSubmissions:", error);
+      console.error("Database error in getCourseAssignments:", error);
+      throw error;
+    }
+  }
+
+    async checkEnrollment(courseId, learnerId) {
+    try {
+      const db = await connectDB();
+      
+      const [enrollments] = await db.query(
+        `SELECT 
+          e.EnrollmentID,
+          e.EnrollmentDate,
+          e.Status as EnrollmentStatus,
+          e.ClassID,
+          e.OrderCode,
+          c.ClassID,
+          c.Status as ClassStatus,
+          c.CourseID,
+          co.Title as CourseTitle
+         FROM enrollment e
+         INNER JOIN class c ON e.ClassID = c.ClassID
+         INNER JOIN course co ON c.CourseID = co.CourseID
+         WHERE c.CourseID = ? AND e.LearnerID = ? 
+         AND e.Status = 'Enrolled' 
+         AND c.Status IN ('ACTIVE', 'ONGOING')
+         AND co.Status = 'PUBLISHED'`,
+        [courseId, learnerId]
+      );
+
+      return enrollments.length > 0 ? enrollments[0] : null;
+    } catch (error) {
+      console.error("Database error in checkEnrollment:", error);
       throw error;
     }
   }

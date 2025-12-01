@@ -43,7 +43,7 @@ class ProgressRepository {
                   FROM assignment a
                   INNER JOIN unit u ON a.UnitID = u.UnitID
                   WHERE u.CourseID = c.CourseID
-                  AND a.Status = 'published'
+                  AND a.Status IN ('active', 'published', 'scheduled')
                 ),
                 'CompletedAssignments', (
                   SELECT COUNT(DISTINCT s.AssignmentID)
@@ -111,7 +111,7 @@ class ProgressRepository {
                       FROM assignment a
                       INNER JOIN unit u ON a.UnitID = u.UnitID
                       WHERE u.CourseID = c.CourseID
-                      AND a.Status = 'published'
+                      AND a.Status IN ('active', 'published', 'scheduled')
                     ) > 0
                     THEN ROUND((
                       SELECT COUNT(DISTINCT s.AssignmentID)
@@ -126,7 +126,7 @@ class ProgressRepository {
                       FROM assignment a
                       INNER JOIN unit u ON a.UnitID = u.UnitID
                       WHERE u.CourseID = c.CourseID
-                      AND a.Status = 'published'
+                      AND a.Status IN ('active', 'published', 'scheduled')
                     ) * 100)
                     ELSE 0
                   END
@@ -162,12 +162,12 @@ class ProgressRepository {
            AND l.Status = 'VISIBLE'
            AND u.Status = 'VISIBLE') as TotalLessonDuration,
           
-          -- Đếm tổng số assignments
+          -- Đếm tổng số assignments (bỏ điều kiện unit status)
           (SELECT COUNT(*) 
            FROM assignment a
            INNER JOIN unit u ON a.UnitID = u.UnitID
            WHERE u.CourseID = c.CourseID 
-           AND a.Status = 'published') as TotalAssignments,
+          AND a.Status IN ('active', 'published', 'scheduled')) as TotalAssignments,
           
           -- Đếm số assignments đã hoàn thành
           (SELECT COUNT(DISTINCT a.AssignmentID)
@@ -175,9 +175,9 @@ class ProgressRepository {
            INNER JOIN unit u ON a.UnitID = u.UnitID
            INNER JOIN submission s ON s.AssignmentID = a.AssignmentID
            WHERE u.CourseID = c.CourseID 
-           AND s.LearnerID = e.LearnerID
-           AND s.Status IN ('submitted', 'late')
-           AND a.Status = 'published') as CompletedAssignments,
+          AND s.LearnerID = e.LearnerID
+          AND s.Status IN ('submitted', 'late', 'graded')
+          AND a.Status IN ('active', 'published', 'scheduled')) as CompletedAssignments,
           
           -- Điểm trung bình assignments
           (SELECT COALESCE(AVG(s.Score), 0)
@@ -298,6 +298,15 @@ class ProgressRepository {
 
       const [rows] = await db.query(query, params);
 
+      // DEBUG: Log raw data
+      console.log("=== PROGRESS REPOSITORY DEBUG ===");
+      console.log("Raw rows from DB:", rows.length);
+      if (rows.length > 0) {
+        console.log("First course TotalAssignments:", rows[0].TotalAssignments);
+        console.log("First course CompletedAssignments:", rows[0].CompletedAssignments);
+        console.log("First course CourseID:", rows[0].CourseID);
+      }
+
       // Tính toán tiến độ chi tiết
       const results = rows.map((row) => {
         // Tính % hoàn thành lessons (40% trọng số)
@@ -394,7 +403,7 @@ class ProgressRepository {
           
         FROM unit u
         LEFT JOIN lesson l ON u.UnitID = l.UnitID AND l.Status = 'VISIBLE'
-        LEFT JOIN assignment a ON u.UnitID = a.UnitID AND a.Status = 'published'
+        LEFT JOIN assignment a ON u.UnitID = a.UnitID AND a.Status IN ('active', 'published', 'scheduled')
         WHERE u.CourseID = ?
         AND u.Status = 'VISIBLE'
         GROUP BY u.UnitID, u.Title, u.Description, u.Duration, u.OrderIndex

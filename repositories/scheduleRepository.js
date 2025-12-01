@@ -347,14 +347,15 @@ async getInstructorWeeklySchedule(instructorId, weekStartDate) {
       [instructorId, startDateStr, endDateStr]
     );
 
-    // Tạo Map để lưu status từ instructortimeslot (Date đã là string)
+    // Tạo Map để lưu status từ instructortimeslot
     const instructorSlotStatusMap = new Map();
     allInstructorSlots.forEach((slot) => {
       const key = `${slot.Date}_${slot.TimeslotID}`;
-      instructorSlotStatusMap.set(key, slot.Status);
+      // Chuyển status về lowercase để xử lý thống nhất
+      instructorSlotStatusMap.set(key, slot.Status.toLowerCase());
     });
 
-    // Tạo Set cho teaching sessions (Date đã là string)
+    // Tạo Set cho teaching sessions
     const teachingMap = new Set();
     teachingSessions.forEach((session) => {
       const key = `${session.Date}_${session.TimeslotID}`;
@@ -389,8 +390,8 @@ async getInstructorWeeklySchedule(instructorId, weekStartDate) {
       schedule.push({
         TimeslotID: timeslot.TimeslotID,
         Day: timeslot.Day,
-        StartTime: timeslot.StartTime,  // Đã là string từ dateStrings: true
-        EndTime: timeslot.EndTime,      // Đã là string từ dateStrings: true
+        StartTime: timeslot.StartTime,
+        EndTime: timeslot.EndTime,
         Date: dateForThisDay,
         Status: status,
       });
@@ -408,7 +409,6 @@ async getInstructorWeeklySchedule(instructorId, weekStartDate) {
     throw error;
   }
 }
-
 // Helper functions (giữ nguyên)
 formatDateToString(date) {
   if (!date) return "";
