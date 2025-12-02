@@ -142,7 +142,10 @@ const getInstructorClassScheduleService = async (classId, instructorId) => {
     throw new ServiceError("Bạn không có quyền truy cập lớp này", 403);
   }
 
-  const sessions = await instructorClassRosterRepository.getSessions(classId);
+  const sessions = await instructorClassRosterRepository.getSessions(
+    classId,
+    instructorId
+  );
 
   const totalStudents =
     await instructorClassRosterRepository.getTotalEnrolledStudents(classId);
@@ -151,7 +154,7 @@ const getInstructorClassScheduleService = async (classId, instructorId) => {
     sessions.map(async (session) => {
       const attendedCount =
         await instructorClassRosterRepository.getAttendedCount(
-          session.SessionID
+          session.sessionId
         );
       const isFullyMarked =
         totalStudents > 0 && attendedCount === totalStudents;
@@ -206,9 +209,12 @@ const saveAttendanceService = async (
   if (classObj.InstructorID !== instructorId)
     throw new ServiceError("Bạn không có quyền điểm danh lớp này", 403);
 
-  const sessions = await instructorClassRosterRepository.getSessions(classId);
+  const sessions = await instructorClassRosterRepository.getSessions(
+    classId,
+    instructorId
+  );
   const sessionExists = sessions.some(
-    (s) => s.SessionID === parseInt(sessionId)
+    (s) => s.sessionId === parseInt(sessionId)
   );
   if (!sessionExists)
     throw new ServiceError("Buổi học không thuộc lớp này", 400);
@@ -284,7 +290,6 @@ const getInstructorScheduleService = async (instructorId) => {
 };
 
 // 8. Lấy danh sách lịch rảnh của giảng viên
-
 const getInstructorAvailabilityService = async (
   instructorId,
   startDate,
