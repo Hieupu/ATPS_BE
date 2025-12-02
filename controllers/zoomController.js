@@ -7,23 +7,17 @@ const { time } = require("console");
 
 let zoomCache = [];
 
-const cleanupZoomCache = () => {
-  const now = Date.now();
-  const TWO_HOURS = 140 * 60 * 1000;
-
+const cleanupZoomCache = (accIdToRemove, sessionIdToRemove) => {
   const beforeCount = zoomCache.length;
 
   zoomCache = zoomCache.filter(item => {
-    return (now - item.cachedAt) < TWO_HOURS;
+    return !(item.accId === accIdToRemove && item.sessionId === sessionIdToRemove);
   });
 
   if (beforeCount !== zoomCache.length) {
-    console.log(`Đã dọn ${beforeCount - zoomCache.length} bản ghi cũ khỏi zoomCache. Còn lại: ${zoomCache.length}`);
   }
 };
 
-setInterval(cleanupZoomCache, 15 * 60 * 1000);
-cleanupZoomCache();
 
 class ZoomController {
   // POST /api/zoom/signature
@@ -46,8 +40,8 @@ class ZoomController {
       });
     }
 
-      const iat = Math.floor(Date.now() / 1000); // timestamp hiện tại (giây)
-      const exp = iat + 60 * 60 * 2; // 2h hợp lệ
+      const iat = Math.floor(Date.now() / 1000);
+      const exp = iat + 60 * 60 * 2; 
 
       const oHeader = { alg: "HS256", typ: "JWT" };
       const oPayload = {
@@ -158,7 +152,7 @@ class ZoomController {
 
       const attend = await attendanceService.attendanceLogic(parseData?.accId, parseData?.startTime, parseData?.endTime,      
       parseData?.date, parseData?.sessionId, joinTime, "join");
-      console.log("📌 Attendance result:", attend);
+      console.log("Attendance result:", attend);
 
       return res.status(200).json({ success: true, join: attend });
     }
@@ -174,7 +168,8 @@ class ZoomController {
       parseData?.date, parseData?.sessionId, leaveTime, "leave");
 
       console.log("Attendance result:", attend);
-
+      cleanupZoomCache(parseData?.accId, parseData?.sessionId);
+      console.log("Zoom cache cleaned up. Current cache size:", zoomCache.length);
       return res.status(200).json({ success: true, leave: attend });
     }
 
