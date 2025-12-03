@@ -43,6 +43,27 @@ class InstructorCourseRepository {
     return rows[0].InstructorID;
   }
 
+async getLearnerByAccountId(accId) {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      `SELECT 
+         LearnerID,
+         FullName,
+         DateOfBirth,
+         ProfilePicture,
+         Job,
+         Address,
+         AccID
+       FROM learner 
+       WHERE AccID = ? 
+       LIMIT 1`,
+      [accId]
+    );
+
+    if (!rows.length) return null;
+    return rows[0];
+}
+
   async listByInstructor(instructorId) {
     const db = await connectDB();
     const [rows] = await db.query(
