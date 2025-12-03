@@ -142,7 +142,10 @@ const getInstructorClassScheduleService = async (classId, instructorId) => {
     throw new ServiceError("Bạn không có quyền truy cập lớp này", 403);
   }
 
-  const sessions = await instructorClassRosterRepository.getSessions(classId);
+  const sessions = await instructorClassRosterRepository.getSessions(
+    classId,
+    instructorId
+  );
 
   const totalStudents =
     await instructorClassRosterRepository.getTotalEnrolledStudents(classId);
@@ -151,7 +154,7 @@ const getInstructorClassScheduleService = async (classId, instructorId) => {
     sessions.map(async (session) => {
       const attendedCount =
         await instructorClassRosterRepository.getAttendedCount(
-          session.SessionID
+          session.sessionId
         );
       const isFullyMarked =
         totalStudents > 0 && attendedCount === totalStudents;
@@ -206,9 +209,12 @@ const saveAttendanceService = async (
   if (classObj.InstructorID !== instructorId)
     throw new ServiceError("Bạn không có quyền điểm danh lớp này", 403);
 
-  const sessions = await instructorClassRosterRepository.getSessions(classId);
+  const sessions = await instructorClassRosterRepository.getSessions(
+    classId,
+    instructorId
+  );
   const sessionExists = sessions.some(
-    (s) => s.SessionID === parseInt(sessionId)
+    (s) => s.sessionId === parseInt(sessionId)
   );
   if (!sessionExists)
     throw new ServiceError("Buổi học không thuộc lớp này", 400);
@@ -233,6 +239,133 @@ const saveAttendanceService = async (
   return { success: true, message: "Điểm danh đã được lưu thành công" };
 };
 
+// Lấy thời khóa biểu của instructor (tất cả các lớp)
+const getInstructorScheduleService = async (instructorId) => {
+  const sessions =
+    await instructorClassRosterRepository.getSessionsByInstructor(instructorId);
+
+  if (!sessions || sessions.length === 0) {
+    return {
+      Sessions: [],
+      message: "Không có buổi học nào",
+    };
+  }
+
+  const classIds = [...new Set(sessions.map((s) => s.classId))];
+
+  const classStudentCounts = await Promise.all(
+    classIds.map(async (classId) => {
+      const count =
+        await instructorClassRosterRepository.getTotalEnrolledStudents(classId);
+      return { classId, count };
+    })
+  );
+
+  const studentCountMap = Object.fromEntries(
+    classStudentCounts.map((item) => [item.classId, item.count])
+  );
+
+  const enrichedSessions = await Promise.all(
+    sessions.map(async (session) => {
+      const totalStudents = studentCountMap[session.classId] || 0;
+      const attendedCount =
+        await instructorClassRosterRepository.getAttendedCount(
+          session.sessionId
+        );
+      const isFullyMarked =
+        totalStudents > 0 && attendedCount === totalStudents;
+
+      return {
+        ...session,
+        attendedCount,
+        totalStudents,
+        isFullyMarked,
+      };
+    })
+  );
+
+  return {
+    Sessions: enrichedSessions,
+  };
+};
+
+// 8. Lấy danh sách lịch rảnh của giảng viên
+const getInstructorAvailabilityService = async (
+  instructorId,
+  startDate,
+  endDate
+) => {
+  if (!startDate || !endDate) {
+    throw new ServiceError(
+      "Vui lòng cung cấp ngày bắt đầu và ngày kết thúc",
+      400
+    );
+  }
+
+  // Sử dụng Promise.all để chạy song song 2 câu lệnh (Tối ưu tốc độ)
+  const [availabilityData, occupiedData] = await Promise.all([
+    // 1. Lấy những slot đã tick "Rảnh" (Màu xanh)
+    instructorClassRosterRepository.getInstructorAvailability(
+      instructorId,
+      startDate,
+      endDate
+    ),
+
+    instructorClassRosterRepository.getInstructorOccupiedSlots(
+      instructorId,
+      startDate,
+      endDate
+    ),
+  ]);
+
+  return {
+    availability: availabilityData,
+    occupied: occupiedData,
+  };
+};
+
+// 9. Cập nhật lịch rảnh (Save Availability)
+const saveInstructorAvailabilityService = async (
+  instructorId,
+  startDate,
+  endDate,
+  slots
+) => {
+  if (!startDate || !endDate) {
+    throw new ServiceError(
+      "Vui lòng cung cấp ngày bắt đầu và ngày kết thúc",
+      400
+    );
+  }
+
+  if (!Array.isArray(slots)) {
+    throw new ServiceError(
+      "Dữ liệu lịch đăng ký (slots) phải là một danh sách",
+      400
+    );
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  if (startDate < today) {
+    throw new ServiceError(
+      "Không thể cập nhật lịch cho ngày trong quá khứ",
+      400
+    );
+  }
+
+  await instructorClassRosterRepository.saveInstructorAvailability(
+    instructorId,
+    startDate,
+    endDate,
+    slots
+  );
+
+  return {
+    success: true,
+    message: "Cập nhật lịch rảnh thành công",
+  };
+};
+
 module.exports = {
   listInstructorClassesService,
   getInstructorClassDetailService,
@@ -240,4 +373,7 @@ module.exports = {
   getInstructorClassScheduleService,
   getAttendanceSheetService,
   saveAttendanceService,
+  getInstructorScheduleService,
+  getInstructorAvailabilityService,
+  saveInstructorAvailabilityService,
 };

@@ -2,7 +2,21 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const connectDB = require("../config/db");
 const accountRepository = require("../repositories/accountRepository");
+const instructorRepository = require("../repositories/instructorRepository");
 require("dotenv").config();
+
+const courseRepository = require("../repositories/instructorCourseRepository");
+
+const getInstructorId = async (accId) => {
+  const instructorId = await courseRepository.findInstructorIdByAccountId(
+    accId
+  );
+
+  if (!instructorId) {
+    throw new Error("Instructor không tồn tại");
+  }
+  return instructorId;
+};
 
 class ServiceError extends Error {
   constructor(message, status = 400) {
@@ -12,11 +26,22 @@ class ServiceError extends Error {
 }
 
 // services/authService.js
-const loginService = async (email, password, provider = "local") => {
+const loginService = async (
+  email,
+  password,
+  provider = "local",
+  rememberMe = false
+) => {
   const user = await accountRepository.findAccountByEmail(email);
 
   if (!user) {
-    throw new ServiceError("User not found", 401);
+    if (password) {
+      await bcrypt.compare(
+        password,
+        "$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"
+      );
+    }
+    throw new ServiceError("Email hoặc mật khẩu không chính xác", 401);
   }
 
   const userProvider = user.Provider.toLowerCase();
@@ -24,48 +49,70 @@ const loginService = async (email, password, provider = "local") => {
 
   if (userProvider !== loginProvider) {
     if (userProvider === "local") {
-      throw new ServiceError("This account requires password login", 401);
+      throw new ServiceError(
+        "Tài khoản này yêu cầu đăng nhập bằng mật khẩu",
+        401
+      );
     } else {
       throw new ServiceError(
-        `This account can only login via ${user.Provider}`,
+        `Tài khoản này chỉ có thể đăng nhập qua ${user.Provider}`,
         401
       );
     }
   }
 
-  // Xác thực mật khẩu chỉ cho local
   if (loginProvider === "local") {
     if (!password) {
-      throw new ServiceError("Password is required for local login", 400);
+      throw new ServiceError("Vui lòng nhập mật khẩu", 400);
+    }
+
+    if (!user.Password) {
+      throw new ServiceError("Email hoặc mật khẩu không chính xác", 401);
     }
 
     const match = await bcrypt.compare(password, user.Password);
-    if (!match) throw new ServiceError("Invalid credentials", 401);
+    if (!match) {
+      throw new ServiceError("Email hoặc mật khẩu không chính xác", 401);
+    }
   }
 
   const role = await determineUserRole(user.AccID);
 
-  const featureNames = await accountRepository.getFeaturesByAccountId(
-    user.AccID
-  );
+  let profilePicture = null;
+
+  if (role === "instructor") {
+    const instructorId = await getInstructorId(user.AccID);
+
+    const instructor = await instructorRepository.getInstructorById(
+      instructorId
+    );
+
+    profilePicture = instructor?.ProfilePicture || null;
+  }
+
+  const expiresIn = rememberMe ? "30d" : "1h";
+  const expiresInSeconds = rememberMe ? 30 * 24 * 60 * 60 : 3600;
 
   const token = jwt.sign(
     {
       id: user.AccID,
       email: user.Email,
-      username: user.Username,
-      features: featureNames,
-      role: role,
+      Username: user.Username,
+      role: role, // Đảm bảo role được thêm vào token
     },
     process.env.JWT_SECRET,
-    { expiresIn: "1h" }
+    { expiresIn }
   );
 
   return {
     token,
+    expiresIn: expiresInSeconds,
     user: {
-      ...user,
+      id: user.AccID,
+      email: user.Email,
+      username: user.Username,
       role: role,
+      ProfilePicture: profilePicture,
     },
   };
 };

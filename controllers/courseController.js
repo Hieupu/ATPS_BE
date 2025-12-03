@@ -197,7 +197,7 @@ const getCourseAssignments = async (req, res) => {
     }
 
     const learnerId = learner.LearnerID;
-    const assignments = await courseRepository.getAssignmentsWithSubmissions(courseId, learnerId);
+    const assignments = await courseRepository.getCourseAssignments(courseId, learnerId);
 
     res.json({ 
       success: true, 
