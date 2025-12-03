@@ -191,6 +191,50 @@ class AttendanceRepository {
       throw error;
     }
   }
+
+  async recordAttendance(learnerId, sessionId, status, note) {
+    try {
+      const db = await connectDB();
+
+      if (!learnerId || !sessionId) {
+        return { success: false, message: "LearnerID and SessionID are required" };
+      }
+
+      // Check existing attendance
+      const [existing] = await db.query(
+        `SELECT * FROM attendance 
+        WHERE LearnerID = ? AND SessionID = ?`,
+        [learnerId, sessionId]
+      );
+
+      const now = new Date();
+
+      if (existing.length === 0) {
+        // INSERT NEW
+        await db.query(
+          `INSERT INTO attendance (LearnerID, SessionID, Status, Date, note)
+          VALUES (?, ?, ?, ?, ?)`,
+          [learnerId, sessionId, status, now, note]
+        );
+
+        return { success: true, message: "Attendance created" };
+      }
+
+      // UPDATE EXISTING
+      await db.query(
+        `UPDATE attendance 
+        SET Status = ?, Date = ?, note = ?
+        WHERE LearnerID = ? AND SessionID = ?`,
+        [status, now, note, learnerId, sessionId]
+      );
+
+      return { success: true, message: "Attendance updated" };
+    } catch (error) {
+      console.error("Attendance updating error:", error);
+      return { success: false, message: "Failed to update attendance" };
+    }
+  }
+
 }
 
 module.exports = new AttendanceRepository();
