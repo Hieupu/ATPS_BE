@@ -8,6 +8,7 @@ const {
   getInstructorScheduleService,
   getInstructorAvailabilityService,
   saveInstructorAvailabilityService,
+  addInstructorAvailabilityService,
 } = require("../services/instructorClassService");
 const courseRepository = require("../repositories/instructorCourseRepository");
 
@@ -155,13 +156,10 @@ const getInstructorSchedule = async (req, res) => {
 //  Lấy danh sách lịch rảnh (Availability)
 const getInstructorAvailability = async (req, res) => {
   try {
-  
     const instructorId = await getInstructorId(Number(req.user.id));
 
- 
     const { startDate, endDate } = req.query;
 
-  
     const result = await getInstructorAvailabilityService(
       instructorId,
       startDate,
@@ -202,6 +200,24 @@ const saveInstructorAvailability = async (req, res) => {
   }
 };
 
+const addInstructorAvailability = async (req, res) => {
+  try {
+    const instructorId = await getInstructorId(Number(req.user.id));
+
+    const { slots } = req.body;
+
+    // Gọi Service xử lý (Logic chỉ thêm, không xóa)
+    const result = await addInstructorAvailabilityService(instructorId, slots);
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("addInstructorAvailability error:", error);
+    res.status(error.status || 500).json({
+      message: error.message || "Lỗi khi đăng ký thêm lịch rảnh",
+    });
+  }
+};
+
 module.exports = {
   listInstructorClasses,
   getInstructorClassDetail,
@@ -212,4 +228,5 @@ module.exports = {
   getInstructorSchedule,
   getInstructorAvailability,
   saveInstructorAvailability,
+  addInstructorAvailability,
 };

@@ -9,6 +9,7 @@ const {
   getInstructorSchedule,
   getInstructorAvailability,
   saveInstructorAvailability,
+  addInstructorAvailability,
 } = require("../controllers/instructorClassController");
 
 const { verifyToken, authorizeRole } = require("../middlewares/middware");
@@ -83,6 +84,14 @@ router.post(
   verifyToken,
   authorizeRole("instructor"),
   saveInstructorAvailability
+);
+
+// 10. Đăng ký thêm lịch rảnh (nhiều buổi)
+router.post(
+  "/availability/add",
+  verifyToken,
+  authorizeRole("instructor"),
+  addInstructorAvailability
 );
 
 module.exports = router;

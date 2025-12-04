@@ -366,6 +366,73 @@ const saveInstructorAvailabilityService = async (
   };
 };
 
+// 10. Đăng ký lịch rảnh (Chế độ bổ sung - Có check trùng)
+const addInstructorAvailabilityService = async (instructorId, slots) => {
+  // 1. Validate dữ liệu đầu vào
+  if (!instructorId) {
+    throw new ServiceError("Thiếu thông tin giảng viên", 400);
+  }
+
+  if (!Array.isArray(slots) || slots.length === 0) {
+    throw new ServiceError("Danh sách lịch đăng ký không được để trống", 400);
+  }
+
+  // 2. Validate ngày quá khứ
+  const today = new Date().toISOString().split("T")[0];
+  const hasPastDate = slots.some((slot) => slot.date < today);
+
+  if (hasPastDate) {
+    throw new ServiceError(
+      "Không thể đăng ký lịch cho ngày trong quá khứ",
+      400
+    );
+  }
+
+  // --- BƯỚC MỚI: CHECK LỊCH ĐÃ TỒN TẠI ---
+
+  // a. Tìm khoảng thời gian Min-Max trong danh sách gửi lên
+  // Để gọi DB lấy dữ liệu cũ ra so sánh
+  const dates = slots.map((s) => s.date).sort();
+  const startDate = dates[0];
+  const endDate = dates[dates.length - 1];
+
+  // b. Lấy danh sách lịch rảnh ĐÃ CÓ trong khoảng thời gian đó
+  const existingSlots = await instructorClassRosterRepository.getInstructorAvailability(
+    instructorId,
+    startDate,
+    endDate
+  );
+
+  // c. Tạo Set (Key dạng "YYYY-MM-DD_TimeslotID") để tra cứu cho nhanh
+  const existingSet = new Set(
+    existingSlots.map((item) => `${item.date}_${item.timeslotId}`)
+  );
+
+  // d. Lọc danh sách: Chỉ giữ lại những slot CHƯA CÓ trong existingSet
+  const slotsToInsert = slots.filter((slot) => {
+    const key = `${slot.date}_${slot.timeslotId}`;
+    return !existingSet.has(key);
+  });
+
+  // 3. Gọi Repository để thêm mới (Chỉ thêm những cái chưa có)
+  if (slotsToInsert.length > 0) {
+    await instructorClassRosterRepository.addInstructorAvailability(
+      instructorId,
+      slotsToInsert
+    );
+  }
+
+  // 4. Trả về kết quả chi tiết hơn
+  const skippedCount = slots.length - slotsToInsert.length;
+  
+  return {
+    success: true,
+    message: `Đã đăng ký thêm ${slotsToInsert.length} buổi. (Bỏ qua ${skippedCount} buổi đã tồn tại)`,
+    inserted: slotsToInsert.length,
+    skipped: skippedCount
+  };
+};
+
 module.exports = {
   listInstructorClassesService,
   getInstructorClassDetailService,
@@ -376,4 +443,5 @@ module.exports = {
   getInstructorScheduleService,
   getInstructorAvailabilityService,
   saveInstructorAvailabilityService,
+  addInstructorAvailabilityService,
 };
