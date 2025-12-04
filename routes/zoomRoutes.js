@@ -5,7 +5,7 @@ const attendanceController = require('../controllers/attendanceController');
 
 router.post('/signature', zoomController.generateSignature);
 router.post('/attendance', attendanceController.recordAttendance);
-router.post('/webhook', attendanceController.takeAttendanceAuto);
+router.post('/webhook', zoomController.zoomRes);
 router.get('/attendance/:sessionId', attendanceController.getAttendanceBySession);
 
 module.exports = router;

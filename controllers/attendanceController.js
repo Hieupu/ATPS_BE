@@ -1,7 +1,6 @@
 const attendanceService = require("../services/attendanceService");
 const connectDB = require("../config/db");
 const crypto = require("crypto");
-const axios = require("axios")
 
 class AttendanceController {
   async getLearnerAttendance(req, res) {
@@ -188,81 +187,7 @@ class AttendanceController {
     }
   }
 
-async takeAttendanceAuto(req, res) {
-  console.log("a");
-  try {
-    const event = req.body.event;
-    const data = req.body.payload?.object;
-
-    // URL VALIDATION
-    if (event === "endpoint.url_validation") {
-      const plainToken = req.body.payload.plainToken;
-      const webhookSecret = process.env.ZOOM_WEBHOOK_SECRET;
-
-      const hash = crypto
-        .createHmac("sha256", webhookSecret)
-        .update(plainToken)
-        .digest("hex");
-
-      return res.json({
-        plainToken,
-        encryptedToken: hash,
-      });
-    }
-
-    // PARTICIPANT JOIN
-    if (event === "meeting.participant_joined") {
-      console.log("📥 Joined:", data);
-      const sessionUuid = encodeURIComponent(data.uuid);
-      const tokenUrl = `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${process.env.ZOOM_ACCOUNT_ID}`;
-      const authHeader = Buffer.from(`${process.env.ZOOM_CLIENT_ID}:${process.env.ZOOM_CLIENT_SECRET}`).toString("base64");
-      const response = await axios.post(tokenUrl, null, {
-      headers: { Authorization: `Basic ${authHeader}` },
-      });
-      const zoomRes = await axios.get(
-        `https://api.zoom.us/v2/past_meetings/${sessionUuid}/participants`,
-        {
-          headers: {
-            Authorization: `Bearer ${response.data.access_token}`,
-          },
-        }
-      );
-
-      console.log("📚 Past meeting participants:", zoomRes.data);
-
-      return res.status(200).json(zoomRes.data);
-    }
-
-    // PARTICIPANT LEFT → GỌI PAST MEETING
-    if (event === "meeting.participant_left") {
-      console.log("📤 Left:", data);
-      const sessionUuid = encodeURIComponent(data.uuid);
-      const tokenUrl = `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${process.env.ZOOM_ACCOUNT_ID}`;
-      const authHeader = Buffer.from(`${process.env.ZOOM_CLIENT_ID}:${process.env.ZOOM_CLIENT_SECRET}`).toString("base64");
-      const response = await axios.post(tokenUrl, null, {
-      headers: { Authorization: `Basic ${authHeader}` },
-      });
-      const zoomRes = await axios.get(
-        `https://api.zoom.us/v2/past_meetings/${sessionUuid}/participants`,
-        {
-          headers: {
-            Authorization: `Bearer ${response.data.access_token}`,
-          },
-        }
-      );
-
-      console.log("📚 Past meeting participants:", zoomRes.data);
-
-      return res.status(200).json(zoomRes.data);
-    }
-
-    // DEFAULT
-    res.status(200).send("ignored");
-  } catch (error) {
-    console.error("Auto attendance error:", error?.response?.data || error);
-    res.status(500).json({ message: "Failed to take attendance" });
-  }
-}
+  
 
 }
 
