@@ -16,7 +16,7 @@ class ProfileService {
         Username: account.Username,
         Email: account.Email,
         Phone: account.Phone,
-         Gender: account.Gender,
+        Gender: account.Gender,
         Role: role // Sử dụng role đã xác định
       }
     };

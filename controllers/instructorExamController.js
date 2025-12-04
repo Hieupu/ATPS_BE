@@ -4,41 +4,54 @@ const {
   getExamsService,
   getExamDetailService,
   deleteExamService,
-  
-  // Section Management Services (MỚI)
+  archiveExamService,
+  getArchivedExamsService,
+
+  // Classes
+  getClassesByCourseService,
+
+  // Section Management
   createExamSectionService,
   updateExamSectionService,
   deleteExamSectionService,
   getSectionsService,
-  
+  getSectionDetailService,
+
   // Question Bank
   createQuestionService,
   getQuestionsService,
   getQuestionDetailService,
   updateQuestionService,
   deleteQuestionService,
-  
-  // Section-Question Management (CẬP NHẬT)
+
+  // Section-Question Management
   addQuestionsToSectionService,
   removeQuestionFromSectionService,
-  
+  updateQuestionOrderService,
+
   // Grading
   getExamResultsService,
   getLearnerSubmissionService,
   autoGradeExamService,
-  manualGradeExamService
+  manualGradeExamService,
+
+  // Status Check
+  checkAndUpdateExamStatusService,
+  unarchiveExamService 
 } = require("../services/instructorExamService");
 
 // ==================== EXAM CONTROLLERS ====================
 
-//Tạo exam mới (HỖ TRỢ SECTIONS)
+/**
+ * Tạo exam mới
+ */
 const createExam = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const examData = req.body;
-    
+
     const result = await createExamService(instructorAccId, examData);
-    
+
     res.status(201).json({
       success: true,
       ...result
@@ -51,15 +64,17 @@ const createExam = async (req, res) => {
   }
 };
 
-//Cập nhật exam (CẬP NHẬT: hỗ trợ random settings)
+/**
+ * Cập nhật exam
+ */
 const updateExam = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId } = req.params;
     const examData = req.body;
-    
+
     const result = await updateExamService(instructorAccId, examId, examData);
-    
+
     res.status(200).json({
       success: true,
       ...result
@@ -72,7 +87,9 @@ const updateExam = async (req, res) => {
   }
 };
 
-//Lấy danh sách exams
+/**
+ * Lấy danh sách exams
+ */
 const getExams = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -80,9 +97,9 @@ const getExams = async (req, res) => {
       status: req.query.status,
       courseId: req.query.courseId
     };
-    
+
     const exams = await getExamsService(instructorAccId, filters);
-    
+
     res.status(200).json({
       success: true,
       data: exams,
@@ -96,14 +113,16 @@ const getExams = async (req, res) => {
   }
 };
 
-//Lấy chi tiết exam (CẬP NHẬT: bao gồm sections + questions)
+/**
+ * Lấy chi tiết exam (bao gồm cấu trúc phân cấp sections + questions)
+ */
 const getExamDetail = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId } = req.params;
-    
+
     const exam = await getExamDetailService(instructorAccId, examId);
-    
+
     res.status(200).json({
       success: true,
       data: exam
@@ -116,14 +135,16 @@ const getExamDetail = async (req, res) => {
   }
 };
 
-//Xóa exam
+/**
+ * Xóa exam
+ */
 const deleteExam = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId } = req.params;
-    
+
     const result = await deleteExamService(instructorAccId, examId);
-    
+
     res.status(200).json({
       success: true,
       ...result
@@ -136,17 +157,64 @@ const deleteExam = async (req, res) => {
   }
 };
 
-// ==================== SECTION MANAGEMENT CONTROLLERS (MỚI) ====================
+/**
+ * Lưu trữ exam
+ */
+const archiveExam = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    const { examId } = req.params;
+    
+    const result = await archiveExamService(instructorAccId, examId);
+    
+    res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({
+      success: false,
+      message: err.message || "Lỗi khi lưu trữ bài thi"
+    });
+  }
+};
 
-//Tạo section cho exam
+/**
+ * Lấy danh sách exam đã lưu trữ
+ */
+const getArchivedExams = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    
+    const exams = await getArchivedExamsService(instructorAccId);
+    
+    res.status(200).json({
+      success: true,
+      data: exams,
+      total: exams.length
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message || "Lỗi khi lấy danh sách bài thi đã lưu trữ"
+    });
+  }
+};
+
+// ==================== SECTION MANAGEMENT CONTROLLERS====================
+
+/**
+ * Tạo section cho exam (có thể là parent hoặc child section)
+ * Body: { type, orderIndex, parentSectionId? }
+ */
 const createExamSection = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId } = req.params;
     const sectionData = req.body;
-    
+
     const result = await createExamSectionService(instructorAccId, examId, sectionData);
-    
+
     res.status(201).json({
       success: true,
       ...result
@@ -154,20 +222,23 @@ const createExamSection = async (req, res) => {
   } catch (err) {
     res.status(err.status || 400).json({
       success: false,
-      message: err.message || "Lỗi khi tạo phần thi"
+      message: err.message || "Lỗi khi tạo section"
     });
   }
 };
 
-//Cập nhật section
+/**
+ * Cập nhật section
+ * Body: { type, orderIndex, parentSectionId? }
+ */
 const updateExamSection = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId, sectionId } = req.params;
     const sectionData = req.body;
-    
+
     const result = await updateExamSectionService(instructorAccId, examId, sectionId, sectionData);
-    
+
     res.status(200).json({
       success: true,
       ...result
@@ -175,19 +246,21 @@ const updateExamSection = async (req, res) => {
   } catch (err) {
     res.status(err.status || 400).json({
       success: false,
-      message: err.message || "Lỗi khi cập nhật phần thi"
+      message: err.message || "Lỗi khi cập nhật section"
     });
   }
 };
 
-//Xóa section
+/**
+ * Xóa section (sẽ xóa cả child sections và questions)
+ */
 const deleteExamSection = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId, sectionId } = req.params;
-    
+
     const result = await deleteExamSectionService(instructorAccId, examId, sectionId);
-    
+
     res.status(200).json({
       success: true,
       ...result
@@ -195,42 +268,69 @@ const deleteExamSection = async (req, res) => {
   } catch (err) {
     res.status(err.status || 400).json({
       success: false,
-      message: err.message || "Lỗi khi xóa phần thi"
+      message: err.message || "Lỗi khi xóa section"
     });
   }
 };
 
-//Lấy danh sách sections của exam
+/**
+ * Lấy danh sách sections của exam
+ * Query: ?hierarchical=true (default) hoặc false
+ */
 const getSections = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId } = req.params;
-    
-    const sections = await getSectionsService(instructorAccId, examId);
-    
+    const hierarchical = req.query.hierarchical !== 'false'; // default true
+    const sections = await getSectionsService(instructorAccId, examId, hierarchical);
+
     res.status(200).json({
       success: true,
       data: sections,
-      total: sections.length
+      hierarchical: hierarchical
     });
   } catch (err) {
     res.status(err.status || 500).json({
       success: false,
-      message: err.message || "Lỗi khi lấy danh sách phần thi"
+      message: err.message || "Lỗi khi lấy danh sách sections"
+    });
+  }
+};
+
+/**
+ * Lấy chi tiết một section (bao gồm child sections và questions)
+ */
+const getSectionDetail = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    const { examId, sectionId } = req.params;
+
+    const section = await getSectionDetailService(instructorAccId, examId, sectionId);
+
+    res.status(200).json({
+      success: true,
+      data: section
+    });
+  } catch (err) {
+    res.status(err.status || 404).json({
+      success: false,
+      message: err.message || "Lỗi khi lấy chi tiết section"
     });
   }
 };
 
 // ==================== QUESTION BANK CONTROLLERS ====================
 
-//Tạo câu hỏi mới
+/**
+ * Tạo câu hỏi mới
+ */
 const createQuestion = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const questionData = req.body;
-    
+
     const result = await createQuestionService(instructorAccId, questionData);
-    
+
     res.status(201).json({
       success: true,
       ...result
@@ -243,7 +343,9 @@ const createQuestion = async (req, res) => {
   }
 };
 
-//Lấy danh sách câu hỏi
+/**
+ * Lấy danh sách câu hỏi
+ */
 const getQuestions = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -252,9 +354,9 @@ const getQuestions = async (req, res) => {
       level: req.query.level,
       type: req.query.type
     };
-    
+
     const questions = await getQuestionsService(instructorAccId, filters);
-    
+
     res.status(200).json({
       success: true,
       data: questions,
@@ -268,14 +370,16 @@ const getQuestions = async (req, res) => {
   }
 };
 
-//Lấy chi tiết câu hỏi
+/**
+ * Lấy chi tiết câu hỏi
+ */
 const getQuestionDetail = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { questionId } = req.params;
-    
+
     const question = await getQuestionDetailService(instructorAccId, questionId);
-    
+
     res.status(200).json({
       success: true,
       data: question
@@ -288,15 +392,17 @@ const getQuestionDetail = async (req, res) => {
   }
 };
 
-//Cập nhật câu hỏi
+/**
+ * Cập nhật câu hỏi
+ */
 const updateQuestion = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { questionId } = req.params;
     const questionData = req.body;
-    
+
     const result = await updateQuestionService(instructorAccId, questionId, questionData);
-    
+
     res.status(200).json({
       success: true,
       ...result
@@ -309,14 +415,16 @@ const updateQuestion = async (req, res) => {
   }
 };
 
-//Xóa câu hỏi
+/**
+ * Xóa câu hỏi
+ */
 const deleteQuestion = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { questionId } = req.params;
-    
+
     const result = await deleteQuestionService(instructorAccId, questionId);
-    
+
     res.status(200).json({
       success: true,
       ...result
@@ -329,17 +437,20 @@ const deleteQuestion = async (req, res) => {
   }
 };
 
-// ==================== SECTION-QUESTION MANAGEMENT (CẬP NHẬT) ====================
+// ==================== SECTION-QUESTION MANAGEMENT ====================
 
-//Thêm câu hỏi vào section (THAY ĐỔI: từ exam sang section)
+/**
+ * Thêm câu hỏi vào section
+ * Body: { questionIds: [1, 2, 3] }
+ */
 const addQuestionsToSection = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId, sectionId } = req.params;
     const { questionIds } = req.body;
-    
+
     const result = await addQuestionsToSectionService(instructorAccId, examId, sectionId, questionIds);
-    
+
     res.status(200).json({
       success: true,
       ...result
@@ -347,19 +458,21 @@ const addQuestionsToSection = async (req, res) => {
   } catch (err) {
     res.status(err.status || 400).json({
       success: false,
-      message: err.message || "Lỗi khi thêm câu hỏi vào phần thi"
+      message: err.message || "Lỗi khi thêm câu hỏi vào section"
     });
   }
 };
 
-//Xóa câu hỏi khỏi section (THAY ĐỔI: từ exam sang section)
+/**
+ * Xóa câu hỏi khỏi section
+ */
 const removeQuestionFromSection = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId, sectionId, questionId } = req.params;
-    
+
     const result = await removeQuestionFromSectionService(instructorAccId, examId, sectionId, questionId);
-    
+
     res.status(200).json({
       success: true,
       ...result
@@ -367,21 +480,53 @@ const removeQuestionFromSection = async (req, res) => {
   } catch (err) {
     res.status(err.status || 400).json({
       success: false,
-      message: err.message || "Lỗi khi xóa câu hỏi khỏi phần thi"
+      message: err.message || "Lỗi khi xóa câu hỏi khỏi section"
+    });
+  }
+};
+
+/**
+ * Cập nhật thứ tự câu hỏi trong section
+ * Body: { orderIndex: 5 }
+ */
+const updateQuestionOrder = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    const { examId, sectionId, questionId } = req.params;
+    const { orderIndex } = req.body;
+
+    const result = await updateQuestionOrderService(
+      instructorAccId, 
+      examId, 
+      sectionId, 
+      questionId, 
+      orderIndex
+    );
+
+    res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({
+      success: false,
+      message: err.message || "Lỗi khi cập nhật thứ tự câu hỏi"
     });
   }
 };
 
 // ==================== GRADING CONTROLLERS ====================
 
-//Lấy danh sách kết quả thi
+/**
+ * Lấy danh sách kết quả thi
+ */
 const getExamResults = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId, classId } = req.params;
-    
+
     const data = await getExamResultsService(instructorAccId, examId, classId);
-    
+
     res.status(200).json({
       success: true,
       ...data
@@ -394,14 +539,16 @@ const getExamResults = async (req, res) => {
   }
 };
 
-//Lấy bài thi của learner để chấm
+/**
+ * Lấy bài thi của learner để chấm
+ */
 const getLearnerSubmission = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId, learnerId } = req.params;
-    
+
     const submission = await getLearnerSubmissionService(instructorAccId, examId, learnerId);
-    
+
     res.status(200).json({
       success: true,
       data: submission
@@ -414,14 +561,16 @@ const getLearnerSubmission = async (req, res) => {
   }
 };
 
-//Chấm bài tự động
+/**
+ * Chấm bài tự động
+ */
 const autoGradeExam = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId, learnerId } = req.params;
-    
+
     const result = await autoGradeExamService(instructorAccId, examId, learnerId);
-    
+
     res.status(200).json({
       success: true,
       ...result
@@ -434,15 +583,18 @@ const autoGradeExam = async (req, res) => {
   }
 };
 
-//Chấm bài thủ công
+/**
+ * Chấm bài thủ công
+ * Body: { score, feedback }
+ */
 const manualGradeExam = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId, learnerId } = req.params;
     const { score, feedback } = req.body;
-    
+
     const result = await manualGradeExamService(instructorAccId, examId, learnerId, score, feedback);
-    
+
     res.status(200).json({
       success: true,
       ...result
@@ -455,6 +607,69 @@ const manualGradeExam = async (req, res) => {
   }
 };
 
+// ==================== CLASSES CONTROLLER ====================
+
+/**
+ * Lấy danh sách lớp học theo khóa học
+ */
+const getClassesByCourse = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    const { courseId } = req.params;
+
+    const classes = await getClassesByCourseService(instructorAccId, courseId);
+
+    res.status(200).json({
+      success: true,
+      data: classes,
+      total: classes.length
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message || "Lỗi khi lấy danh sách lớp học"
+    });
+  }
+};
+/**
+ * Check and update exam status - Controller layer
+ */
+const checkAndUpdateExamStatus = async (req, res) => {
+  try {
+    const result = await checkAndUpdateExamStatusService();
+    
+    res.status(200).json(result);
+    
+  } catch (error) {
+    console.error("❌ Controller: Check exam status error:", error);
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || "Failed to check exam status"
+    });
+  }
+};
+/**
+ * Khôi phục bài thi từ lưu trữ
+ */
+const unarchiveExam = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    const { examId } = req.params;
+    
+    const result = await unarchiveExamService(instructorAccId, examId);
+    
+    res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({
+      success: false,
+      message: err.message || "Lỗi khi khôi phục bài thi"
+    });
+  }
+};
+
 module.exports = {
   // Exam CRUD
   createExam,
@@ -462,27 +677,38 @@ module.exports = {
   getExams,
   getExamDetail,
   deleteExam,
-  
-  // Section Management (MỚI)
+  archiveExam,
+  getArchivedExams,
+
+  // Section Management
   createExamSection,
   updateExamSection,
   deleteExamSection,
   getSections,
-  
+  getSectionDetail,
+
   // Question Bank
   createQuestion,
   getQuestions,
   getQuestionDetail,
   updateQuestion,
   deleteQuestion,
-  
-  // Section-Question Management (CẬP NHẬT)
+
+  // Section-Question Management
   addQuestionsToSection,
   removeQuestionFromSection,
-  
+  updateQuestionOrder,
+
+  // Classes
+  getClassesByCourse,
+
   // Grading
   getExamResults,
   getLearnerSubmission,
   autoGradeExam,
-  manualGradeExam
+  manualGradeExam,
+  
+  // Status Check
+  checkAndUpdateExamStatus,
+  unarchiveExam
 };
