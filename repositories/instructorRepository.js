@@ -225,7 +225,8 @@ async searchInstructors({
           c.Title,
           c.Description,
           c.Duration,
-          c.Status
+          c.Status,
+          c.Image
         FROM course c
         WHERE c.InstructorID = ?
         ORDER BY c.CourseID DESC`,

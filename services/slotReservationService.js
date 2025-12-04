@@ -1,7 +1,7 @@
 // services/slotReservationService.js
-const { redisClient } = require('../config/redisClient');  // 添加解构
+const { redisClient } = require('../config/redisClient');  
 
-const RESERVATION_EXPIRE_SECONDS = 60; // 60 giây
+const RESERVATION_EXPIRE_SECONDS = 120; 
 
 class SlotReservationService {
   
