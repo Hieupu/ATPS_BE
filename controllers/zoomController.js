@@ -90,8 +90,6 @@ class ZoomController {
 
   // POST /api/zoom/webhook
   async zoomRes(req, res) {
-  console.log("========= 🔔 ZOOM WEBHOOK RECEIVED 🔔 =========");
-  console.log("Full body:", JSON.stringify(req.body, null, 2));
   if (req.body.accId && req.body.sessionId) {
 
   const existing = zoomCache.findIndex(z => z.sessionId === req.body.sessionId && z.userName === req.body.userName);
@@ -152,7 +150,6 @@ class ZoomController {
 
       const attend = await attendanceService.attendanceLogic(parseData?.accId, parseData?.startTime, parseData?.endTime,      
       parseData?.date, parseData?.sessionId, joinTime, "join");
-      console.log("Attendance result:", attend);
 
       return res.status(200).json({ success: true, join: attend });
     }
@@ -167,9 +164,7 @@ class ZoomController {
       const attend = await attendanceService.attendanceLogic(parseData?.accId, parseData?.startTime, parseData?.endTime,      
       parseData?.date, parseData?.sessionId, leaveTime, "leave");
 
-      console.log("Attendance result:", attend);
       cleanupZoomCache(parseData?.accId, parseData?.sessionId);
-      console.log("Zoom cache cleaned up. Current cache size:", zoomCache.length);
       return res.status(200).json({ success: true, leave: attend });
     }
 
