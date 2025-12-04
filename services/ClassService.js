@@ -6,6 +6,7 @@ const sessionRepository = require("../repositories/sessionRepository");
 const timeslotRepository = require("../repositories/timeslotRepository");
 const attendanceRepository = require("../repositories/attendanceRepository");
 const paymentRepository = require("../repositories/paymentRepository");
+const refundRepository = require("../repositories/refundRepository");
 const { generateSessions } = require("../utils/scheduleUtils");
 const pool = require("../config/db");
 
@@ -43,7 +44,9 @@ class ClassService {
       }
 
       // Check if instructor exists
-      const instructor = await instructorRepository.findById(classData.InstructorID);
+      const instructor = await instructorRepository.findById(
+        classData.InstructorID
+      );
       if (!instructor) {
         throw new Error("Instructor not found");
       }
@@ -54,9 +57,12 @@ class ClassService {
 
       // Auto-generate sessions if schedule is provided
       if (data.schedule) {
-        const { OpendatePlan, EnddatePlan, DaysOfWeek, TimeslotID } = data.schedule;
-        
+        const { OpendatePlan, EnddatePlan, DaysOfWeek, TimeslotID } =
+          data.schedule;
+
         // Generate sessions array
+        const className =
+          classData.Name || classData.ClassName || `Class ${classId}`;
         const sessions = generateSessions({
           classId,
           instructorId: classData.InstructorID,
@@ -64,6 +70,7 @@ class ClassService {
           endDate: EnddatePlan,
           daysOfWeek: DaysOfWeek,
           timeslotId: TimeslotID,
+          className: className,
         });
 
         // Create each session
@@ -71,7 +78,9 @@ class ClassService {
           await sessionRepository.create(session);
         }
 
-        console.log(`Auto-generated ${sessions.length} sessions for class ${classId}`);
+        console.log(
+          `Auto-generated ${sessions.length} sessions for class ${classId}`
+        );
       }
 
       // Return full class data
@@ -120,13 +129,23 @@ class ClassService {
 
       // Whitelist allowed fields for dbver5 (không có ZoomURL)
       const allowedFields = [
-        'Name', 'CourseID', 'InstructorID', 'Status', 'ZoomID', 'Zoompass', 'Fee',
-        'OpendatePlan', 'Opendate', 'EnddatePlan', 'Enddate',
-        'Numofsession', 'Maxstudent'
+        "Name",
+        "CourseID",
+        "InstructorID",
+        "Status",
+        "ZoomID",
+        "Zoompass",
+        "Fee",
+        "OpendatePlan",
+        "Opendate",
+        "EnddatePlan",
+        "Enddate",
+        "Numofsession",
+        "Maxstudent",
       ];
-      
+
       const filteredData = {};
-      Object.keys(data).forEach(key => {
+      Object.keys(data).forEach((key) => {
         if (allowedFields.includes(key)) {
           filteredData[key] = data[key];
         }
@@ -209,17 +228,24 @@ class ClassService {
       const classScheduleService = require("./classScheduleService");
       const closedClasses = await classScheduleService.autoCloseClasses();
 
-      // Có thể thêm logic khác ở đây (ví dụ: tự động chuyển OPEN -> ON_GOING)
+      // Tự động kích hoạt các lớp từ APPROVED sang ACTIVE
+      const activatedClasses = await this.autoActivateClasses();
+
+      // Tự động chuyển các lớp từ ACTIVE sang ON_GOING khi đến ngày bắt đầu dự kiến (OpendatePlan)
+      const startedClasses = await this.autoStartClass();
+
       return {
+        activatedClasses: activatedClasses,
+        startedClasses: startedClasses,
         closedClasses: closedClasses,
-        message: `Đã đóng ${closedClasses.length} lớp học`,
+        message: `Đã kích hoạt ${activatedClasses.length} lớp từ APPROVED sang ACTIVE, chuyển ${startedClasses.length} lớp từ ACTIVE sang ON_GOING, đóng ${closedClasses.length} lớp học`,
       };
     } catch (error) {
       throw error;
     }
   }
 
-  // ========== ClassService APIs theo API_TIME_MANAGEMENT_GUIDE.md ==========
+  // ========== ClassService  ==========
 
   async createClassSession(classId, sessionData) {
     try {
@@ -235,12 +261,15 @@ class ClassService {
         `Creating session for class ${classId}, instructor ${classInfo[0].InstructorID}`
       );
 
-      // dbver5: Mỗi session có một TimeslotID và một Date
       // Mỗi phần tử trong timeslots sẽ tạo một session riêng
       const createdSessions = [];
 
       // Kiểm tra conflict timeslot trước khi tạo với options
-      await this.checkTimeslotConflicts(classInfo[0].InstructorID, timeslots, options);
+      await this.checkTimeslotConflicts(
+        classInfo[0].InstructorID,
+        timeslots,
+        options
+      );
 
       // Tạo sessions cho mỗi timeslot
       for (const timeslotData of timeslots) {
@@ -402,7 +431,10 @@ class ClassService {
       }
 
       // Cập nhật session
-      const updatedSession = await sessionRepository.update(sessionId, updateData);
+      const updatedSession = await sessionRepository.update(
+        sessionId,
+        updateData
+      );
 
       return updatedSession;
     } catch (error) {
@@ -507,7 +539,11 @@ class ClassService {
       if (isFull) {
         // Có thể set flag hoặc chuyển status tùy business logic
         // Ở đây ta chỉ log, không tự động đóng (để admin quyết định)
-        console.log(`Lớp ${classId} đã đầy (${await this.getEnrollmentCount(classId)} học viên)`);
+        console.log(
+          `Lớp ${classId} đã đầy (${await this.getEnrollmentCount(
+            classId
+          )} học viên)`
+        );
         return true;
       }
       return false;
@@ -562,29 +598,88 @@ class ClassService {
     }
   }
 
-  // ========== HÀM TỰ ĐỘNG CHUYỂN SANG ON_GOING ==========
+  // ========== HÀM TỰ ĐỘNG CHUYỂN TỪ APPROVED SANG ACTIVE ==========
   /**
-   * Hàm Tự động Chuyển sang ON_GOING: Tự động chuyển status sang ON_GOING khi Opendate <= NOW()
+   * Hàm Tự động Kích hoạt: Tự động chuyển status từ APPROVED sang ACTIVE
+   * Khi: Số học sinh = maxStudent VÀ đã đến ngày dự kiến mở lớp (OpendatePlan <= NOW())
    * Nên chạy hàng ngày (cron job)
-   * @returns {Array} - Danh sách các lớp đã được chuyển sang ON_GOING
+   * @returns {Array} - Danh sách các lớp đã được chuyển sang ACTIVE
+   */
+  async autoActivateClasses() {
+    try {
+      const pool = require("../config/db");
+      const { CLASS_STATUS } = require("../constants/classStatus");
+
+      // Tìm các lớp APPROVED đã đủ điều kiện:
+      // 1. Đã đến ngày dự kiến mở lớp (OpendatePlan <= NOW())
+      // 2. Số học sinh đã đăng ký = Maxstudent
+      const query = `
+        SELECT 
+          c.ClassID,
+          c.Name,
+          c.OpendatePlan,
+          c.Maxstudent,
+          COUNT(e.EnrollmentID) as CurrentEnrollment
+        FROM \`class\` c
+        LEFT JOIN enrollment e ON c.ClassID = e.ClassID AND e.Status = 'active'
+        WHERE c.Status = ?
+          AND c.OpendatePlan IS NOT NULL
+          AND c.OpendatePlan <= CURDATE()
+          AND c.Maxstudent > 0
+        GROUP BY c.ClassID, c.Name, c.OpendatePlan, c.Maxstudent
+        HAVING CurrentEnrollment >= c.Maxstudent
+      `;
+
+      const [classes] = await pool.execute(query, [CLASS_STATUS.APPROVED]);
+
+      const activatedClasses = [];
+
+      for (const classItem of classes) {
+        await classRepository.update(classItem.ClassID, {
+          Status: CLASS_STATUS.ACTIVE,
+        });
+
+        activatedClasses.push({
+          ClassID: classItem.ClassID,
+          Name: classItem.Name,
+          OpendatePlan: classItem.OpendatePlan,
+          Maxstudent: classItem.Maxstudent,
+          CurrentEnrollment: classItem.CurrentEnrollment,
+        });
+      }
+
+      console.log(
+        `Đã tự động kích hoạt ${activatedClasses.length} lớp từ APPROVED sang ACTIVE`
+      );
+      return activatedClasses;
+    } catch (error) {
+      console.error("Error in autoActivateClasses:", error);
+      throw error;
+    }
+  }
+
+  // ========== HÀM TỰ ĐỘNG CHUYỂN TỪ ACTIVE SANG ON_GOING ==========
+  /**
+   * Hàm Tự động Chuyển từ ACTIVE sang ON_GOING: Tự động chuyển status từ ACTIVE sang ON_GOING
+   * khi đến ngày bắt đầu dự kiến (OpendatePlan <= CURDATE())
+   * Nên chạy hàng ngày (cron job)
+   * @returns {Array} - Danh sách các lớp đã được chuyển từ ACTIVE sang ON_GOING
    */
   async autoStartClass() {
     try {
       const pool = require("../config/db");
       const { CLASS_STATUS } = require("../constants/classStatus");
 
-      // Tìm các lớp đã đến ngày bắt đầu nhưng chưa chuyển sang ON_GOING
+      // Tìm các lớp có status ACTIVE và đã đến ngày bắt đầu dự kiến (OpendatePlan)
       const query = `
-        SELECT ClassID, Name, Opendate
+        SELECT ClassID, Name, OpendatePlan
         FROM \`class\`
-        WHERE (Status = ? OR Status = ?)
-          AND Opendate IS NOT NULL
-          AND Opendate <= CURDATE()
+        WHERE Status = ?
+          AND OpendatePlan IS NOT NULL
+          AND OpendatePlan <= CURDATE()
       `;
 
-      const [classes] = await pool.execute(query, [
-        CLASS_STATUS.ACTIVE,
-      ]);
+      const [classes] = await pool.execute(query, [CLASS_STATUS.ACTIVE]);
 
       const startedClasses = [];
 
@@ -596,13 +691,16 @@ class ClassService {
         startedClasses.push({
           ClassID: classItem.ClassID,
           Name: classItem.Name,
-          Opendate: classItem.Opendate,
+          OpendatePlan: classItem.OpendatePlan,
         });
       }
 
-      console.log(`Đã tự động chuyển ${startedClasses.length} lớp sang ON_GOING`);
+      console.log(
+        `Đã tự động chuyển ${startedClasses.length} lớp từ ACTIVE sang ON_GOING`
+      );
       return startedClasses;
     } catch (error) {
+      console.error("Error in autoStartClass:", error);
       throw error;
     }
   }
@@ -632,6 +730,170 @@ class ClassService {
       };
     } catch (error) {
       throw error;
+    }
+  }
+
+  /**
+   * Hủy lớp học - Xử lý khi class status được đổi thành CANCEL
+   * 1. Xóa các sessions sau datetime hiện tại
+   * 2. Chuyển instructortimeslot từ OTHER về AVAILABLE cho các sessions bị xóa
+   * 3. Tạo refundrequest cho các học sinh của lớp
+   */
+  async cancelClass(classId) {
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // 1. Lấy thông tin lớp
+      const classData = await classRepository.findById(classId);
+      if (!classData || classData.length === 0) {
+        throw new Error("Class not found");
+      }
+      const classInfo = classData[0];
+
+      // 2. Lấy datetime hiện tại
+      const now = new Date();
+      const currentDate = now.toISOString().split("T")[0]; // YYYY-MM-DD
+      const currentTime = now.toTimeString().split(" ")[0]; // HH:MM:SS
+
+      // 3. Lấy tất cả sessions của lớp có Date và StartTime sau datetime hiện tại
+      const query = `
+        SELECT 
+          s.SessionID,
+          s.Date,
+          s.TimeslotID,
+          s.InstructorID,
+          t.StartTime,
+          t.EndTime
+        FROM session s
+        LEFT JOIN timeslot t ON s.TimeslotID = t.TimeslotID
+        WHERE s.ClassID = ?
+          AND (
+            s.Date > ? 
+            OR (s.Date = ? AND t.StartTime > ?)
+          )
+        ORDER BY s.Date ASC, t.StartTime ASC
+      `;
+
+      const [sessionsToDelete] = await connection.execute(query, [
+        classId,
+        currentDate,
+        currentDate,
+        currentTime,
+      ]);
+
+      console.log(
+        `[cancelClass] Tìm thấy ${sessionsToDelete.length} sessions sau datetime hiện tại (${currentDate} ${currentTime})`
+      );
+
+      // 4. Xóa các sessions và chuyển instructortimeslot từ OTHER về AVAILABLE
+      const deletedSessionIds = [];
+      for (const session of sessionsToDelete) {
+        // Xóa attendance trước (cascade)
+        await attendanceRepository.deleteBySessionId(session.SessionID);
+
+        // Xóa session
+        await sessionRepository.delete(session.SessionID);
+        deletedSessionIds.push(session.SessionID);
+
+        // Chuyển instructortimeslot từ OTHER về AVAILABLE
+        // Tìm instructortimeslot có cùng InstructorID, TimeslotID, Date
+        const findInstructorTimeslotQuery = `
+          SELECT InstructortimeslotID, Status
+          FROM instructortimeslot
+          WHERE InstructorID = ?
+            AND TimeslotID = ?
+            AND Date = ?
+            AND Status = 'OTHER'
+        `;
+
+        const [instructorTimeslots] = await connection.execute(
+          findInstructorTimeslotQuery,
+          [session.InstructorID, session.TimeslotID, session.Date]
+        );
+
+        // Chuyển từ OTHER về AVAILABLE
+        for (const it of instructorTimeslots) {
+          const updateQuery = `
+            UPDATE instructortimeslot
+            SET Status = 'AVAILABLE'
+            WHERE InstructortimeslotID = ?
+          `;
+          await connection.execute(updateQuery, [it.InstructortimeslotID]);
+          console.log(
+            `[cancelClass] Chuyển instructortimeslot ${it.InstructortimeslotID} từ OTHER về AVAILABLE`
+          );
+        }
+      }
+
+      // 5. Lấy tất cả enrollments của lớp
+      const enrollments = await enrollmentRepository.findByClassId(classId);
+
+      // 6. Tạo refundrequest cho các học sinh
+      const refundRequests = [];
+      for (const enrollment of enrollments) {
+        // Kiểm tra xem đã có refundrequest cho enrollment này chưa
+        const existingRefunds = await refundRepository.findByEnrollmentId(
+          enrollment.EnrollmentID
+        );
+
+        // Chỉ tạo refundrequest mới nếu chưa có
+        if (!existingRefunds || existingRefunds.length === 0) {
+          const refundData = {
+            RequestDate: currentDate,
+            Reason: `Lớp học ${classInfo.Name} (ClassID: ${classId}) đã bị hủy`,
+            Status: "pending",
+            EnrollmentID: enrollment.EnrollmentID,
+          };
+
+          const refund = await refundRepository.create(refundData);
+          refundRequests.push(refund);
+          console.log(
+            `[cancelClass] Tạo refundrequest ${refund.RefundID} cho enrollment ${enrollment.EnrollmentID}`
+          );
+        } else {
+          console.log(
+            `[cancelClass] Enrollment ${enrollment.EnrollmentID} đã có refundrequest, bỏ qua`
+          );
+        }
+      }
+
+      // 7. Cập nhật status của lớp thành CANCEL
+      const updatedClass = await classRepository.update(classId, {
+        Status: "CANCEL",
+      });
+
+      await connection.commit();
+
+      // 8. Gửi email thông báo cho các học viên (không block transaction)
+      try {
+        const {
+          notifyClassCancelled,
+        } = require("../utils/emailNotificationHelper");
+        await notifyClassCancelled(
+          classId,
+          `Lớp học ${classInfo.Name} đã bị hủy`
+        );
+      } catch (emailError) {
+        console.error(
+          "[cancelClass] Error sending email notifications:",
+          emailError
+        );
+        // Không throw error để không rollback transaction
+      }
+
+      return {
+        success: true,
+        deletedSessions: deletedSessionIds.length,
+        refundRequests: refundRequests.length,
+        class: updatedClass,
+      };
+    } catch (error) {
+      await connection.rollback();
+      console.error("[cancelClass] Error:", error);
+      throw error;
+    } finally {
+      connection.release();
     }
   }
 }

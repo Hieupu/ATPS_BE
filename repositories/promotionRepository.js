@@ -33,7 +33,9 @@ class PromotionRepository {
   async findAll(options = {}) {
     try {
       const { page = 1, limit = 10, status = null, search = "" } = options;
-      const offset = (page - 1) * limit;
+      const safeLimit = Math.max(1, Number(limit) || 10);
+      const pageNumber = Math.max(1, Number(page) || 1);
+      const safeOffset = (pageNumber - 1) * safeLimit;
 
       let query = `
         SELECT 
@@ -63,8 +65,7 @@ class PromotionRepository {
         params.push(`%${search}%`, `%${search}%`);
       }
 
-      query += ` ORDER BY p.StartDate DESC LIMIT ? OFFSET ?`;
-      params.push(limit, offset);
+      query += ` ORDER BY p.StartDate DESC LIMIT ${safeLimit} OFFSET ${safeOffset}`;
 
       const [rows] = await pool.execute(query, params);
 
@@ -198,6 +199,21 @@ class PromotionRepository {
       const [result] = await pool.execute(query, [promotionId]);
 
       return result.affectedRows > 0;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async expireOutdatedPromotions() {
+    try {
+      const query = `
+        UPDATE promotion
+        SET Status = 'expired'
+        WHERE Status IN ('active', 'inactive')
+          AND EndDate IS NOT NULL
+          AND EndDate < NOW()
+      `;
+      await pool.execute(query);
     } catch (error) {
       throw error;
     }

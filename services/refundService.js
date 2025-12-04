@@ -12,19 +12,21 @@ class RefundService {
       }
 
       // Kiểm tra enrollment tồn tại
-      const enrollment = await enrollmentRepository.findById(refundData.EnrollmentID);
+      const enrollment = await enrollmentRepository.findById(
+        refundData.EnrollmentID
+      );
       if (!enrollment) {
         throw new Error("Enrollment không tồn tại");
       }
 
-      // Kiểm tra đã có yêu cầu hoàn tiền chưa
-      const existingRefunds = await refundRepository.findByStatus("pending");
-      const hasPendingRefund = existingRefunds.some(
-        (r) => r.EnrollmentID === refundData.EnrollmentID
+      // Kiểm tra đã có yêu cầu hoàn tiền pending chưa
+      const existingRefund = await refundRepository.findByEnrollmentId(
+        refundData.EnrollmentID
       );
-
-      if (hasPendingRefund) {
-        throw new Error("Đã có yêu cầu hoàn tiền đang chờ xử lý cho enrollment này");
+      if (existingRefund && existingRefund.Status === "pending") {
+        throw new Error(
+          "Đã có yêu cầu hoàn tiền đang chờ xử lý cho enrollment này"
+        );
       }
 
       const refund = {
@@ -34,7 +36,19 @@ class RefundService {
         EnrollmentID: refundData.EnrollmentID,
       };
 
-      return await refundRepository.create(refund);
+      const createdRefund = await refundRepository.create(refund);
+
+      // Gửi email thông báo khi tạo refund (không block nếu lỗi)
+      if (createdRefund && createdRefund.RefundID) {
+        try {
+          const { notifyRefundCreated } = require("../utils/emailNotificationHelper");
+          await notifyRefundCreated(createdRefund.RefundID);
+        } catch (emailError) {
+          console.error("[createRefund] Error sending email notification:", emailError);
+        }
+      }
+
+      return createdRefund;
     } catch (error) {
       throw error;
     }
@@ -99,7 +113,7 @@ class RefundService {
     }
   }
 
-  // Duyệt yêu cầu hoàn tiền (chuyển status từ pending sang completed)
+  // Duyệt yêu cầu hoàn tiền (chuyển status từ pending sang approved)
   async approveRefund(refundId) {
     try {
       const refund = await refundRepository.findById(refundId);
@@ -108,21 +122,68 @@ class RefundService {
       }
 
       if (refund.Status !== "pending") {
-        throw new Error("Chỉ có thể duyệt yêu cầu hoàn tiền ở trạng thái pending");
+        throw new Error(
+          "Chỉ có thể duyệt yêu cầu hoàn tiền ở trạng thái pending"
+        );
       }
 
-      // Cập nhật status của refund
+      // Cập nhật status của refund sang approved
+      await refundRepository.update(refundId, { Status: "approved" });
+
+      const updatedRefund = await refundRepository.findById(refundId);
+
+      // Gửi email thông báo (không block nếu lỗi)
+      try {
+        const { notifyRefundApproved } = require("../utils/emailNotificationHelper");
+        await notifyRefundApproved(refundId);
+      } catch (emailError) {
+        console.error("[approveRefund] Error sending email notification:", emailError);
+      }
+
+      return updatedRefund;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Hoàn tiền (chuyển status từ approved sang completed)
+  async completeRefund(refundId) {
+    try {
+      const refund = await refundRepository.findById(refundId);
+      if (!refund) {
+        throw new Error("Không tìm thấy yêu cầu hoàn tiền");
+      }
+
+      if (refund.Status !== "approved") {
+        throw new Error(
+          "Chỉ có thể hoàn tiền khi yêu cầu ở trạng thái approved"
+        );
+      }
+
+      // Cập nhật status của refund sang completed
       await refundRepository.update(refundId, { Status: "completed" });
 
       // Cập nhật status của payment thành refunded
       if (refund.PaymentID) {
-        await paymentRepository.update(refund.PaymentID, { Status: "refunded" });
+        await paymentRepository.update(refund.PaymentID, {
+          Status: "refunded",
+        });
       }
 
       // Cập nhật status của enrollment nếu cần
       // await enrollmentRepository.update(refund.EnrollmentID, { Status: "cancelled" });
 
-      return await refundRepository.findById(refundId);
+      const updatedRefund = await refundRepository.findById(refundId);
+
+      // Gửi email thông báo (không block nếu lỗi)
+      try {
+        const { notifyRefundCompleted } = require("../utils/emailNotificationHelper");
+        await notifyRefundCompleted(refundId);
+      } catch (emailError) {
+        console.error("[completeRefund] Error sending email notification:", emailError);
+      }
+
+      return updatedRefund;
     } catch (error) {
       throw error;
     }
@@ -137,7 +198,9 @@ class RefundService {
       }
 
       if (refund.Status !== "pending") {
-        throw new Error("Chỉ có thể từ chối yêu cầu hoàn tiền ở trạng thái pending");
+        throw new Error(
+          "Chỉ có thể từ chối yêu cầu hoàn tiền ở trạng thái pending"
+        );
       }
 
       const updateData = { Status: "rejected" };
@@ -145,7 +208,17 @@ class RefundService {
         updateData.Reason = `${refund.Reason}\n\nLý do từ chối: ${rejectionReason}`;
       }
 
-      return await refundRepository.update(refundId, updateData);
+      await refundRepository.update(refundId, updateData);
+
+      // Gửi email thông báo (không block nếu lỗi)
+      try {
+        const { notifyRefundRejected } = require("../utils/emailNotificationHelper");
+        await notifyRefundRejected(refundId, rejectionReason);
+      } catch (emailError) {
+        console.error("[rejectRefund] Error sending email notification:", emailError);
+      }
+
+      return await refundRepository.findById(refundId);
     } catch (error) {
       throw error;
     }
@@ -162,5 +235,3 @@ class RefundService {
 }
 
 module.exports = new RefundService();
-
-

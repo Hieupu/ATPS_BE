@@ -23,10 +23,21 @@ const { CLASS_STATUS } = require("../constants/classStatus");
  * @returns {Object} { success: [...], conflicts: [...], summary: {...} }
  */
 async function createBulkSchedule(params) {
-  const { ClassID, OpendatePlan, Numofsession, InstructorID, SelectedTimeslotIDs } =
-    params;
+  const {
+    ClassID,
+    OpendatePlan,
+    Numofsession,
+    InstructorID,
+    SelectedTimeslotIDs,
+  } = params;
 
-  if (!ClassID || !OpendatePlan || !Numofsession || !InstructorID || !SelectedTimeslotIDs) {
+  if (
+    !ClassID ||
+    !OpendatePlan ||
+    !Numofsession ||
+    !InstructorID ||
+    !SelectedTimeslotIDs
+  ) {
     throw new Error("Thiếu tham số bắt buộc");
   }
 
@@ -35,6 +46,8 @@ async function createBulkSchedule(params) {
   if (!classData || classData.length === 0) {
     throw new Error("Lớp học không tồn tại");
   }
+  const className =
+    classData[0].Name || classData[0].ClassName || `Class ${ClassID}`;
 
   // Tạo danh sách sessions dựa trên SelectedTimeslotIDs
   const sessionsToCreate = [];
@@ -55,7 +68,7 @@ async function createBulkSchedule(params) {
 
     if (matchingTimeslot) {
       sessionsToCreate.push({
-        Title: `Buổi ${sessionNumber}`,
+        Title: `Session for class ${className}`,
         Description: `Buổi học thứ ${sessionNumber}`,
         ClassID: ClassID,
         InstructorID: InstructorID,
@@ -179,7 +192,9 @@ async function validateReschedule(sessionId, newSchedule) {
     }
 
     // Lấy thông tin lớp để kiểm tra status
-    const statusValidation = await validateStatusForEdit(currentSession.ClassID);
+    const statusValidation = await validateStatusForEdit(
+      currentSession.ClassID
+    );
     if (!statusValidation.canEdit) {
       errors.push({
         type: "status_error",
@@ -235,12 +250,12 @@ async function validateReschedule(sessionId, newSchedule) {
         AND s.TimeslotID = ?
         AND s.SessionID != ?
     `;
-    
+
     const [conflictsRows] = await pool.execute(conflictQuery, [
       newSessionData.InstructorID,
       newSessionData.Date,
       newSessionData.TimeslotID,
-      sessionId
+      sessionId,
     ]);
 
     if (conflictsRows.length > 0) {
@@ -289,7 +304,9 @@ async function rescheduleSession(sessionId, newSchedule) {
 
   if (validation.conflicts.length > 0) {
     throw new Error(
-      `Có xung đột: ${validation.conflicts.map((c) => c.conflictInfo.message || c.conflictInfo).join(", ")}`
+      `Có xung đột: ${validation.conflicts
+        .map((c) => c.conflictInfo.message || c.conflictInfo)
+        .join(", ")}`
     );
   }
 
@@ -363,7 +380,9 @@ async function addMakeupSession(classId, sessionData) {
 
     if (result.conflict) {
       throw new Error(
-        `Không thể thêm buổi học bù: ${result.conflict.conflictInfo.message || "Có xung đột"}`
+        `Không thể thêm buổi học bù: ${
+          result.conflict.conflictInfo.message || "Có xung đột"
+        }`
       );
     }
 
@@ -454,9 +473,10 @@ async function autoCloseClasses() {
     for (const classItem of classes) {
       // Kiểm tra lại xem có session nào sau Enddate không
       const sessions = await sessionRepository.findByClassId(classItem.ClassID);
-      const lastSessionDate = sessions.length > 0
-        ? new Date(Math.max(...sessions.map((s) => new Date(s.Date))))
-        : null;
+      const lastSessionDate =
+        sessions.length > 0
+          ? new Date(Math.max(...sessions.map((s) => new Date(s.Date))))
+          : null;
 
       if (lastSessionDate && lastSessionDate < today) {
         // Đóng lớp
@@ -502,4 +522,3 @@ module.exports = {
   autoCloseEnrollment,
   autoCloseClasses,
 };
-

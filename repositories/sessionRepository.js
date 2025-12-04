@@ -2,17 +2,24 @@ const pool = require("../config/db");
 
 /**
  * SessionRepository - dbver5
- * 
+ *
  * Hỗ trợ trường mới:
  * - ZoomUUID: UUID phòng Zoom cho session
- * 
+ *
  * Tự động tạo ZoomUUID nếu không được cung cấp.
  */
 class SessionRepository {
   // Tạo session mới (dbver5 schema)
   async create(sessionData) {
-    const { Title, Description, InstructorID, ClassID, TimeslotID, Date, ZoomUUID } =
-      sessionData;
+    const {
+      Title,
+      Description,
+      InstructorID,
+      ClassID,
+      TimeslotID,
+      Date,
+      ZoomUUID,
+    } = sessionData;
 
     // dbver5: Hỗ trợ ZoomUUID
     // Nếu không có ZoomUUID, tạo một UUID ngẫu nhiên
@@ -133,12 +140,10 @@ class SessionRepository {
 
   // Xóa session
   async delete(sessionId) {
-    console.log("Repository delete - sessionId:", sessionId, "Type:", typeof sessionId);
     if (!sessionId) {
       throw new Error("SessionID là bắt buộc");
     }
     const query = `DELETE FROM session WHERE SessionID = ?`;
-    console.log("Executing query:", query, "with params:", [sessionId]);
     const [result] = await pool.execute(query, [sessionId]);
     return result;
   }
@@ -150,8 +155,8 @@ class SessionRepository {
     }
 
     // Chuẩn bị query bulk insert với ZoomUUID
-    const values = sessionsData.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
-    const params = sessionsData.flatMap(session => [
+    const values = sessionsData.map(() => "(?, ?, ?, ?, ?, ?, ?)").join(", ");
+    const params = sessionsData.flatMap((session) => [
       session.Title,
       session.Description,
       session.InstructorID,
@@ -191,23 +196,27 @@ class SessionRepository {
 
     // Add optional filters
     if (filters.classId) {
-      query += ' AND s.ClassID = ?';
+      query += " AND s.ClassID = ?";
       params.push(filters.classId);
     }
 
     // Support classIds array for filtering multiple classes
-    if (filters.classIds && Array.isArray(filters.classIds) && filters.classIds.length > 0) {
-      const placeholders = filters.classIds.map(() => '?').join(',');
+    if (
+      filters.classIds &&
+      Array.isArray(filters.classIds) &&
+      filters.classIds.length > 0
+    ) {
+      const placeholders = filters.classIds.map(() => "?").join(",");
       query += ` AND s.ClassID IN (${placeholders})`;
       params.push(...filters.classIds);
     }
 
     if (filters.instructorId) {
-      query += ' AND s.InstructorID = ?';
+      query += " AND s.InstructorID = ?";
       params.push(filters.instructorId);
     }
 
-    query += ' ORDER BY s.Date ASC, t.StartTime ASC';
+    query += " ORDER BY s.Date ASC, t.StartTime ASC";
 
     const [rows] = await pool.execute(query, params);
     return rows;
@@ -231,6 +240,29 @@ class SessionRepository {
     `;
 
     const [rows] = await pool.execute(query, [timeslotId]);
+    return rows;
+  }
+
+  // Lấy sessions theo InstructorID và khoảng ngày
+  async findByInstructorAndDateRange(instructorId, startDate, endDate) {
+    const query = `
+      SELECT 
+        s.*,
+        t.StartTime,
+        t.EndTime,
+        c.Name as ClassName,
+        i.FullName as InstructorName
+      FROM session s
+      LEFT JOIN timeslot t ON s.TimeslotID = t.TimeslotID
+      LEFT JOIN \`class\` c ON s.ClassID = c.ClassID
+      LEFT JOIN instructor i ON s.InstructorID = i.InstructorID
+      WHERE s.InstructorID = ? 
+        AND s.Date >= ? 
+        AND s.Date <= ?
+      ORDER BY s.Date ASC, t.StartTime ASC
+    `;
+
+    const [rows] = await pool.execute(query, [instructorId, startDate, endDate]);
     return rows;
   }
 }

@@ -17,6 +17,8 @@ const { getDayOfWeek } = require("../utils/sessionValidation");
 async function addBulkInstructorLeave(params) {
   const { InstructorID, Date, Status, Note, blockEntireDay } = params;
 
+  console.log("[instructorLeaveService] addBulkInstructorLeave params:", params);
+
   if (!InstructorID || !Date || !Status) {
     throw new Error("Thiếu tham số bắt buộc");
   }
@@ -29,11 +31,12 @@ async function addBulkInstructorLeave(params) {
     }
 
     // Kiểm tra xung đột với session đã có
-    const sessionConflict = await instructorTimeslotRepository.checkSessionConflict(
-      InstructorID,
-      TimeslotID,
-      Date
-    );
+    const sessionConflict =
+      await instructorTimeslotRepository.checkSessionConflict(
+        InstructorID,
+        TimeslotID,
+        Date
+      );
 
     if (sessionConflict) {
       throw new Error(
@@ -67,9 +70,7 @@ async function addBulkInstructorLeave(params) {
 
   // 2. Tìm tất cả các ca của thứ đó
   const allTimeslots = await timeslotRepository.findAll({ limit: 1000 });
-  const slotsForDay = allTimeslots.data.filter(
-    (ts) => ts.Day === dayOfWeek
-  );
+  const slotsForDay = allTimeslots.data.filter((ts) => ts.Day === dayOfWeek);
 
   if (slotsForDay.length === 0) {
     throw new Error(
@@ -152,6 +153,7 @@ async function addBulkInstructorLeave(params) {
  * @returns {Object} { hasConflicts: boolean, affectedSessions: [...], affectedClasses: [...] }
  */
 async function checkFutureConflicts(params) {
+  console.log("[instructorLeaveService] checkFutureConflicts params:", params);
   const { InstructorID, Date, TimeslotID, Status } = params;
 
   if (!InstructorID || !Date || !TimeslotID) {
@@ -205,9 +207,10 @@ async function checkFutureConflicts(params) {
 
     if (!affectedClassesMap.has(session.ClassID)) {
       // Lấy thêm thông tin lớp
-      const classEnrollments = await require("../repositories/enrollmentRepository").findByClassId(
-        session.ClassID
-      );
+      const classEnrollments =
+        await require("../repositories/enrollmentRepository").findByClassId(
+          session.ClassID
+        );
       const activeLearners = classEnrollments.filter(
         (e) => e.Status === "active" || e.Status === "enrolled"
       );
@@ -264,6 +267,7 @@ async function checkFutureConflicts(params) {
  */
 async function handleAffectedClass(params) {
   const { ClassID, action, sessionIds, newSchedule } = params;
+  console.log("[instructorLeaveService] handleAffectedClass params:", params);
 
   const classScheduleService = require("./classScheduleService");
   const results = [];
@@ -359,9 +363,237 @@ async function handleAffectedClass(params) {
   };
 }
 
+async function listInstructorLeaves(params = {}) {
+  console.log("[instructorLeaveService] listInstructorLeaves params:", params);
+  const {
+    InstructorID,
+    Status,
+    StartDate,
+    EndDate,
+    page = 1,
+    limit = 20,
+  } = params;
+
+  const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+  const safePage = Math.max(parseInt(page, 10) || 1, 1);
+  const offset = (safePage - 1) * safeLimit;
+
+  const numericInstructorId = InstructorID ? parseInt(InstructorID, 10) : null;
+  const normalizedStatus = Status ? Status.toUpperCase() : null;
+
+  const [items, total] = await Promise.all([
+    instructorTimeslotRepository.findLeaves({
+      instructorId: numericInstructorId,
+      status: normalizedStatus,
+      startDate: StartDate || null,
+      endDate: EndDate || null,
+      limit: safeLimit,
+      offset,
+    }),
+    instructorTimeslotRepository.countLeaves({
+      instructorId: numericInstructorId,
+      status: normalizedStatus,
+      startDate: StartDate || null,
+      endDate: EndDate || null,
+    }),
+  ]);
+
+  return {
+    items,
+    pagination: {
+      page: safePage,
+      limit: safeLimit,
+      total,
+      totalPages: Math.ceil(total / safeLimit) || 0,
+    },
+  };
+}
+
+async function deleteInstructorLeave(leaveId) {
+  console.log("[instructorLeaveService] deleteInstructorLeave id:", leaveId);
+  if (!leaveId) {
+    throw new Error("InstructorTimeslotID là bắt buộc");
+  }
+
+  const numericId = parseInt(leaveId, 10);
+  const result = await instructorTimeslotRepository.delete(numericId);
+
+  if (result.affectedRows === 0) {
+    throw new Error("Lịch nghỉ không tồn tại hoặc đã bị xóa");
+  }
+
+  return { success: true };
+}
+
+// Thêm lịch nghỉ HOLIDAY cho tất cả giảng viên
+async function addHolidayForAllInstructors(data) {
+  const { Date: startDateStr, EndDate: endDateStr, Status, Note, blockEntireDay, TimeslotID, TimeslotIDs } = data;
+  
+  if (!startDateStr || Status !== "HOLIDAY") {
+    throw new Error("Date là bắt buộc và Status phải là HOLIDAY");
+  }
+
+  const instructorRepository = require("../repositories/instructorRepository");
+  const allInstructors = await instructorRepository.findAll();
+
+  let successCount = 0;
+  let errorCount = 0;
+  const errors = [];
+
+  // Xử lý date range nếu có EndDate
+  const startDate = new Date(startDateStr);
+  const endDate = endDateStr ? new Date(endDateStr) : startDate;
+  const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+
+  for (const instructor of allInstructors) {
+    for (let i = 0; i < daysDiff; i++) {
+      const currentDate = new Date(startDate);
+      currentDate.setDate(startDate.getDate() + i);
+      const currentDateStr = currentDate.toISOString().split("T")[0];
+
+      try {
+        if (blockEntireDay) {
+          await addBulkInstructorLeave({
+            InstructorID: instructor.InstructorID,
+            Date: currentDateStr,
+            Status: "HOLIDAY",
+            Note: Note || "Nghỉ lễ cho tất cả giảng viên",
+            blockEntireDay: true,
+            TimeslotID: null,
+          });
+        } else {
+          const timeslotIdsToAdd = TimeslotIDs || (TimeslotID ? [TimeslotID] : []);
+          for (const timeslotId of timeslotIdsToAdd) {
+            await addBulkInstructorLeave({
+              InstructorID: instructor.InstructorID,
+              Date: currentDateStr,
+              Status: "HOLIDAY",
+              Note: Note || "Nghỉ lễ cho tất cả giảng viên",
+              blockEntireDay: false,
+              TimeslotID: timeslotId,
+            });
+          }
+        }
+        successCount++;
+      } catch (error) {
+        errorCount++;
+        errors.push(
+          `${instructor.FullName} - ${currentDateStr}: ${error.message}`
+        );
+      }
+    }
+  }
+
+  return {
+    success: true,
+    added: successCount,
+    errors: errorCount,
+    errorDetails: errors,
+    message: `Đã thêm ${successCount} lịch nghỉ cho tất cả giảng viên${errorCount > 0 ? `. Có ${errorCount} lỗi.` : ""}`,
+  };
+}
+
+// Đồng bộ lịch nghỉ HOLIDAY cho giảng viên
+async function syncHolidayForInstructor(instructorId) {
+  if (!instructorId) {
+    throw new Error("InstructorID là bắt buộc");
+  }
+
+  // Lấy tất cả unique DATE từ instructortimeslot có Status = HOLIDAY
+  const pool = require("../config/db");
+  const [holidayDates] = await pool.execute(
+    `SELECT DISTINCT Date FROM instructortimeslot WHERE UPPER(Status) = 'HOLIDAY' ORDER BY Date ASC`
+  );
+  const uniqueDates = holidayDates.map(row => row.Date);
+
+  if (uniqueDates.length === 0) {
+    return {
+      added: 0,
+      dates: [],
+      message: "Không có ngày nghỉ HOLIDAY nào trong hệ thống",
+    };
+  }
+
+  // Lấy danh sách DATE đã có của giảng viên này (Status = HOLIDAY)
+  const existingLeaves = await instructorTimeslotRepository.findLeaves({
+    instructorId: parseInt(instructorId),
+    status: "HOLIDAY",
+    limit: 10000,
+    offset: 0,
+  });
+  const existingDates = new Set(existingLeaves.map(h => h.Date));
+
+  // Tạo instructortimeslot cho những DATE chưa có
+  const datesToAdd = uniqueDates.filter(date => !existingDates.has(date));
+  let addedCount = 0;
+  const errors = [];
+
+  for (const date of datesToAdd) {
+    try {
+      // Lấy một mẫu instructortimeslot HOLIDAY có cùng DATE để lấy thông tin timeslot
+      const [sampleHoliday] = await pool.execute(
+        `SELECT * FROM instructortimeslot WHERE UPPER(Status) = 'HOLIDAY' AND Date = ? LIMIT 1`,
+        [date]
+      );
+
+      if (sampleHoliday.length > 0) {
+        const sample = sampleHoliday[0];
+        // Tạo instructortimeslot cho giảng viên này với cùng TimeslotID và Note
+        await instructorTimeslotRepository.create({
+          InstructorID: parseInt(instructorId),
+          Date: date,
+          Status: "HOLIDAY",
+          TimeslotID: sample.TimeslotID,
+          Note: sample.Note || "Đồng bộ từ lịch nghỉ chung",
+        });
+        addedCount++;
+      } else {
+        // Nếu không có mẫu, tạo với blockEntireDay
+        const dayOfWeek = require("../utils/sessionValidation").getDayOfWeek(date);
+        const allTimeslots = await require("../repositories/timeslotRepository").findAll({ limit: 1000 });
+        const slotsForDay = allTimeslots.data.filter((ts) => ts.Day === dayOfWeek);
+
+        for (const slot of slotsForDay) {
+          await instructorTimeslotRepository.create({
+            InstructorID: parseInt(instructorId),
+            Date: date,
+            Status: "HOLIDAY",
+            TimeslotID: slot.TimeslotID,
+            Note: "Đồng bộ từ lịch nghỉ chung",
+          });
+        }
+        addedCount += slotsForDay.length;
+      }
+    } catch (error) {
+      errors.push(`${date}: ${error.message}`);
+    }
+  }
+
+  return {
+    added: addedCount,
+    dates: datesToAdd,
+    errors: errors.length,
+    errorDetails: errors,
+    message: `Đã thêm ${addedCount} ngày nghỉ HOLIDAY cho giảng viên${errors.length > 0 ? `. Có ${errors.length} lỗi.` : ""}`,
+  };
+}
+
+// Lấy danh sách unique DATE có Status = HOLIDAY
+async function getHolidayDates() {
+  const pool = require("../config/db");
+  const [rows] = await pool.execute(
+    `SELECT DISTINCT Date FROM instructortimeslot WHERE UPPER(Status) = 'HOLIDAY' ORDER BY Date ASC`
+  );
+  return rows.map(row => row.Date);
+}
+
 module.exports = {
   addBulkInstructorLeave,
   checkFutureConflicts,
   handleAffectedClass,
+  listInstructorLeaves,
+  deleteInstructorLeave,
+  addHolidayForAllInstructors,
+  syncHolidayForInstructor,
+  getHolidayDates,
 };
-

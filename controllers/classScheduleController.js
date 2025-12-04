@@ -7,10 +7,21 @@ const classScheduleController = {
   // Tạo lịch hàng loạt
   createBulkSchedule: async (req, res) => {
     try {
-      const { ClassID, OpendatePlan, Numofsession, InstructorID, SelectedTimeslotIDs } =
-        req.body;
+      const {
+        ClassID,
+        OpendatePlan,
+        Numofsession,
+        InstructorID,
+        SelectedTimeslotIDs,
+      } = req.body;
 
-      if (!ClassID || !OpendatePlan || !Numofsession || !InstructorID || !SelectedTimeslotIDs) {
+      if (
+        !ClassID ||
+        !OpendatePlan ||
+        !Numofsession ||
+        !InstructorID ||
+        !SelectedTimeslotIDs
+      ) {
         return res.status(400).json({
           success: false,
           message: "Thiếu tham số bắt buộc",
@@ -287,15 +298,134 @@ const classScheduleController = {
     }
   },
 
+  // Cập nhật lại schedule của lớp khi admin chỉnh sửa (Edit Class Wizard)
+  // Body: { sessions: [...], startDate?, endDate? }
+  updateClassSchedule: async (req, res) => {
+    try {
+      const { classId } = req.params;
+      const payload = req.body || {};
+
+      const ClassID = Number(classId || payload.ClassID);
+      if (!ClassID) {
+        return res.status(400).json({
+          success: false,
+          message: "ClassID là bắt buộc",
+        });
+      }
+
+      const sessions = payload.sessions || [];
+      const { startDate, endDate, scheduleDetail } = payload;
+
+      const result = await classCreationWizardService.updateClassSchedule({
+        ClassID,
+        sessions,
+        startDate,
+        endDate,
+        scheduleDetail, // Logic mới: Truyền scheduleDetail để validate single timeslot pattern
+      });
+
+      return res.json({
+        success: true,
+        message: "Cập nhật lịch học chi tiết thành công",
+        data: result,
+      });
+    } catch (error) {
+      console.error("Error updating class schedule:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi khi cập nhật lịch học chi tiết",
+        error: error.message,
+      });
+    }
+  },
+
+  // Phân tích độ bận định kỳ của instructor
+  analyzeBlockedDays: async (req, res) => {
+    try {
+      const startTime = Date.now();
+      const {
+        InstructorID,
+        OpendatePlan,
+        Numofsession,
+        DaysOfWeek,
+        TimeslotsByDay,
+      } = req.body;
+
+      console.log("[analyzeBlockedDays] START", {
+        InstructorID,
+        OpendatePlan,
+        Numofsession,
+        daysOfWeekCount: Array.isArray(DaysOfWeek) ? DaysOfWeek.length : 0,
+        hasTimeslotsByDay: !!TimeslotsByDay,
+      });
+
+      if (!InstructorID || !OpendatePlan || !Numofsession) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Thiếu tham số bắt buộc: InstructorID, OpendatePlan, Numofsession",
+        });
+      }
+
+      const result = await classCreationWizardService.analyzeBlockedDays({
+        InstructorID: parseInt(InstructorID),
+        OpendatePlan,
+        Numofsession: parseInt(Numofsession),
+        DaysOfWeek: DaysOfWeek || [],
+        TimeslotsByDay: TimeslotsByDay || {},
+      });
+
+      const durationMs = Date.now() - startTime;
+      const blockedDaysKeys = Object.keys(result?.blockedDays || {});
+      console.log("[analyzeBlockedDays] DONE", {
+        InstructorID,
+        OpendatePlan,
+        Numofsession,
+        daysOfWeek: DaysOfWeek,
+        blockedDaysCount: blockedDaysKeys.length,
+        totalManualConflicts: result?.summary?.totalManualConflicts ?? 0,
+        totalSessionConflicts: result?.summary?.totalSessionConflicts ?? 0,
+        durationMs,
+      });
+
+      res.json({
+        success: true,
+        message: "Phân tích độ bận định kỳ thành công",
+        data: result,
+      });
+    } catch (error) {
+      console.error("[analyzeBlockedDays] ERROR", {
+        message: error.message,
+        stack: error.stack,
+      });
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi phân tích độ bận định kỳ",
+        error: error.message,
+      });
+    }
+  },
+
   // Tìm các ca rảnh của GV (Bước 1 - Chỉ kiểm tra GV)
   findAvailableInstructorSlots: async (req, res) => {
     try {
-      console.log(`[findAvailableInstructorSlots] Request URL: ${req.originalUrl}`);
+      console.log(
+        `[findAvailableInstructorSlots] Request URL: ${req.originalUrl}`
+      );
       console.log(`[findAvailableInstructorSlots] Query params:`, req.query);
-      const { InstructorID, TimeslotID, Day, numSuggestions, startDate, excludeClassId } = req.query;
+      const {
+        InstructorID,
+        TimeslotID,
+        Day,
+        numSuggestions,
+        startDate,
+        excludeClassId,
+      } = req.query;
 
       if (!InstructorID || !TimeslotID || !Day) {
-        console.log(`[findAvailableInstructorSlots] Thiếu tham số: InstructorID=${InstructorID}, TimeslotID=${TimeslotID}, Day=${Day}`);
+        console.log(
+          `[findAvailableInstructorSlots] Thiếu tham số: InstructorID=${InstructorID}, TimeslotID=${TimeslotID}, Day=${Day}`
+        );
         return res.status(400).json({
           success: false,
           message: "Thiếu tham số bắt buộc",
@@ -321,7 +451,9 @@ const classScheduleController = {
           excludeClassId: excludeClassId ? parseInt(excludeClassId) : null,
         });
 
-      console.log(`[findAvailableInstructorSlots] Service trả về ${suggestions.length} suggestions`);
+      console.log(
+        `[findAvailableInstructorSlots] Service trả về ${suggestions.length} suggestions`
+      );
 
       const response = {
         success: true,
@@ -333,7 +465,10 @@ const classScheduleController = {
         },
       };
 
-      console.log(`[findAvailableInstructorSlots] Response:`, JSON.stringify(response, null, 2));
+      console.log(
+        `[findAvailableInstructorSlots] Response:`,
+        JSON.stringify(response, null, 2)
+      );
       res.json(response);
     } catch (error) {
       console.error("Error finding available instructor slots:", error);
@@ -384,6 +519,31 @@ const classScheduleController = {
   // INSTRUCTOR LEAVE MANAGEMENT
   // =====================================================
 
+  listInstructorLeaves: async (req, res) => {
+    try {
+      console.log("[listInstructorLeaves] Query params:", req.query);
+      const result = await instructorLeaveService.listInstructorLeaves(
+        req.query
+      );
+      console.log(
+        "[listInstructorLeaves] Result:",
+        result?.items?.length || 0,
+        "items"
+      );
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      console.error("Error listing instructor leaves:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách lịch nghỉ",
+        error: error.message,
+      });
+    }
+  },
+
   // Thêm lịch nghỉ hàng loạt
   addBulkInstructorLeave: async (req, res) => {
     try {
@@ -416,6 +576,31 @@ const classScheduleController = {
       res.status(500).json({
         success: false,
         message: "Lỗi khi thêm lịch nghỉ hàng loạt",
+        error: error.message,
+      });
+    }
+  },
+
+  deleteInstructorLeave: async (req, res) => {
+    try {
+      const { leaveId } = req.params;
+      if (!leaveId) {
+        return res.status(400).json({
+          success: false,
+          message: "Thiếu tham số leaveId",
+        });
+      }
+
+      await instructorLeaveService.deleteInstructorLeave(leaveId);
+      res.json({
+        success: true,
+        message: "Đã xóa lịch nghỉ",
+      });
+    } catch (error) {
+      console.error("Error deleting instructor leave:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi xóa lịch nghỉ",
         error: error.message,
       });
     }
@@ -488,7 +673,198 @@ const classScheduleController = {
       });
     }
   },
+
+  // Tìm ngày bắt đầu phù hợp theo desired timeslots (API chuyên dụng - tối ưu)
+  searchTimeslots: async (req, res) => {
+    try {
+      const startTime = Date.now();
+      const {
+        InstructorID,
+        DaysOfWeek,
+        TimeslotsByDay,
+        Numofsession,
+        sessionsPerWeek,
+        requiredSlotsPerWeek,
+        currentStartDate,
+      } = req.body;
+
+      console.log("[searchTimeslots] START", {
+        InstructorID,
+        Numofsession,
+        sessionsPerWeek,
+        requiredSlotsPerWeek,
+        currentStartDate,
+        daysOfWeek: DaysOfWeek,
+        hasTimeslotsByDay: !!TimeslotsByDay,
+      });
+
+      if (!InstructorID || !DaysOfWeek || !TimeslotsByDay || !Numofsession) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Thiếu tham số bắt buộc: InstructorID, DaysOfWeek, TimeslotsByDay, Numofsession",
+        });
+      }
+
+      // Gọi service để tìm ngày phù hợp
+      const suggestions = await classCreationWizardService.searchTimeslots({
+        InstructorID: parseInt(InstructorID),
+        DaysOfWeek: DaysOfWeek || [],
+        TimeslotsByDay: TimeslotsByDay || {},
+        Numofsession: parseInt(Numofsession),
+        sessionsPerWeek: sessionsPerWeek ? parseInt(sessionsPerWeek) : 0,
+        requiredSlotsPerWeek: requiredSlotsPerWeek
+          ? parseInt(requiredSlotsPerWeek)
+          : sessionsPerWeek
+          ? parseInt(sessionsPerWeek)
+          : 0,
+        currentStartDate: currentStartDate || null,
+      });
+
+      const durationMs = Date.now() - startTime;
+      console.log("[searchTimeslots] DONE", {
+        InstructorID,
+        Numofsession,
+        sessionsPerWeek,
+        requiredSlotsPerWeek,
+        currentStartDate,
+        suggestionCount: suggestions?.length || 0,
+        suggestions,
+        durationMs,
+      });
+
+      res.json({
+        success: true,
+        message: "Tìm kiếm ngày phù hợp thành công",
+        data: {
+          suggestions: suggestions || [],
+        },
+      });
+    } catch (error) {
+      console.error("Error searching timeslots:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi tìm kiếm ngày phù hợp",
+        error: error.message,
+      });
+    }
+  },
+
+  // Lấy lý do chi tiết tại sao một timeslot bị khóa
+  getTimeslotLockReasons: async (req, res) => {
+    try {
+      const { InstructorID, dayOfWeek, timeslotId, startDate, endDate } =
+        req.query;
+
+      if (
+        !InstructorID ||
+        !dayOfWeek ||
+        !timeslotId ||
+        !startDate ||
+        !endDate
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Thiếu tham số bắt buộc: InstructorID, dayOfWeek, timeslotId, startDate, endDate",
+        });
+      }
+
+      // Gọi service để lấy lý do chi tiết
+      const reasons = await classCreationWizardService.getTimeslotLockReasons({
+        InstructorID: parseInt(InstructorID),
+        dayOfWeek: parseInt(dayOfWeek),
+        timeslotId: parseInt(timeslotId),
+        startDate,
+        endDate,
+      });
+
+      res.json({
+        success: true,
+        message: "Lấy lý do chi tiết thành công",
+        data: reasons,
+      });
+    } catch (error) {
+      console.error("Error getting timeslot lock reasons:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy lý do chi tiết",
+        error: error.message,
+      });
+    }
+  },
+
+  // Thêm lịch nghỉ HOLIDAY cho tất cả giảng viên
+  addHolidayForAllInstructors: async (req, res) => {
+    try {
+      const result = await instructorLeaveService.addHolidayForAllInstructors(
+        req.body
+      );
+
+      res.status(201).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+    } catch (error) {
+      console.error("Error adding holiday for all instructors:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi thêm lịch nghỉ cho tất cả giảng viên",
+        error: error.message,
+      });
+    }
+  },
+
+  // Đồng bộ lịch nghỉ HOLIDAY cho giảng viên
+  syncHolidayForInstructor: async (req, res) => {
+    try {
+      const { instructorId } = req.params;
+      if (!instructorId) {
+        return res.status(400).json({
+          success: false,
+          message: "Thiếu tham số instructorId",
+        });
+      }
+
+      const result = await instructorLeaveService.syncHolidayForInstructor(
+        parseInt(instructorId)
+      );
+
+      res.json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+    } catch (error) {
+      console.error("Error syncing holiday for instructor:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi đồng bộ lịch nghỉ",
+        error: error.message,
+      });
+    }
+  },
+
+  // Lấy danh sách unique DATE có Status = HOLIDAY
+  getHolidayDates: async (req, res) => {
+    try {
+      const dates = await instructorLeaveService.getHolidayDates();
+
+      res.json({
+        success: true,
+        message: "Lấy danh sách ngày nghỉ HOLIDAY thành công",
+        data: dates,
+      });
+    } catch (error) {
+      console.error("Error getting holiday dates:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách ngày nghỉ",
+        error: error.message,
+      });
+    }
+  },
 };
 
 module.exports = classScheduleController;
-

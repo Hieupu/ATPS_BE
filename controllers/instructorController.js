@@ -1,4 +1,5 @@
 const instructorService = require("../services/instructorService");
+const uploadToCloudinary = require("../utils/uploadCloudinary");
 
 const instructorController = {
   // Lấy tất cả giảng viên
@@ -238,6 +239,88 @@ const instructorController = {
       res.status(500).json({
         success: false,
         message: "Lỗi khi lấy thống kê giảng viên",
+        error: error.message,
+      });
+    }
+  },
+
+  // Upload ảnh đại diện cho giảng viên (lên Cloudinary)
+  uploadAvatar: async (req, res) => {
+    try {
+      console.log("[uploadAvatar] Request received:", {
+        hasFile: !!req.file,
+        fileSize: req.file?.size,
+        mimetype: req.file?.mimetype,
+      });
+
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "Không có file được tải lên",
+        });
+      }
+
+      // Upload lên Cloudinary
+      console.log("[uploadAvatar] Uploading to Cloudinary...");
+      const imageUrl = await uploadToCloudinary(
+        req.file.buffer,
+        "instructors/avatars"
+      );
+      console.log("[uploadAvatar] Upload successful, URL:", imageUrl);
+
+      res.status(201).json({
+        success: true,
+        message: "Tải ảnh đại diện thành công",
+        data: {
+          url: imageUrl,
+        },
+      });
+    } catch (error) {
+      console.error("[uploadAvatar] Error uploading instructor avatar:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi tải ảnh đại diện",
+        error: error.message,
+      });
+    }
+  },
+
+  // Upload CV cho giảng viên (lên Cloudinary)
+  uploadCV: async (req, res) => {
+    try {
+      console.log("[uploadCV] Request received:", {
+        hasFile: !!req.file,
+        fileSize: req.file?.size,
+        mimetype: req.file?.mimetype,
+      });
+
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "Không có file được tải lên",
+        });
+      }
+
+      // Upload lên Cloudinary (có thể là PDF hoặc file khác)
+      console.log("[uploadCV] Uploading to Cloudinary...");
+      const fileUrl = await uploadToCloudinary(
+        req.file.buffer,
+        "instructors/cvs"
+      );
+      console.log("[uploadCV] Upload successful, URL:", fileUrl);
+
+      res.status(201).json({
+        success: true,
+        message: "Tải CV thành công",
+        data: {
+          url: fileUrl,
+        },
+      });
+    } catch (error) {
+      console.error("[uploadCV] Error uploading instructor CV:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi tải CV",
         error: error.message,
       });
     }

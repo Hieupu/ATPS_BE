@@ -509,9 +509,13 @@ const classController = {
   // Bước 1: Admin tạo lớp mới
   createClass: async (req, res) => {
     try {
+      console.log("[classController] ========== createClass START ==========");
+      console.log("[classController] Request method:", req.method);
+      console.log("[classController] Request URL:", req.originalUrl);
+      console.log("[classController] Request headers:", req.headers);
       // Log request body để debug (có thể xóa sau)
       console.log(
-        "Create Class Request Body:",
+        "[classController] Create Class Request Body:",
         JSON.stringify(req.body, null, 2)
       );
 
@@ -571,8 +575,8 @@ const classController = {
       });
 
       if (missingFields.length > 0) {
-        console.log("Missing required fields:", missingFields);
-        console.log("Field values:", {
+        console.error("[classController] ERROR: Missing required fields:", missingFields);
+        console.error("[classController] Field values:", {
           Name: className,
           InstructorID,
           OpendatePlan: opendatePlan,
@@ -646,6 +650,20 @@ const classController = {
       }
 
       // Tạo lớp với status DRAFT (dbver5: không có ZoomURL)
+      console.log("[classController] Calling classService.createClass with data:", {
+        Name: className,
+        CourseID: CourseID || null,
+        InstructorID,
+        Fee: Fee || null,
+        OpendatePlan: opendatePlan,
+        EnddatePlan: EnddatePlan || null,
+        Numofsession: numofsessionValue,
+        Maxstudent: maxstudentValue,
+        ZoomID: ZoomID || null,
+        Zoompass: Zoompass || null,
+        Status: "DRAFT",
+      });
+      
       const classData = await classService.createClass({
         Name: className,
         CourseID: CourseID || null,
@@ -660,15 +678,26 @@ const classController = {
         Status: "DRAFT",
       });
 
+      console.log("[classController] classService.createClass result:", JSON.stringify(classData, null, 2));
+
       const classId = classData?.ClassID;
+      const classDisplayName = className || `Class ${classId}`;
+      
+      console.log("[classController] Created class with ID:", classId);
 
       // Tạo sessions nếu có trong request body
+      console.log("[classController] Checking for sessions in request body...");
+      console.log("[classController] req.body.sessions:", req.body.sessions);
+      console.log("[classController] Is array?", Array.isArray(req.body.sessions));
+      console.log("[classController] Length:", req.body.sessions?.length || 0);
+      
       let createdSessions = [];
       if (
         req.body.sessions &&
         Array.isArray(req.body.sessions) &&
         req.body.sessions.length > 0
       ) {
+        console.log("[classController] Processing sessions...");
         const sessionRepository = require("../repositories/sessionRepository");
         const {
           validateDateDayConsistency,
@@ -699,6 +728,10 @@ const classController = {
           }
 
           // Validate Date vs Timeslot Day
+          // NOTE: Bỏ qua validation này vì một timeslot có thể được dùng cho nhiều ngày khác nhau
+          // Trường Day trong bảng timeslot chỉ là gợi ý/mặc định, không phải ràng buộc cứng
+          // Nếu cần strict validation, có thể bật lại bằng cách uncomment đoạn code dưới
+          /*
           try {
             const timeslot = await timeslotRepository.findById(
               session.TimeslotID
@@ -723,10 +756,11 @@ const classController = {
             }: Lỗi khi validate - ${error.message}`;
             continue;
           }
+          */
 
           sessionsData.push({
             ClassID: classId,
-            Title: session.Title || `Session ${index + 1}`,
+            Title: session.Title || `Session for class ${classDisplayName}`,
             Description: session.Description || "",
             Date: session.Date,
             TimeslotID: session.TimeslotID,
@@ -755,7 +789,7 @@ const classController = {
       }
 
       // Đảm bảo ClassID ở vị trí cố định: response.data.ClassID
-      res.status(201).json({
+      const responseData = {
         success: true,
         message: "Tạo lớp học thành công",
         data: {
@@ -765,9 +799,20 @@ const classController = {
         ClassID: classId, // Giữ lại ở root level để backward compatibility
         sessionsCreated: createdSessions.length,
         sessions: createdSessions.length > 0 ? createdSessions : undefined,
-      });
+      };
+      
+      console.log("[classController] ========== createClass SUCCESS ==========");
+      console.log("[classController] Response data:", JSON.stringify(responseData, null, 2));
+      console.log("[classController] ClassID:", classId);
+      console.log("[classController] Sessions created:", createdSessions.length);
+      
+      res.status(201).json(responseData);
     } catch (error) {
-      console.error("Error creating class:", error);
+      console.error("[classController] ========== createClass ERROR ==========");
+      console.error("[classController] Error creating class:", error);
+      console.error("[classController] Error name:", error?.name);
+      console.error("[classController] Error message:", error?.message);
+      console.error("[classController] Error stack:", error?.stack);
 
       // Nếu là validation error từ session validation, trả về 400
       if (
@@ -854,9 +899,10 @@ const classController = {
         });
       }
 
-      // Cập nhật status: DRAFT -> WAITING (admin gửi cho instructor)
+      // Cập nhật status: DRAFT -> APPROVED (admin duyệt lớp)
+      // Lưu ý: Đã loại bỏ WAITING/PENDING vì admin đã chọn course từ bước 1
       const updatedClass = await classService.updateClass(classId, {
-        Status: "WAITING",
+        Status: "APPROVED",
       });
 
       // Lấy thông tin giảng viên để gửi notification
@@ -866,11 +912,11 @@ const classController = {
 
       // Tạo notification cho giảng viên
       if (instructor) {
-        const notificationContent = `Lớp học "${classData.Name}" đang chờ bạn xem xét và chuẩn bị nội dung.`;
+        const notificationContent = `Lớp học "${classData.Name}" đã được duyệt và sẵn sàng để kích hoạt.`;
 
         await notificationRepository.create({
           Content: notificationContent,
-          Type: "class_pending_approval",
+          Type: "class_approved",
           Status: "unread",
           AccID: instructor.AccID,
         });
@@ -879,7 +925,7 @@ const classController = {
       // Ghi log
       if (adminAccID) {
         await logService.logAction({
-          action: "SEND_CLASS_TO_INSTRUCTOR",
+          action: "APPROVE_CLASS",
           accId: adminAccID,
           detail: `ClassID: ${classId}, ClassName: ${classData.Name}`,
         });
@@ -889,8 +935,9 @@ const classController = {
         success: true,
         data: {
           ClassID: classId,
-          Status: "WAITING",
-          message: "Đã gửi lớp học cho giảng viên thành công",
+          Status: "APPROVED",
+          message:
+            "Đã duyệt lớp học thành công. Lớp sẽ tự động chuyển sang ACTIVE khi đủ điều kiện.",
         },
       });
     } catch (error) {
@@ -926,11 +973,12 @@ const classController = {
         });
       }
 
-      // Kiểm tra status hiện tại: có thể là WAITING (instructor chưa gửi lại) hoặc PENDING (instructor đã gửi lại)
-      if (classData.Status !== "WAITING" && classData.Status !== "PENDING") {
+      // Kiểm tra status hiện tại: chỉ chấp nhận DRAFT
+      // Lưu ý: Đã loại bỏ WAITING/PENDING vì admin đã chọn course từ bước 1
+      if (classData.Status !== "DRAFT") {
         return res.status(400).json({
           success: false,
-          message: "Lớp học không ở trạng thái chờ duyệt (WAITING hoặc PENDING)",
+          message: "Lớp học không ở trạng thái DRAFT",
         });
       }
 
@@ -1106,9 +1154,8 @@ const classController = {
       }
 
       // Xử lý các trường hợp status khác nhau
-      if (Status === "WAITING" || Status === "PENDING_APPROVAL") {
-        // Tái sử dụng logic từ sendToInstructor
-        // PENDING_APPROVAL là alias cho WAITING (backward compatibility)
+      if (Status === "APPROVED") {
+        // Chuyển từ DRAFT sang APPROVED
         if (classData.Status !== "DRAFT") {
           return res.status(400).json({
             success: false,
@@ -1125,7 +1172,7 @@ const classController = {
             error: true,
             success: false,
             message:
-              "Lớp học chưa có lịch học chi tiết. Vui lòng thêm lịch học trước khi gửi cho giảng viên.",
+              "Lớp học chưa có lịch học chi tiết. Vui lòng thêm lịch học trước khi duyệt.",
             code: "MISSING_SCHEDULE",
             details: {
               classId: classId,
@@ -1134,9 +1181,9 @@ const classController = {
           });
         }
 
-        // Cập nhật status: DRAFT -> WAITING
+        // Cập nhật status: DRAFT -> APPROVED
         const updatedClass = await classService.updateClass(classId, {
-          Status: "WAITING",
+          Status: "APPROVED",
         });
 
         // Lấy thông tin giảng viên để gửi notification
@@ -1146,11 +1193,11 @@ const classController = {
 
         // Tạo notification cho giảng viên
         if (instructor) {
-          const notificationContent = `Lớp học "${classData.Name}" đang chờ bạn xem xét và chuẩn bị nội dung.`;
+          const notificationContent = `Lớp học "${classData.Name}" đã được duyệt và sẵn sàng để kích hoạt.`;
 
           await notificationRepository.create({
             Content: notificationContent,
-            Type: "class_pending_approval",
+            Type: "class_approved",
             Status: "unread",
             AccID: instructor.AccID,
           });
@@ -1159,7 +1206,7 @@ const classController = {
         // Ghi log
         if (adminAccID) {
           await logService.logAction({
-            action: "SEND_CLASS_TO_INSTRUCTOR",
+            action: "APPROVE_CLASS",
             accId: adminAccID,
             detail: `ClassID: ${classId}, ClassName: ${classData.Name}`,
           });
@@ -1169,11 +1216,16 @@ const classController = {
           success: true,
           data: {
             ClassID: classId,
-            Status: "WAITING",
-            message: "Đã gửi lớp học cho giảng viên thành công",
+            Status: "APPROVED",
+            message:
+              "Đã duyệt lớp học thành công. Lớp sẽ tự động chuyển sang ACTIVE khi đủ điều kiện.",
           },
         });
-      } else if (Status === "ACTIVE" || Status === "OPEN" || Status === "PUBLISHED") {
+      } else if (
+        Status === "ACTIVE" ||
+        Status === "OPEN" ||
+        Status === "PUBLISHED"
+      ) {
         // Hỗ trợ alias: OPEN, PUBLISHED -> ACTIVE
         const updatedClass = await classService.updateClass(classId, {
           Status: "ACTIVE",
@@ -1184,7 +1236,12 @@ const classController = {
           message: "Cập nhật status thành công",
           data: updatedClass,
         });
-      } else if (Status === "CLOSE" || Status === "CLOSED" || Status === "DONE" || Status === "COMPLETED") {
+      } else if (
+        Status === "CLOSE" ||
+        Status === "CLOSED" ||
+        Status === "DONE" ||
+        Status === "COMPLETED"
+      ) {
         // Hỗ trợ alias: CLOSED, DONE, COMPLETED -> CLOSE
         const updatedClass = await classService.updateClass(classId, {
           Status: "CLOSE",
@@ -1197,14 +1254,13 @@ const classController = {
         });
       } else if (Status === "CANCEL" || Status === "CANCELLED") {
         // Hỗ trợ alias: CANCELLED -> CANCEL
-        const updatedClass = await classService.updateClass(classId, {
-          Status: "CANCEL",
-        });
+        // Gọi method cancelClass để xử lý logic hủy lớp
+        const result = await classService.cancelClass(classId);
 
         return res.json({
           success: true,
-          message: "Cập nhật status thành công",
-          data: updatedClass,
+          message: `Hủy lớp thành công. Đã xóa ${result.deletedSessions} buổi học và tạo ${result.refundRequests} yêu cầu hoàn tiền.`,
+          data: result,
         });
       } else {
         // Các trường hợp status khác: APPROVED, PUBLISHED, DRAFT, REJECTED

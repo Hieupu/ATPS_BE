@@ -1,13 +1,4 @@
-/**
- * Session Model - dbver5
- * 
- * Trường mới (dbver5):
- * - ZoomUUID: UUID phòng Zoom cho session
- * 
- * Lưu ý:
- * - Backend sẽ tự động tạo ZoomUUID nếu FE không gửi
- * - Date phải khớp với Day của TimeslotID (validation)
- */
+
 class Session {
   constructor({
     SessionID,

@@ -1,10 +1,11 @@
 const { getDayOfWeek } = require("./sessionValidation");
 const timeslotRepository = require("../repositories/timeslotRepository");
+const classRepository = require("../repositories/classRepository");
 
 /**
  * Hàm Tạo Lịch Hàng loạt
  * Tạo nhiều sessions từ OpendatePlan, Numofsession, và danh sách SelectedTimeslotIDs
- * 
+ *
  * @param {Object} config
  * @param {string} config.OpendatePlan - Ngày bắt đầu dự kiến (YYYY-MM-DD)
  * @param {number} config.Numofsession - Số buổi học
@@ -24,12 +25,22 @@ async function generateBulkSchedule(config) {
 
   // Validate input
   if (!OpendatePlan || !Numofsession || !InstructorID || !ClassID) {
-    throw new Error("Thiếu thông tin bắt buộc: OpendatePlan, Numofsession, InstructorID, ClassID");
+    throw new Error(
+      "Thiếu thông tin bắt buộc: OpendatePlan, Numofsession, InstructorID, ClassID"
+    );
   }
 
   if (!SelectedTimeslotIDs || SelectedTimeslotIDs.length === 0) {
     throw new Error("Phải chọn ít nhất một ca học");
   }
+
+  // Lấy thông tin lớp
+  const classData = await classRepository.findById(ClassID);
+  if (!classData || classData.length === 0) {
+    throw new Error("Lớp học không tồn tại");
+  }
+  const className =
+    classData[0].Name || classData[0].ClassName || `Class ${ClassID}`;
 
   // Lấy thông tin các timeslots
   const timeslots = [];
@@ -64,12 +75,14 @@ async function generateBulkSchedule(config) {
       if (timeslot.Day === dayOfWeek) {
         // Kiểm tra xem đã tạo đủ số buổi cho timeslot này chưa
         const count = timeslotCount.get(timeslot.TimeslotID) || 0;
-        const expectedCount = Math.ceil(Numofsession / SelectedTimeslotIDs.length);
+        const expectedCount = Math.ceil(
+          Numofsession / SelectedTimeslotIDs.length
+        );
 
         // Nếu chưa đủ, tạo session
         if (count < expectedCount && sessionNumber <= Numofsession) {
           sessions.push({
-            Title: `Buổi ${sessionNumber}`,
+            Title: `Session for class ${className}`,
             Description: `Buổi học thứ ${sessionNumber}`,
             ClassID: ClassID,
             InstructorID: InstructorID,
@@ -135,4 +148,3 @@ module.exports = {
   generateBulkSchedule,
   previewBulkSchedule,
 };
-

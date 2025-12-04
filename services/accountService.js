@@ -47,11 +47,15 @@ class AccountService {
 
       // Xử lý Status
       if (updateData.Status !== undefined) {
-        const validStatuses = ["active", "inactive", "pending", "banned"];
-        if (!validStatuses.includes(updateData.Status)) {
-          throw new Error(`Status phải là một trong: ${validStatuses.join(", ")}`);
+        const normalizedStatus = updateData.Status.toLowerCase();
+        // DB chỉ chấp nhận: active, inactive, banned
+        const validStatuses = ["active", "inactive", "banned"];
+        if (!validStatuses.includes(normalizedStatus)) {
+          throw new Error(
+            `Status phải là một trong: ${validStatuses.join(", ")}`
+          );
         }
-        updateFields.Status = updateData.Status;
+        updateFields.Status = normalizedStatus;
       }
 
       // Xử lý Password
@@ -71,8 +75,21 @@ class AccountService {
         return await this.getAccountById(accountId);
       }
 
+      // Lưu status cũ để gửi email thông báo
+      const oldStatus = existingAccount.Status;
+
       // Update account
       await accountRepository.updateAccount(accountId, updateFields);
+
+      // Gửi email thông báo nếu status thay đổi (không block nếu lỗi)
+      if (updateFields.Status && updateFields.Status !== oldStatus) {
+        try {
+          const { notifyAccountStatusChange } = require("../utils/emailNotificationHelper");
+          await notifyAccountStatusChange(accountId, oldStatus, updateFields.Status);
+        } catch (emailError) {
+          console.error("[updateAccount] Error sending email notification:", emailError);
+        }
+      }
 
       // Trả về account đã được update (không có password)
       return await this.getAccountById(accountId);

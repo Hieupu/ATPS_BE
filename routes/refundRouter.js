@@ -31,6 +31,7 @@ router.post("/:id/approve", refundController.approveRefund);
 // Từ chối yêu cầu hoàn tiền
 router.post("/:id/reject", refundController.rejectRefund);
 
+// Hoàn tiền (approved -> completed)
+router.post("/:id/complete", refundController.completeRefund);
+
 module.exports = router;
-
-

@@ -28,7 +28,8 @@ class LearnerRepository {
         l.*,
         a.Username,
         a.Email,
-        a.Phone
+        a.Phone,
+        a.Status as AccountStatus
       FROM learner l
       LEFT JOIN account a ON l.AccID = a.AccID
       WHERE l.LearnerID = ?
@@ -44,7 +45,8 @@ class LearnerRepository {
         l.*,
         a.Username,
         a.Email,
-        a.Phone
+        a.Phone,
+        a.Status as AccountStatus
       FROM learner l
       LEFT JOIN account a ON l.AccID = a.AccID
       WHERE l.AccID = ?
@@ -60,7 +62,8 @@ class LearnerRepository {
         l.*,
         a.Username,
         a.Email,
-        a.Phone
+        a.Phone,
+        a.Status as AccountStatus
       FROM learner l
       LEFT JOIN account a ON l.AccID = a.AccID
       ORDER BY l.LearnerID DESC

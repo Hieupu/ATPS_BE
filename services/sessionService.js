@@ -49,7 +49,9 @@ class SessionService {
 
       // ========== VALIDATION THEO DBVER5 ==========
       // 1. Kiểm tra xung đột với lịch nghỉ (instructortimeslot)
-      const leaveValidation = await validateInstructorLeave(preparedSessionData);
+      const leaveValidation = await validateInstructorLeave(
+        preparedSessionData
+      );
       if (leaveValidation.hasConflict) {
         return {
           success: null,
@@ -113,6 +115,19 @@ class SessionService {
 
       // ========== SYNCHRONIZATION FUNCTION: Đồng bộ class.Opendate/Enddate ==========
       await this.syncClassDates(preparedSessionData.ClassID);
+
+      // Chuyển status từ AVAILABLE sang OTHER trong instructortimeslot
+      try {
+        const instructorAvailabilityService = require("./instructorAvailabilityService");
+        await instructorAvailabilityService.markSlotAsBooked(
+          preparedSessionData.InstructorID,
+          preparedSessionData.TimeslotID,
+          preparedSessionData.Date
+        );
+      } catch (error) {
+        console.error("Error marking slot as booked:", error);
+        // Không throw để không ảnh hưởng đến flow chính
+      }
 
       // Lấy thông tin đầy đủ
       const fullSessionData = await sessionRepository.findById(
@@ -268,6 +283,17 @@ class SessionService {
         throw new Error("Session không tồn tại");
       }
 
+      // Logic mới: Không cho phép update ZoomUUID (chỉ được giữ nguyên hoặc không có)
+      // Chỉ cho phép update: Title, Description, Date, TimeslotID
+      if (
+        updateData.ZoomUUID !== undefined &&
+        updateData.ZoomUUID !== currentSession.ZoomUUID
+      ) {
+        // Nếu ZoomUUID khác với ZoomUUID hiện tại → reject hoặc ignore
+        // Giữ nguyên ZoomUUID cũ, không update
+        delete updateData.ZoomUUID;
+      }
+
       // Nếu có thay đổi Date, TimeslotID, ClassID, hoặc InstructorID thì cần kiểm tra conflict
       const needConflictCheck =
         (updateData.Date && updateData.Date !== currentSession.Date) ||
@@ -296,7 +322,9 @@ class SessionService {
         }
 
         // 2. Validate instructor leave
-        const leaveValidation = await validateInstructorLeave(sessionDataToCheck);
+        const leaveValidation = await validateInstructorLeave(
+          sessionDataToCheck
+        );
         if (leaveValidation.hasConflict) {
           throw new Error(leaveValidation.conflictInfo.message);
         }
@@ -343,7 +371,9 @@ class SessionService {
 
       const classData = await classRepository.findById(session.ClassID);
       if (classData && classData.length > 0) {
-        const { validateClassStatusForEdit } = require("../utils/classValidation");
+        const {
+          validateClassStatusForEdit,
+        } = require("../utils/classValidation");
         validateClassStatusForEdit(classData[0].Status);
       }
 
@@ -388,7 +418,9 @@ class SessionService {
 
       const classData = await classRepository.findById(session.ClassID);
       if (classData && classData.length > 0) {
-        const { validateClassStatusForEdit } = require("../utils/classValidation");
+        const {
+          validateClassStatusForEdit,
+        } = require("../utils/classValidation");
         validateClassStatusForEdit(classData[0].Status);
       }
 
@@ -420,16 +452,22 @@ class SessionService {
         throw new Error("Lớp học không tồn tại");
       }
 
-      const { validateClassStatusForEdit } = require("../utils/classValidation");
+      const {
+        validateClassStatusForEdit,
+      } = require("../utils/classValidation");
       validateClassStatusForEdit(classData[0].Status);
 
       // Lấy InstructorID từ class
       const instructorId =
         sessionData.InstructorID || classData[0].InstructorID;
 
+      // Lấy className để tạo title
+      const className =
+        classData[0].Name || classData[0].ClassName || `Class ${classId}`;
+
       // Chuẩn bị session data
       const preparedSessionData = {
-        Title: sessionData.Title || "Buổi học bù",
+        Title: sessionData.Title || `Session for class ${className}`,
         Description: sessionData.Description || "",
         ClassID: classId,
         TimeslotID: sessionData.TimeslotID,
@@ -480,6 +518,24 @@ class SessionService {
         throw new Error("Session không tồn tại");
       }
 
+      // Nếu có thông tin InstructorID, TimeslotID, Date thì giải phóng slot (OTHER -> AVAILABLE)
+      try {
+        if (session.InstructorID && session.TimeslotID && session.Date) {
+          const instructorAvailabilityService = require("./instructorAvailabilityService");
+          await instructorAvailabilityService.markSlotAsAvailable(
+            session.InstructorID,
+            session.TimeslotID,
+            session.Date
+          );
+        }
+      } catch (releaseError) {
+        console.error(
+          "Error releasing instructor slot when deleting session:",
+          releaseError
+        );
+        // Không throw để không làm gián đoạn flow xóa session
+      }
+
       // Xóa session
       const deleted = await sessionRepository.delete(sessionId);
 
@@ -500,6 +556,144 @@ class SessionService {
     try {
       if (!sessionsData || sessionsData.length === 0) {
         throw new Error("Không có dữ liệu sessions để tạo");
+      }
+
+      // Logic mới: Validate timeslot pattern cho DRAFT classes
+      // Yêu cầu: Các ca học trong ngày phải giống nhau cho tất cả các ngày
+      // Được phép ở buổi cuối chỉ có một phần ca học nếu đã đủ số buổi
+      const classIds = [...new Set(sessionsData.map((s) => s.ClassID))];
+      for (const classId of classIds) {
+        const classSessions = sessionsData.filter((s) => s.ClassID === classId);
+        if (classSessions.length > 0) {
+          // Lấy thông tin class để check Status
+          const classData = await classRepository.findById(classId);
+          if (classData && classData.length > 0) {
+            const classStatus = classData[0].Status || classData[0].status;
+            const numofsession = classData[0].Numofsession || 0;
+            
+            // Nếu class có Status = 'DRAFT', validate timeslot pattern
+            if (classStatus === "DRAFT" || classStatus === "draft") {
+              // Lấy tất cả TimeslotID từ sessions để query timeslot info
+              const allTimeslotIds = [
+                ...new Set(
+                  classSessions
+                    .map((s) => s.TimeslotID)
+                    .filter((id) => id != null)
+                ),
+              ];
+              
+              // Lấy thông tin timeslot từ database
+              const timeslotMap = new Map();
+              for (const timeslotId of allTimeslotIds) {
+                const timeslot = await timeslotRepository.findById(timeslotId);
+                if (timeslot) {
+                  timeslotMap.set(timeslotId, timeslot);
+                }
+              }
+
+              // Helper function: Tạo key từ StartTime-EndTime để so sánh
+              const getTimeslotKey = (timeslotId) => {
+                const timeslot = timeslotMap.get(timeslotId);
+                if (!timeslot) return null;
+                const startTime = (timeslot.StartTime || "").trim();
+                const endTime = (timeslot.EndTime || "").trim();
+                return `${startTime}-${endTime}`;
+              };
+
+              // Nhóm sessions theo Date, lưu timeslot keys (StartTime-EndTime) thay vì TimeslotID
+              const sessionsByDate = {};
+              classSessions.forEach((session) => {
+                const date = session.Date;
+                if (!date) return;
+                
+                if (!sessionsByDate[date]) {
+                  sessionsByDate[date] = [];
+                }
+                const timeslotKey = getTimeslotKey(session.TimeslotID);
+                if (timeslotKey) {
+                  sessionsByDate[date].push(timeslotKey);
+                }
+              });
+
+              // Sắp xếp các ngày theo thứ tự
+              const sortedDates = Object.keys(sessionsByDate).sort();
+              
+              if (sortedDates.length === 0) {
+                throw new Error(
+                  `Lớp học (ClassID: ${classId}) có Status = DRAFT nhưng không có sessions hợp lệ`
+                );
+              }
+
+              // Lấy set timeslot keys chung từ các ngày (trừ ngày cuối)
+              let commonTimeslotsSet = null;
+              const datesToCheck = sortedDates.slice(0, -1); // Tất cả ngày trừ ngày cuối
+              
+              if (datesToCheck.length > 0) {
+                // Lấy set timeslot keys từ ngày đầu tiên làm chuẩn
+                const firstDateTimeslots = new Set(sessionsByDate[datesToCheck[0]]);
+                commonTimeslotsSet = firstDateTimeslots;
+                
+                // Kiểm tra các ngày còn lại (trừ ngày cuối) có cùng set timeslot keys không
+                for (let i = 1; i < datesToCheck.length; i++) {
+                  const date = datesToCheck[i];
+                  const dateTimeslots = new Set(sessionsByDate[date]);
+                  
+                  // So sánh 2 sets có giống nhau không (so sánh StartTime-EndTime)
+                  if (
+                    commonTimeslotsSet.size !== dateTimeslots.size ||
+                    ![...commonTimeslotsSet].every((key) => dateTimeslots.has(key))
+                  ) {
+                    throw new Error(
+                      `Lớp học (ClassID: ${classId}) có Status = DRAFT: Các ca học trong ngày phải giống nhau cho tất cả các ngày. ` +
+                      `Ngày ${datesToCheck[0]} có ca học [${[...commonTimeslotsSet].join(", ")}] ` +
+                      `nhưng ngày ${date} có ca học [${[...dateTimeslots].join(", ")}]`
+                    );
+                  }
+                }
+              }
+
+              // Kiểm tra ngày cuối: được phép có subset của set chung nếu đã đủ số buổi
+              const lastDate = sortedDates[sortedDates.length - 1];
+              const lastDateTimeslots = new Set(sessionsByDate[lastDate]);
+              
+              if (commonTimeslotsSet && commonTimeslotsSet.size > 0) {
+                // Kiểm tra ngày cuối có phải subset của set chung không (so sánh StartTime-EndTime)
+                const isSubset = [...lastDateTimeslots].every((key) =>
+                  commonTimeslotsSet.has(key)
+                );
+                
+                if (!isSubset) {
+                  throw new Error(
+                    `Lớp học (ClassID: ${classId}) có Status = DRAFT: Ngày cuối cùng (${lastDate}) có ca học [${[...lastDateTimeslots].join(", ")}] ` +
+                    `không khớp với các ca học chung [${[...commonTimeslotsSet].join(", ")}]`
+                  );
+                }
+                
+                // Kiểm tra số buổi: nếu chưa đủ số buổi thì ngày cuối phải có đủ các ca
+                const totalSessions = classSessions.length;
+                if (totalSessions < numofsession) {
+                  // Chưa đủ số buổi → ngày cuối phải có đủ các ca như các ngày khác
+                  if (lastDateTimeslots.size < commonTimeslotsSet.size) {
+                    throw new Error(
+                      `Lớp học (ClassID: ${classId}) có Status = DRAFT: Chưa đủ số buổi học (${totalSessions}/${numofsession}). ` +
+                      `Ngày cuối cùng (${lastDate}) phải có đủ các ca học [${[...commonTimeslotsSet].join(", ")}]`
+                    );
+                  }
+                }
+                // Nếu đã đủ số buổi (totalSessions >= numofsession), ngày cuối được phép có ít hơn
+              } else {
+                // Chỉ có 1 ngày → không cần validate pattern
+                // Nhưng vẫn cần kiểm tra số buổi
+                const totalSessions = classSessions.length;
+                if (totalSessions < numofsession) {
+                  throw new Error(
+                    `Lớp học (ClassID: ${classId}) có Status = DRAFT: Chưa đủ số buổi học (${totalSessions}/${numofsession})`
+                  );
+                }
+              }
+            }
+          }
+        }
       }
 
       // Chuẩn bị dữ liệu sessions với các giá trị mặc định
@@ -548,6 +742,7 @@ class SessionService {
           }
 
           // Chuẩn bị session data với các giá trị mặc định
+          // Logic mới: Preserve ZoomUUID nếu có trong session data (không sinh mới)
           const preparedSession = {
             Title: session.Title,
             Description: session.Description || "", // Mặc định rỗng nếu không có
@@ -555,6 +750,7 @@ class SessionService {
             TimeslotID: session.TimeslotID,
             InstructorID: instructorId, // Ưu tiên từ request, fallback từ Class
             Date: session.Date,
+            ZoomUUID: session.ZoomUUID || null, // Logic mới: Giữ lại ZoomUUID nếu có, không sinh mới
           };
 
           // Lấy thông tin instructor và class name
@@ -571,7 +767,9 @@ class SessionService {
 
           // ========== VALIDATION THEO DBVER5 ==========
           // 1. Kiểm tra xung đột với lịch nghỉ
-          const leaveValidation = await validateInstructorLeave(preparedSession);
+          const leaveValidation = await validateInstructorLeave(
+            preparedSession
+          );
           if (leaveValidation.hasConflict) {
             conflicts.push({
               sessionIndex: i + 1,
@@ -718,10 +916,24 @@ class SessionService {
 
         // Lấy thông tin đầy đủ của các sessions vừa tạo
         const firstInsertId = result.insertId;
+        const instructorAvailabilityService = require("./instructorAvailabilityService");
+
         for (let i = 0; i < sessionsToCreate.length; i++) {
           const session = await sessionRepository.findById(firstInsertId + i);
           if (session && session[0]) {
             createdSessions.push(session[0]);
+
+            // Chuyển status từ AVAILABLE sang OTHER trong instructortimeslot
+            try {
+              await instructorAvailabilityService.markSlotAsBooked(
+                session[0].InstructorID,
+                session[0].TimeslotID,
+                session[0].Date
+              );
+            } catch (error) {
+              console.error("Error marking slot as booked:", error);
+              // Không throw để không ảnh hưởng đến flow chính
+            }
             classIdsToSync.add(session[0].ClassID);
           }
         }
@@ -773,28 +985,14 @@ class SessionService {
 
   // Kiểm tra conflict và trả về thông tin conflict (không throw error)
   // Return: { hasConflict: boolean, conflictType: string, conflictInfo: object }
-  async checkSessionConflictInfo(sessionData, excludeSessionId = null, excludeClassId = null) {
+  async checkSessionConflictInfo(
+    sessionData,
+    excludeSessionId = null,
+    excludeClassId = null
+  ) {
     try {
       const pool = require("../config/db");
       const { ClassID, TimeslotID, InstructorID, Date } = sessionData;
-
-      // Log để debug
-      console.log("[checkSessionConflictInfo] sessionData:", {
-        ClassID,
-        TimeslotID,
-        InstructorID,
-        Date,
-        excludeSessionId,
-        excludeClassId,
-        ClassID_type: typeof ClassID,
-        TimeslotID_type: typeof TimeslotID,
-        InstructorID_type: typeof InstructorID,
-        Date_type: typeof Date,
-        ClassID_undefined: ClassID === undefined,
-        TimeslotID_undefined: TimeslotID === undefined,
-        InstructorID_undefined: InstructorID === undefined,
-        Date_undefined: Date === undefined,
-      });
 
       // Validate required fields for instructor check
       if (InstructorID === undefined || InstructorID === null) {
@@ -839,23 +1037,10 @@ class SessionService {
         instructorParams.push(excludeClassId);
       }
 
-      console.log("[checkSessionConflictInfo] Query 1 SQL:", instructorConflictQuery);
-      console.log("[checkSessionConflictInfo] Query 1 - instructorParams:", instructorParams);
-
       const [instructorConflicts] = await pool.execute(
         instructorConflictQuery,
         instructorParams
       );
-
-      console.log(
-        `[checkSessionConflictInfo] Query 1 kết quả: ${instructorConflicts.length} conflicts`
-      );
-      if (instructorConflicts.length > 0) {
-        console.log(
-          `[checkSessionConflictInfo] Conflict đầu tiên:`,
-          instructorConflicts[0]
-        );
-      }
 
       if (instructorConflicts.length > 0) {
         const conflict = instructorConflicts[0];
@@ -880,30 +1065,28 @@ class SessionService {
       // Trong findAvailableInstructorSlots, không có ClassID nên bỏ qua bước này
       if (ClassID !== undefined && ClassID !== null) {
         let classConflictQuery = `
-          SELECT 
-            s.SessionID,
-            s.Title as sessionTitle,
-            s.Date,
-            c.Name as className,
-            i.FullName as instructorName,
-            t.StartTime,
-            t.EndTime
-          FROM session s
-          INNER JOIN timeslot t ON s.TimeslotID = t.TimeslotID
-          INNER JOIN \`class\` c ON s.ClassID = c.ClassID
-          INNER JOIN instructor i ON s.InstructorID = i.InstructorID
-          WHERE s.ClassID = ?
-            AND s.Date = ?
-            AND s.TimeslotID = ?
-        `;
+        SELECT 
+          s.SessionID,
+          s.Title as sessionTitle,
+          s.Date,
+          c.Name as className,
+          i.FullName as instructorName,
+          t.StartTime,
+          t.EndTime
+        FROM session s
+        INNER JOIN timeslot t ON s.TimeslotID = t.TimeslotID
+        INNER JOIN \`class\` c ON s.ClassID = c.ClassID
+        INNER JOIN instructor i ON s.InstructorID = i.InstructorID
+        WHERE s.ClassID = ?
+          AND s.Date = ?
+          AND s.TimeslotID = ?
+      `;
 
         const classParams = [ClassID, Date, TimeslotID];
         if (excludeSessionId) {
           classConflictQuery += ` AND s.SessionID != ?`;
           classParams.push(excludeSessionId);
         }
-
-        console.log("[checkSessionConflictInfo] Query 2 - classParams:", classParams);
 
         const [classConflicts] = await pool.execute(
           classConflictQuery,
@@ -928,7 +1111,6 @@ class SessionService {
           };
         }
       } else {
-        console.log("[checkSessionConflictInfo] Bỏ qua query class conflict vì ClassID không có");
       }
 
       return { hasConflict: false };
@@ -1099,7 +1281,10 @@ class SessionService {
 
       const [rows] = await pool.execute(query, [classId]);
 
-      if (rows.length === 0 || (!rows[0].ActualStartDate && !rows[0].ActualEndDate)) {
+      if (
+        rows.length === 0 ||
+        (!rows[0].ActualStartDate && !rows[0].ActualEndDate)
+      ) {
         // Nếu không có session nào, có thể set về null hoặc giữ nguyên
         // Tùy vào business logic, ở đây ta sẽ không cập nhật
         return;
@@ -1115,11 +1300,11 @@ class SessionService {
         WHERE ClassID = ?
       `;
 
-      await pool.execute(updateQuery, [actualStartDate, actualEndDate, classId]);
-
-      console.log(
-        `Đã đồng bộ dates cho ClassID ${classId}: Opendate=${actualStartDate}, Enddate=${actualEndDate}`
-      );
+      await pool.execute(updateQuery, [
+        actualStartDate,
+        actualEndDate,
+        classId,
+      ]);
     } catch (error) {
       console.error(`Lỗi khi đồng bộ dates cho ClassID ${classId}:`, error);
       // Không throw error để không làm gián đoạn flow chính

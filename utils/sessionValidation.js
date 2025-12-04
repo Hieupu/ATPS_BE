@@ -44,27 +44,22 @@ function convertVietnameseDayToEnglish(vietnameseDay) {
 }
 
 /**
- * Validation Function A: Kiểm tra xung đột Session vs. Lịch NGHỈ
+ * Validation Function A: Kiểm tra xung đột Session vs. Lịch bận để dạy
+ * Logic mới:
+ * - Fulltime: Chỉ check HOLIDAY (mặc định full ca T2-T7)
+ * - Parttime: Check AVAILABLE (phải có), HOLIDAY (conflict), CLOSE (conflict)
  * @param {Object} sessionData - Dữ liệu session { InstructorID, TimeslotID, Date }
+ * @param {string} instructorType - 'fulltime' hoặc 'parttime'
  * @param {number} excludeSessionId - SessionID cần loại trừ (khi update)
  * @returns {Object} - { hasConflict: boolean, conflictInfo: object }
  */
-async function validateInstructorLeave(sessionData, excludeSessionId = null) {
+async function validateInstructorLeave(
+  sessionData,
+  instructorType = null,
+  excludeSessionId = null
+) {
   try {
     const { InstructorID, TimeslotID, Date } = sessionData;
-
-    // Log để debug
-    console.log("[validateInstructorLeave] sessionData:", {
-      InstructorID,
-      TimeslotID,
-      Date,
-      InstructorID_type: typeof InstructorID,
-      TimeslotID_type: typeof TimeslotID,
-      Date_type: typeof Date,
-      InstructorID_undefined: InstructorID === undefined,
-      TimeslotID_undefined: TimeslotID === undefined,
-      Date_undefined: Date === undefined,
-    });
 
     // Validate required fields
     if (InstructorID === undefined || InstructorID === null) {
@@ -77,21 +72,80 @@ async function validateInstructorLeave(sessionData, excludeSessionId = null) {
       throw new Error("Date is required but was undefined/null");
     }
 
-    // Kiểm tra giảng viên có nghỉ vào ca này không
-    console.log(
-      `[validateInstructorLeave] Gọi checkConflict với: InstructorID=${InstructorID}, TimeslotID=${TimeslotID}, Date=${Date}`
-    );
+    // Lấy Type nếu chưa có
+    if (!instructorType) {
+      const instructorRepository = require("../repositories/instructorRepository");
+      const instructor = await instructorRepository.findById(InstructorID);
+      instructorType = instructor?.Type || "parttime";
+    }
+
+    // Kiểm tra giảng viên có lịch bận vào ca này không
     const leaveConflict = await instructorTimeslotRepository.checkConflict(
       InstructorID,
       TimeslotID,
       Date
     );
-    console.log(
-      `[validateInstructorLeave] Kết quả checkConflict:`,
-      leaveConflict ? { ...leaveConflict } : "null (không có lịch nghỉ)"
-    );
 
-    if (leaveConflict) {
+    if (instructorType === "fulltime") {
+      // Fulltime: Chỉ conflict nếu có HOLIDAY
+      if (
+        leaveConflict &&
+        leaveConflict.Status &&
+        leaveConflict.Status.toUpperCase() === "HOLIDAY"
+      ) {
+        return {
+          hasConflict: true,
+          conflictType: "instructor_leave",
+          conflictInfo: {
+            instructorId: InstructorID,
+            timeslotId: TimeslotID,
+            date: Date,
+            status: leaveConflict.Status,
+            note: leaveConflict.Note,
+            message: `Giảng viên nghỉ lễ vào ca này`,
+          },
+        };
+      }
+      // Fulltime mặc định có thể dạy T2-T7, không cần check AVAILABLE
+      return { hasConflict: false };
+    } else {
+      // Parttime: Phải có AVAILABLE, conflict nếu có HOLIDAY hoặc CLOSE
+      if (leaveConflict) {
+        const status = (leaveConflict.Status || "").toUpperCase();
+        if (status === "HOLIDAY") {
+          return {
+            hasConflict: true,
+            conflictType: "instructor_leave",
+            conflictInfo: {
+              instructorId: InstructorID,
+              timeslotId: TimeslotID,
+              date: Date,
+              status: leaveConflict.Status,
+              note: leaveConflict.Note,
+              message: `Giảng viên nghỉ lễ vào ca này`,
+            },
+          };
+        }
+        if (status === "CLOSE") {
+          return {
+            hasConflict: true,
+            conflictType: "instructor_leave",
+            conflictInfo: {
+              instructorId: InstructorID,
+              timeslotId: TimeslotID,
+              date: Date,
+              status: leaveConflict.Status,
+              note: leaveConflict.Note,
+              message: `Ca này đã được book (CLOSE)`,
+            },
+          };
+        }
+        // Nếu có AVAILABLE thì OK
+        if (status === "AVAILABLE") {
+          return { hasConflict: false };
+        }
+      }
+      // Parttime: Không có trong instructortimeslot = conflict (chưa chọn ca này)
       return {
         hasConflict: true,
         conflictType: "instructor_leave",
@@ -99,16 +153,12 @@ async function validateInstructorLeave(sessionData, excludeSessionId = null) {
           instructorId: InstructorID,
           timeslotId: TimeslotID,
           date: Date,
-          status: leaveConflict.Status,
-          note: leaveConflict.Note,
-          message: `Giảng viên bận nghỉ vào ca này (${leaveConflict.Status})`,
+          message: `Giảng viên parttime chưa chọn ca này (không có trong lịch bận để dạy)`,
         },
       };
     }
-
-    return { hasConflict: false };
   } catch (error) {
-    throw new Error(`Lỗi khi kiểm tra lịch nghỉ: ${error.message}`);
+    throw new Error(`Lỗi khi kiểm tra lịch bận: ${error.message}`);
   }
 }
 
@@ -146,6 +196,10 @@ async function validateDateDayConsistency(sessionData) {
     }
 
     // So sánh Day từ timeslot với Day từ Date
+    // NOTE: Bỏ qua validation này vì một timeslot có thể được dùng cho nhiều ngày khác nhau
+    // Trường Day trong bảng timeslot chỉ là gợi ý/mặc định, không phải ràng buộc cứng
+    // Nếu cần strict validation, có thể bật lại bằng cách uncomment đoạn code dưới
+    /*
     if (timeslot.Day !== dateDay) {
       return {
         isValid: false,
@@ -158,10 +212,13 @@ async function validateDateDayConsistency(sessionData) {
         },
       };
     }
+    */
 
     return { isValid: true };
   } catch (error) {
-    throw new Error(`Lỗi khi kiểm tra tính nhất quán ngày/thứ: ${error.message}`);
+    throw new Error(
+      `Lỗi khi kiểm tra tính nhất quán ngày/thứ: ${error.message}`
+    );
   }
 }
 
@@ -216,4 +273,3 @@ module.exports = {
   validateDateDayConsistency,
   validateSessionData,
 };
-

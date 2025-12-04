@@ -1,13 +1,4 @@
-/**
- * Class Model - dbver5
- *
- * Trường mới (dbver5):
- * - ZoomID, Zoompass: Thông tin phòng Zoom
- * - OpendatePlan, Opendate: Ngày dự kiến và thực tế bắt đầu
- * - EnddatePlan, Enddate: Ngày dự kiến và thực tế kết thúc
- * - Numofsession: Số buổi học
- * - Maxstudent: Sĩ số tối đa
- */
+
 class Class {
   constructor({
     ClassID,

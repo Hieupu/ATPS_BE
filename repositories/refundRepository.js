@@ -31,7 +31,11 @@ class RefundRepository {
   async findAll(options = {}) {
     try {
       const { page = 1, limit = 10, status = null, search = "" } = options;
-      const offset = (page - 1) * limit;
+
+      // Đảm bảo page và limit là số nguyên dương
+      const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+      const limitNum = Math.max(1, parseInt(String(limit), 10) || 10);
+      const offset = Math.max(0, (pageNum - 1) * limitNum);
 
       let query = `
         SELECT 
@@ -44,7 +48,7 @@ class RefundRepository {
           e.ClassID,
           e.OrderCode,
           l.FullName as LearnerName,
-          l.Email as LearnerEmail,
+          a.Email as LearnerEmail,
           c.Name as ClassName,
           c.Fee as ClassFee,
           p.PaymentID,
@@ -54,6 +58,7 @@ class RefundRepository {
         FROM refundrequest r
         LEFT JOIN enrollment e ON r.EnrollmentID = e.EnrollmentID
         LEFT JOIN learner l ON e.LearnerID = l.LearnerID
+        LEFT JOIN account a ON l.AccID = a.AccID
         LEFT JOIN \`class\` c ON e.ClassID = c.ClassID
         LEFT JOIN payment p ON p.EnrollmentID = e.EnrollmentID AND p.Status = 'completed'
         WHERE 1=1
@@ -63,21 +68,27 @@ class RefundRepository {
 
       if (status) {
         query += ` AND r.Status = ?`;
-        params.push(status);
+        params.push(String(status));
       }
 
-      if (search) {
+      if (search && String(search).trim()) {
         query += ` AND (l.FullName LIKE ? OR c.Name LIKE ? OR r.Reason LIKE ?)`;
-        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        const searchTerm = `%${String(search).trim()}%`;
+        params.push(searchTerm, searchTerm, searchTerm);
       }
 
-      query += ` ORDER BY r.RequestDate DESC LIMIT ? OFFSET ?`;
-      params.push(limit, offset);
+      // Sử dụng template string cho LIMIT và OFFSET (giống các repository khác)
+      // Đảm bảo limit và offset là số nguyên dương
+      const safeLimit = Number(limitNum) || 10;
+      const safeOffset = Number(offset) || 0;
+      query += ` ORDER BY r.RequestDate DESC LIMIT ${safeLimit} OFFSET ${safeOffset}`;
 
       const [rows] = await pool.execute(query, params);
 
       return rows;
     } catch (error) {
+      console.error("[RefundRepository.findAll] Error:", error);
+      console.error("[RefundRepository.findAll] Error SQL:", error.sql);
       throw error;
     }
   }
@@ -92,6 +103,7 @@ class RefundRepository {
         FROM refundrequest r
         LEFT JOIN enrollment e ON r.EnrollmentID = e.EnrollmentID
         LEFT JOIN learner l ON e.LearnerID = l.LearnerID
+        LEFT JOIN account a ON l.AccID = a.AccID
         LEFT JOIN \`class\` c ON e.ClassID = c.ClassID
         WHERE 1=1
       `;
@@ -102,9 +114,10 @@ class RefundRepository {
         params.push(status);
       }
 
-      if (search) {
+      if (search && search.trim()) {
         query += ` AND (l.FullName LIKE ? OR c.Name LIKE ? OR r.Reason LIKE ?)`;
-        params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        const searchTerm = `%${search.trim()}%`;
+        params.push(searchTerm, searchTerm, searchTerm);
       }
 
       const [rows] = await pool.execute(query, params);
@@ -128,7 +141,7 @@ class RefundRepository {
           e.ClassID,
           e.OrderCode,
           l.FullName as LearnerName,
-          l.Email as LearnerEmail,
+          a.Email as LearnerEmail,
           c.Name as ClassName,
           c.Fee as ClassFee,
           p.PaymentID,
@@ -138,6 +151,7 @@ class RefundRepository {
         FROM refundrequest r
         LEFT JOIN enrollment e ON r.EnrollmentID = e.EnrollmentID
         LEFT JOIN learner l ON e.LearnerID = l.LearnerID
+        LEFT JOIN account a ON l.AccID = a.AccID
         LEFT JOIN \`class\` c ON e.ClassID = c.ClassID
         LEFT JOIN payment p ON p.EnrollmentID = e.EnrollmentID AND p.Status = 'completed'
         WHERE r.RefundID = ?
@@ -170,7 +184,9 @@ class RefundRepository {
 
       values.push(refundId);
 
-      const query = `UPDATE refundrequest SET ${fields.join(", ")} WHERE RefundID = ?`;
+      const query = `UPDATE refundrequest SET ${fields.join(
+        ", "
+      )} WHERE RefundID = ?`;
 
       const [result] = await pool.execute(query, values);
 
@@ -210,11 +226,17 @@ class RefundRepository {
           e.LearnerID,
           e.ClassID,
           l.FullName as LearnerName,
+          a.Email as LearnerEmail,
           c.Name as ClassName,
-          p.Amount as PaymentAmount
+          c.Fee as ClassFee,
+          p.PaymentID,
+          p.Amount as PaymentAmount,
+          p.PaymentMethod,
+          p.PaymentDate
         FROM refundrequest r
         LEFT JOIN enrollment e ON r.EnrollmentID = e.EnrollmentID
         LEFT JOIN learner l ON e.LearnerID = l.LearnerID
+        LEFT JOIN account a ON l.AccID = a.AccID
         LEFT JOIN \`class\` c ON e.ClassID = c.ClassID
         LEFT JOIN payment p ON p.EnrollmentID = e.EnrollmentID AND p.Status = 'completed'
         WHERE r.Status = ?
@@ -228,8 +250,24 @@ class RefundRepository {
       throw error;
     }
   }
+
+  // Lấy yêu cầu hoàn tiền theo EnrollmentID
+  async findByEnrollmentId(enrollmentId) {
+    try {
+      const query = `
+        SELECT 
+          r.*
+        FROM refundrequest r
+        WHERE r.EnrollmentID = ?
+        ORDER BY r.RequestDate DESC
+      `;
+
+      const [rows] = await pool.execute(query, [enrollmentId]);
+      return rows;
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 module.exports = new RefundRepository();
-
-

@@ -2,8 +2,17 @@ const authService = require("../services/authService");
 
 const login = async (req, res) => {
   try {
-    const { email, password, provider = "local" } = req.body;
-    const result = await authService.loginService(email, password, provider);
+    // Hỗ trợ cả email và username để login (backward compatible với FE/tests cũ)
+    const { email, username, password, provider = "local" } = req.body;
+
+    const identifier = email || username;
+
+    const result = await authService.loginService(
+      identifier,
+      password,
+      provider
+    );
+
     res.json({
       message: "Login successful",
       token: result.token,

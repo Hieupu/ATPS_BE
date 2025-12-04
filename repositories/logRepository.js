@@ -27,53 +27,60 @@ class LogRepository {
   async findByAccountId(accountId, limit = 50) {
     // Đảm bảo limit là số nguyên hợp lệ
     const validLimit = Math.max(1, parseInt(limit, 10) || 50);
-    const limitInt = parseInt(validLimit.toString(), 10);
+    // Đảm bảo limitInt là số nguyên, không phải string
+    const limitInt = Number.isInteger(validLimit) ? validLimit : parseInt(validLimit, 10);
 
+    // Sử dụng string interpolation cho LIMIT để tránh lỗi prepared statement
     const query = `
       SELECT l.*, a.Email, a.username
       FROM \`log\` l
       LEFT JOIN account a ON l.AccID = a.AccID
       WHERE l.AccID = ?
       ORDER BY l.Timestamp DESC
-      LIMIT ?
+      LIMIT ${limitInt}
     `;
 
-    const [rows] = await pool.execute(query, [accountId, limitInt]);
+    const [rows] = await pool.execute(query, [accountId]);
     return rows;
   }
 
   async findAll(limit = 100) {
     // Đảm bảo limit là số nguyên hợp lệ
     const validLimit = Math.max(1, parseInt(limit, 10) || 100);
-    const limitInt = parseInt(validLimit.toString(), 10);
+    // Đảm bảo limitInt là số nguyên, không phải string
+    const limitInt = Number.isInteger(validLimit) ? validLimit : parseInt(validLimit, 10);
 
+    // Sử dụng string interpolation cho LIMIT để tránh lỗi prepared statement
+    // MySQL có thể gặp vấn đề với placeholder cho LIMIT trong một số trường hợp
     const query = `
       SELECT l.*, a.Email, a.username
       FROM \`log\` l
       LEFT JOIN account a ON l.AccID = a.AccID
       ORDER BY l.Timestamp DESC
-      LIMIT ?
+      LIMIT ${limitInt}
     `;
 
-    const [rows] = await pool.execute(query, [limitInt]);
+    const [rows] = await pool.execute(query);
     return rows;
   }
 
   async findByAction(action, limit = 50) {
     // Đảm bảo limit là số nguyên hợp lệ
     const validLimit = Math.max(1, parseInt(limit, 10) || 50);
-    const limitInt = parseInt(validLimit.toString(), 10);
+    // Đảm bảo limitInt là số nguyên, không phải string
+    const limitInt = Number.isInteger(validLimit) ? validLimit : parseInt(validLimit, 10);
 
+    // Sử dụng string interpolation cho LIMIT để tránh lỗi prepared statement
     const query = `
       SELECT l.*, a.Email, a.username
       FROM \`log\` l
       LEFT JOIN account a ON l.AccID = a.AccID
       WHERE l.Action = ?
       ORDER BY l.Timestamp DESC
-      LIMIT ?
+      LIMIT ${limitInt}
     `;
 
-    const [rows] = await pool.execute(query, [action, limitInt]);
+    const [rows] = await pool.execute(query, [action]);
     return rows;
   }
 }

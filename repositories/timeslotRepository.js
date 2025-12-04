@@ -42,10 +42,13 @@ class TimeslotRepository {
   }
 
   async findAll(options = {}) {
-    const { page = 1, limit = 10 } = options;
-    const pageNum = parseInt(page) || 1;
-    const limitNum = parseInt(limit) || 10;
-    const offset = (pageNum - 1) * limitNum;
+    const rawPage = options.page;
+    const rawLimit = options.limit;
+    const parsedLimit = parseInt(rawLimit, 10);
+    const limitNum =
+      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : null;
+    const pageNum = limitNum ? parseInt(rawPage, 10) || 1 : 1;
+    const offset = limitNum ? (pageNum - 1) * limitNum : 0;
 
     // Kiểm tra xem cột Day có tồn tại không
     let hasDayColumn = false;
@@ -93,18 +96,24 @@ class TimeslotRepository {
     const [countResult] = await pool.execute(countQuery, params);
     const total = countResult[0].total;
 
-    // Thêm phân trang
-    query += ` ORDER BY t.StartTime ASC LIMIT ${limitNum} OFFSET ${offset}`;
+    // Sắp xếp ổn định và phân trang (nếu có)
+    query += ` ORDER BY t.Day IS NULL, t.Day ASC, t.StartTime ASC`;
 
-    const [timeslots] = await pool.execute(query, params);
+    let dataQuery = query;
+    let dataParams = params;
+    if (limitNum) {
+      dataQuery += ` LIMIT ${limitNum} OFFSET ${offset}`;
+    }
+
+    const [timeslots] = await pool.execute(dataQuery, dataParams);
 
     return {
       data: timeslots,
       pagination: {
         page: pageNum,
-        limit: limitNum,
+        limit: limitNum || total,
         total,
-        totalPages: Math.ceil(total / limitNum),
+        totalPages: limitNum ? Math.ceil(total / limitNum) : 1,
       },
     };
   }

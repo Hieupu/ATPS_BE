@@ -4,6 +4,12 @@ const { body, validationResult } = require("express-validator");
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.error("[Validation Error]", {
+      path: req.path,
+      method: req.method,
+      body: req.body,
+      errors: errors.array(),
+    });
     return res.status(400).json({
       success: false,
       message: "Validation failed",
@@ -597,6 +603,198 @@ const validateBulkSessions = [
   handleValidationErrors,
 ];
 
+// =====================
+// Class Wizard validators
+// =====================
+
+// Validate body cho analyzeBlockedDays (Class Wizard Step 3)
+const validateAnalyzeBlockedDays = [
+  body("InstructorID")
+    .notEmpty()
+    .withMessage("InstructorID là bắt buộc")
+    .isInt({ min: 1 })
+    .withMessage("InstructorID phải là số nguyên dương"),
+
+  body("OpendatePlan")
+    .notEmpty()
+    .withMessage("OpendatePlan là bắt buộc")
+    .isISO8601()
+    .withMessage("OpendatePlan phải là ngày hợp lệ (YYYY-MM-DD)"),
+
+  body("Numofsession")
+    .notEmpty()
+    .withMessage("Numofsession là bắt buộc")
+    .isInt({ min: 1 })
+    .withMessage("Numofsession phải là số nguyên dương"),
+
+  body("DaysOfWeek")
+    .optional({ nullable: true })
+    .isArray()
+    .withMessage("DaysOfWeek phải là một mảng")
+    .bail()
+    .custom((value) => {
+      if (!Array.isArray(value)) return true;
+      const allInts = value.every((v) => {
+        const n = Number(v);
+        return Number.isInteger(n) && n >= 0 && n <= 6;
+      });
+      if (!allInts) {
+        throw new Error("DaysOfWeek chỉ được chứa số nguyên từ 0-6");
+      }
+      return true;
+    }),
+
+  body("TimeslotsByDay")
+    .optional({ nullable: true })
+    .custom((value) => {
+      if (value == null) return true;
+      if (typeof value !== "object" || Array.isArray(value)) {
+        throw new Error(
+          "TimeslotsByDay phải là object {dayOfWeek: [timeslotIds]}"
+        );
+      }
+      for (const key of Object.keys(value)) {
+        const arr = value[key];
+        if (!Array.isArray(arr)) {
+          throw new Error(
+            `TimeslotsByDay[${key}] phải là một mảng timeslotIds`
+          );
+        }
+        const allInts = arr.every((v) => {
+          const n = Number(v);
+          return Number.isInteger(n) && n > 0;
+        });
+        if (!allInts) {
+          throw new Error(
+            `TimeslotsByDay[${key}] chỉ được chứa số nguyên dương (TimeslotID)`
+          );
+        }
+      }
+      return true;
+    }),
+
+  handleValidationErrors,
+];
+
+// Validate body cho searchTimeslots (Class Wizard Step 3 - gợi ý ngày bắt đầu)
+const validateSearchTimeslots = [
+  body("InstructorID")
+    .notEmpty()
+    .withMessage("InstructorID là bắt buộc")
+    .custom((value) => {
+      const num = typeof value === "string" ? parseInt(value, 10) : value;
+      if (!Number.isInteger(num) || num < 1) {
+        throw new Error("InstructorID phải là số nguyên dương");
+      }
+      return true;
+    }),
+
+  body("DaysOfWeek")
+    .notEmpty()
+    .withMessage("DaysOfWeek là bắt buộc")
+    .isArray({ min: 1 })
+    .withMessage("DaysOfWeek phải là một mảng không rỗng")
+    .bail()
+    .custom((value) => {
+      // Chấp nhận cả string và number
+      const allValid = value.every((v) => {
+        const num = typeof v === "string" ? parseInt(v, 10) : v;
+        return Number.isInteger(num) && num >= 0 && num <= 6;
+      });
+      if (!allValid) {
+        throw new Error("DaysOfWeek chỉ được chứa số nguyên từ 0-6");
+      }
+      return true;
+    }),
+
+  body("TimeslotsByDay")
+    .notEmpty()
+    .withMessage("TimeslotsByDay là bắt buộc")
+    .custom((value) => {
+      if (typeof value !== "object" || Array.isArray(value)) {
+        throw new Error(
+          "TimeslotsByDay phải là object {dayOfWeek: [timeslotIds]}"
+        );
+      }
+      const keys = Object.keys(value);
+      if (keys.length === 0) {
+        throw new Error("TimeslotsByDay không được rỗng");
+      }
+      for (const key of keys) {
+        const arr = value[key];
+        if (!Array.isArray(arr)) {
+          throw new Error(
+            `TimeslotsByDay[${key}] phải là một mảng timeslotIds`
+          );
+        }
+        // Chấp nhận cả string và number cho TimeslotID
+        const allValid = arr.every((v) => {
+          const num = typeof v === "string" ? parseInt(v, 10) : v;
+          return Number.isInteger(num) && num > 0;
+        });
+        if (!allValid) {
+          throw new Error(
+            `TimeslotsByDay[${key}] chỉ được chứa số nguyên dương (TimeslotID)`
+          );
+        }
+      }
+      return true;
+    }),
+
+  body("Numofsession")
+    .notEmpty()
+    .withMessage("Numofsession là bắt buộc")
+    .custom((value) => {
+      const num = typeof value === "string" ? parseInt(value, 10) : value;
+      if (!Number.isInteger(num) || num < 1) {
+        throw new Error("Numofsession phải là số nguyên dương");
+      }
+      return true;
+    }),
+
+  body("sessionsPerWeek")
+    .optional({ nullable: true })
+    .custom((value) => {
+      if (value === null || value === undefined) return true;
+      const num = typeof value === "string" ? parseInt(value, 10) : value;
+      if (!Number.isInteger(num) || num < 0) {
+        throw new Error("sessionsPerWeek phải là số nguyên không âm");
+      }
+      return true;
+    }),
+
+  body("requiredSlotsPerWeek")
+    .optional({ nullable: true })
+    .custom((value) => {
+      if (value === null || value === undefined) return true;
+      const num = typeof value === "string" ? parseInt(value, 10) : value;
+      if (!Number.isInteger(num) || num < 0) {
+        throw new Error("requiredSlotsPerWeek phải là số nguyên không âm");
+      }
+      return true;
+    }),
+
+  body("currentStartDate")
+    .optional({ nullable: true })
+    .custom((value) => {
+      if (value === null || value === undefined || value === "") return true;
+      // Chấp nhận cả string và Date object, kiểm tra format YYYY-MM-DD
+      const dateStr = typeof value === "string" ? value : value.toString();
+      const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!isoDateRegex.test(dateStr)) {
+        throw new Error("currentStartDate phải là ngày hợp lệ (YYYY-MM-DD)");
+      }
+      // Kiểm tra xem có phải ngày hợp lệ không
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) {
+        throw new Error("currentStartDate phải là ngày hợp lệ (YYYY-MM-DD)");
+      }
+      return true;
+    }),
+
+  handleValidationErrors,
+];
+
 module.exports = {
   handleValidationErrors,
   validateClass,
@@ -610,6 +808,9 @@ module.exports = {
   validateSession,
   validateSessionUpdate,
   validateBulkSessions,
+  // Class Wizard
+  validateAnalyzeBlockedDays,
+  validateSearchTimeslots,
   validateEnrollment,
   validateSessionTimeslot,
   validateSessionTimeslotUpdate,

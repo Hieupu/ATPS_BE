@@ -1,32 +1,25 @@
 /**
- * Class Status Constants - dbver5
+ * Class Status Constants - dbver5 (Updated)
  * 
  * Quy trình status:
- * DRAFT -> WAITING -> PENDING -> APPROVED -> ACTIVE -> ON_GOING -> CLOSE
+ * DRAFT -> APPROVED -> ACTIVE -> ON_GOING -> CLOSE
  * Hoặc có thể CANCEL ở bất kỳ giai đoạn nào
  * 
  * - DRAFT: Nháp (admin tạo lớp)
- * - WAITING: Admin gửi lớp cho instructor (chờ instructor xem xét)
- * - PENDING: Instructor gửi lại cho admin (chờ admin duyệt)
- * - APPROVED: Admin đã duyệt
- * - ACTIVE: Đang tuyển sinh (thay thế OPEN)
+ * - APPROVED: Admin đã duyệt (tạo nháp rồi approve)
+ * - ACTIVE: Đang tuyển sinh (tự động chuyển từ APPROVED khi đủ điều kiện)
  * - ON_GOING: Đang diễn ra
- * - CLOSE: Đã kết thúc (thay thế CLOSED)
- * - CANCEL: Đã hủy (thay thế CANCELLED)
+ * - CLOSE: Đã kết thúc
+ * - CANCEL: Đã hủy
+ * 
+ * Lưu ý: Đã loại bỏ WAITING và PENDING vì admin đã chọn course từ bước 1
  */
 
 const CLASS_STATUS = {
   // Trạng thái ban đầu: Lớp đang được tạo/chỉnh sửa
   DRAFT: "DRAFT",
 
-  // Admin gửi lớp cho instructor (chờ instructor xem xét)
-  WAITING: "WAITING",
-
-  // Instructor gửi lại cho admin (chờ admin duyệt)
-  PENDING: "PENDING",
-  PENDING_APPROVAL: "PENDING", // Alias cho PENDING (backward compatibility)
-
-  // Đã được duyệt: Sẵn sàng để xuất bản
+  // Đã được duyệt: Sẵn sàng để tự động chuyển sang ACTIVE
   APPROVED: "APPROVED",
 
   // Đang tuyển sinh: Hiển thị trên hệ thống, học viên có thể đăng ký
@@ -68,10 +61,13 @@ function getAllStatuses() {
 function canTransitionTo(currentStatus, newStatus) {
   // Normalize status (hỗ trợ alias)
   const normalize = (status) => {
-    if (status === CLASS_STATUS.PENDING_APPROVAL) return CLASS_STATUS.PENDING;
     if (status === CLASS_STATUS.OPEN || status === CLASS_STATUS.PUBLISHED) return CLASS_STATUS.ACTIVE;
     if (status === CLASS_STATUS.CLOSED || status === CLASS_STATUS.DONE || status === CLASS_STATUS.COMPLETED) return CLASS_STATUS.CLOSE;
     if (status === CLASS_STATUS.CANCELLED) return CLASS_STATUS.CANCEL;
+    // Hỗ trợ backward compatibility cho WAITING và PENDING (chuyển về DRAFT hoặc APPROVED)
+    if (status === "WAITING" || status === "PENDING" || status === "PENDING_APPROVAL") {
+      return CLASS_STATUS.DRAFT; // Chuyển về DRAFT để tương thích
+    }
     return status;
   };
 
@@ -80,17 +76,7 @@ function canTransitionTo(currentStatus, newStatus) {
 
   const transitions = {
     [CLASS_STATUS.DRAFT]: [
-      CLASS_STATUS.WAITING,
-      CLASS_STATUS.CANCEL,
-    ],
-    [CLASS_STATUS.WAITING]: [
-      CLASS_STATUS.PENDING,
-      CLASS_STATUS.DRAFT, // Instructor từ chối, trả về DRAFT
-      CLASS_STATUS.CANCEL,
-    ],
-    [CLASS_STATUS.PENDING]: [
       CLASS_STATUS.APPROVED,
-      CLASS_STATUS.DRAFT, // Admin từ chối, trả về DRAFT
       CLASS_STATUS.CANCEL,
     ],
     [CLASS_STATUS.APPROVED]: [

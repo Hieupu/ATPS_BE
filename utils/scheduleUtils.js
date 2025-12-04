@@ -12,11 +12,22 @@
  * @param {string} params.endDate - Format: 'YYYY-MM-DD'
  * @param {Array<number>} params.daysOfWeek - Array of weekday numbers (0=Sunday, 1=Monday, ..., 6=Saturday)
  * @param {number} params.timeslotId
+ * @param {string} params.className - Tên lớp học (optional, default: "Class {classId}")
  * @returns {Array<Object>} Array of session objects ready to insert
  */
 function generateSessions(params) {
-  const { classId, instructorId, startDate, endDate, daysOfWeek, timeslotId } =
-    params;
+  const {
+    classId,
+    instructorId,
+    startDate,
+    endDate,
+    daysOfWeek,
+    timeslotId,
+    className,
+  } = params;
+  const sessionTitle = className
+    ? `Session for class ${className}`
+    : `Session for class Class ${classId}`;
 
   if (
     !classId ||
@@ -49,7 +60,7 @@ function generateSessions(params) {
     // Check if current day matches any of the selected days
     if (daysOfWeek.includes(dayOfWeek)) {
       sessions.push({
-        Title: `Buổi ${sessionNumber}`,
+        Title: sessionTitle,
         Description: `Buổi học thứ ${sessionNumber}`,
         InstructorID: instructorId,
         ClassID: classId,
@@ -191,6 +202,3 @@ module.exports = {
   getDatesForDays,
   calculateTotalSessions,
 };
-
-
-

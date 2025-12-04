@@ -618,14 +618,15 @@ const sessionController = {
         });
       }
 
-      // Cập nhật status thành WAITING (admin gửi cho instructor)
+      // Cập nhật status thành APPROVED (admin duyệt lớp)
+      // Lưu ý: Đã loại bỏ WAITING/PENDING vì admin đã chọn course từ bước 1
       const updatedClass = await classService.updateClass(classId, {
-        Status: "WAITING",
+        Status: "APPROVED",
       });
 
       res.json({
         success: true,
-        message: "Submit lớp để chờ duyệt thành công",
+        message: "Duyệt lớp thành công. Lớp sẽ tự động chuyển sang ACTIVE khi đủ điều kiện.",
         data: updatedClass,
       });
     } catch (error) {

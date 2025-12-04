@@ -166,12 +166,33 @@ class InstructorRepository {
         c.Code as CourseCode
       FROM instructor i
       LEFT JOIN account a ON i.AccID = a.AccID
-      LEFT JOIN course c ON c.InstructorID = i.InstructorID
+      LEFT JOIN course c ON c.InstructorID = i.InstructorID AND c.Status = 'PUBLISHED'
       WHERE i.InstructorID = ?
       ORDER BY c.CourseID DESC
     `;
 
+    console.log(
+      `[instructorRepository] findByIdWithCourses - InstructorID: ${instructorId}, Type: ${typeof instructorId}`
+    );
     const [rows] = await pool.execute(query, [instructorId]);
+    console.log(
+      `[instructorRepository] Query result rows count: ${rows.length}`
+    );
+
+    // Debug: Kiểm tra xem có courses nào (kể cả không PUBLISHED) cho instructor này không
+    const [allCourses] = await pool.execute(
+      `SELECT CourseID, Title, Status, InstructorID FROM course WHERE InstructorID = ?`,
+      [instructorId]
+    );
+    console.log(
+      `[instructorRepository] All courses for instructor ${instructorId}:`,
+      allCourses
+    );
+    console.log(
+      `[instructorRepository] Courses with PUBLISHED status:`,
+      allCourses.filter((c) => c.Status === "PUBLISHED")
+    );
+
     if (rows.length === 0) return null;
 
     // Group courses
@@ -206,11 +227,26 @@ class InstructorRepository {
       }
     });
 
+    console.log(
+      `[instructorRepository] Final instructor object with ${instructor.courses.length} PUBLISHED courses`
+    );
+    console.log(`[instructorRepository] Courses:`, instructor.courses);
+
     return instructor;
   }
 
   // Lấy lịch dạy của giảng viên (sessions)
-  async getSchedule(instructorId, startDate = null, endDate = null) {
+  // Logic mới: Phân biệt fulltime và parttime
+  // - Fulltime: Mặc định full ca T2-T7, chỉ check session và HOLIDAY
+  // - Parttime: Chỉ dạy các ca có Status='AVAILABLE' trong instructortimeslot
+  async getSchedule(instructorId, startDate = null, endDate = null, instructorType = null) {
+    // Lấy Type nếu chưa có
+    if (!instructorType) {
+      const instructor = await this.findById(instructorId);
+      instructorType = instructor?.Type || 'parttime';
+    }
+
+    // UNION cả sessions và instructortimeslot để có đầy đủ lịch bận
     let query = `
       SELECT 
         s.SessionID,
@@ -222,8 +258,11 @@ class InstructorRepository {
         t.StartTime,
         t.EndTime,
         t.TimeslotID,
+        t.Day,
         c.Name as ClassName,
-        c.Status as ClassStatus
+        c.Status as ClassStatus,
+        'SESSION' as SourceType,
+        NULL as Status
       FROM session s
       LEFT JOIN timeslot t ON s.TimeslotID = t.TimeslotID
       LEFT JOIN \`class\` c ON s.ClassID = c.ClassID
@@ -242,7 +281,68 @@ class InstructorRepository {
       params.push(endDate);
     }
 
-    query += ` ORDER BY s.Date ASC, t.StartTime ASC`;
+    // UNION với instructortimeslot - Logic khác nhau theo Type
+    if (instructorType === 'fulltime') {
+      // Fulltime: Chỉ lấy HOLIDAY (mặc định full ca T2-T7, không cần check AVAILABLE)
+      query += `
+        UNION ALL
+        SELECT 
+          NULL as SessionID,
+          NULL as Title,
+          NULL as Description,
+          it.Date,
+          NULL as ClassID,
+          it.InstructorID,
+          t.StartTime,
+          t.EndTime,
+          it.TimeslotID,
+          t.Day,
+          NULL as ClassName,
+          NULL as ClassStatus,
+          'INSTRUCTORTIMESLOT' as SourceType,
+          it.Status
+        FROM instructortimeslot it
+        LEFT JOIN timeslot t ON it.TimeslotID = t.TimeslotID
+        WHERE it.InstructorID = ?
+          AND UPPER(it.Status) = 'HOLIDAY'
+      `;
+    } else {
+      // Parttime: Lấy AVAILABLE (các ca đã chọn), HOLIDAY, và CLOSE (đã book)
+      query += `
+        UNION ALL
+        SELECT 
+          NULL as SessionID,
+          NULL as Title,
+          NULL as Description,
+          it.Date,
+          NULL as ClassID,
+          it.InstructorID,
+          t.StartTime,
+          t.EndTime,
+          it.TimeslotID,
+          t.Day,
+          NULL as ClassName,
+          NULL as ClassStatus,
+          'INSTRUCTORTIMESLOT' as SourceType,
+          it.Status
+        FROM instructortimeslot it
+        LEFT JOIN timeslot t ON it.TimeslotID = t.TimeslotID
+        WHERE it.InstructorID = ?
+          AND UPPER(it.Status) IN ('AVAILABLE', 'HOLIDAY', 'CLOSE')
+      `;
+    }
+
+    params.push(instructorId);
+    if (startDate) {
+      query += ` AND it.Date >= ?`;
+      params.push(startDate);
+    }
+    if (endDate) {
+      query += ` AND it.Date <= ?`;
+      params.push(endDate);
+    }
+
+    query += ` ORDER BY Date ASC, StartTime ASC`;
 
     const [rows] = await pool.execute(query, params);
     return rows;

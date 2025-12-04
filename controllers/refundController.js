@@ -192,7 +192,8 @@ const refundController = {
     } catch (error) {
       console.error("Error approving refund:", error);
       const statusCode =
-        error.message.includes("Không tìm thấy") || error.message.includes("Chỉ có thể")
+        error.message.includes("Không tìm thấy") ||
+        error.message.includes("Chỉ có thể")
           ? 400
           : 500;
       res.status(statusCode).json({
@@ -231,7 +232,8 @@ const refundController = {
     } catch (error) {
       console.error("Error rejecting refund:", error);
       const statusCode =
-        error.message.includes("Không tìm thấy") || error.message.includes("Chỉ có thể")
+        error.message.includes("Không tìm thấy") ||
+        error.message.includes("Chỉ có thể")
           ? 400
           : 500;
       res.status(statusCode).json({
@@ -241,8 +243,38 @@ const refundController = {
       });
     }
   },
+
+  // Hoàn tiền (approved -> completed)
+  completeRefund: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const adminAccID = req.user ? req.user.AccID : null;
+
+      const updatedRefund = await refundService.completeRefund(id);
+
+      // Ghi log COMPLETE_REFUND
+      if (adminAccID && updatedRefund?.RefundID) {
+        await logService.logAction({
+          action: "COMPLETE_REFUND",
+          accId: adminAccID,
+          detail: `RefundID: ${updatedRefund.RefundID}, EnrollmentID: ${updatedRefund.EnrollmentID}`,
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Hoàn tiền thành công",
+        data: updatedRefund,
+      });
+    } catch (error) {
+      console.error("Error completing refund:", error);
+      res.status(500).json({
+        success: false,
+        message: error.message || "Lỗi khi hoàn tiền",
+        error: error.message,
+      });
+    }
+  },
 };
 
 module.exports = refundController;
-
-

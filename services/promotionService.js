@@ -43,6 +43,7 @@ class PromotionService {
   // Lấy tất cả promotions
   async getAllPromotions(options = {}) {
     try {
+      await promotionRepository.expireOutdatedPromotions();
       const promotions = await promotionRepository.findAll(options);
       const total = await promotionRepository.count(options);
 
@@ -61,6 +62,7 @@ class PromotionService {
   // Lấy promotion theo ID
   async getPromotionById(promotionId) {
     try {
+      await promotionRepository.expireOutdatedPromotions();
       const promotion = await promotionRepository.findById(promotionId);
       if (!promotion) {
         throw new Error("Không tìm thấy promotion");
@@ -74,6 +76,7 @@ class PromotionService {
   // Lấy promotion theo Code
   async getPromotionByCode(code) {
     try {
+      await promotionRepository.expireOutdatedPromotions();
       const promotion = await promotionRepository.findByCode(code);
       if (!promotion) {
         throw new Error("Không tìm thấy promotion");

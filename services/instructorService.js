@@ -110,8 +110,25 @@ class InstructorService {
         throw new Error("Instructor not found");
       }
 
-      const schedule = await instructorRepository.getSchedule(instructorId, startDate, endDate);
-      return schedule;
+      // Lấy Type và truyền vào getSchedule
+      const instructorType = existingInstructor.Type || 'parttime';
+      const schedule = await instructorRepository.getSchedule(
+        instructorId,
+        startDate,
+        endDate,
+        instructorType
+      );
+
+      // Trả về schedule kèm Type để frontend biết
+      return {
+        schedule,
+        instructorType,
+        instructor: {
+          id: existingInstructor.InstructorID,
+          name: existingInstructor.FullName,
+          type: instructorType,
+        },
+      };
     } catch (error) {
       throw error;
     }

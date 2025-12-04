@@ -1,9 +1,4 @@
-/**
- * Instructor Model - dbver5
- * 
- * Trường mới (dbver5):
- * - Type: ENUM('fulltime', 'parttime') - Loại giảng viên
- */
+
 class Instructor {
   constructor({
     InstructorID,

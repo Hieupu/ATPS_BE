@@ -1,7 +1,4 @@
 /**
- * Timeslot Model - dbver5
- * 
- * Trường mới (dbver5):
  * - Day: Thứ trong tuần (T2, T3, T4, T5, T6, T7, CN)
  * 
  * Day là "Khung Cố định" của trung tâm.

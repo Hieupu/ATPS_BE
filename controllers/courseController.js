@@ -46,7 +46,16 @@ const courseController = {
   // Lấy tất cả khóa học
   getAllCourses: async (req, res) => {
     try {
-      const courses = await courseService.getAllCourses();
+      // Kiểm tra xem có phải admin không (từ req.user hoặc query param)
+      const isAdmin = req.user?.Role === 'admin' || req.query.isAdmin === 'true';
+      const { status } = req.query;
+      
+      const options = {
+        isAdmin,
+        status: status ? (Array.isArray(status) ? status : [status]) : null,
+      };
+      
+      const courses = await courseService.getAllCourses(options);
 
       res.json({
         success: true,
@@ -251,7 +260,7 @@ const courseController = {
   // Lấy danh sách lớp học của khóa học
   getCourseClasses: async (req, res) => {
     try {
-      const courseId = req.params.courseId;
+      const courseId = req.params.courseId || req.params.id;
       const classes = await courseService.getCourseClasses(courseId);
 
       res.json({
@@ -264,6 +273,72 @@ const courseController = {
       res.status(500).json({
         success: false,
         message: "Lỗi khi lấy danh sách lớp học của khóa học",
+        error: error.message,
+      });
+    }
+  },
+
+  // Kiểm tra course có đang được sử dụng bởi lớp học không
+  checkCourseInUse: async (req, res) => {
+    try {
+      const courseId = req.params.id;
+      const checkResult = await courseService.checkCourseInUse(courseId);
+
+      res.json({
+        success: true,
+        message: "Kiểm tra khóa học thành công",
+        data: checkResult,
+      });
+    } catch (error) {
+      console.error("Error checking course in use:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi kiểm tra khóa học",
+        error: error.message,
+      });
+    }
+  },
+
+  // Cập nhật trạng thái course với validation
+  updateCourseStatus: async (req, res) => {
+    try {
+      const courseId = req.params.id;
+      const { Status, action } = req.body;
+      const adminAccID = req.user ? req.user.AccID : null;
+
+      if (!Status) {
+        return res.status(400).json({
+          success: false,
+          message: "Status là bắt buộc",
+        });
+      }
+
+      const updatedCourse = await courseService.updateCourseStatus(
+        courseId,
+        Status,
+        action
+      );
+
+      // Ghi log UPDATE_COURSE_STATUS
+      if (adminAccID && updatedCourse?.CourseID) {
+        await logService.logAction({
+          action: "UPDATE_COURSE_STATUS",
+          accId: adminAccID,
+          detail: `CourseID: ${updatedCourse.CourseID}, Status: ${updatedCourse.Status}`,
+        });
+      }
+
+      res.json({
+        success: true,
+        message: "Cập nhật trạng thái khóa học thành công",
+        data: updatedCourse,
+      });
+    } catch (error) {
+      console.error("Error updating course status:", error);
+      const statusCode = error.message.includes("Không thể chuyển") ? 400 : 500;
+      res.status(statusCode).json({
+        success: false,
+        message: error.message || "Lỗi khi cập nhật trạng thái khóa học",
         error: error.message,
       });
     }

@@ -1,6 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const { verifyToken, authorizeFeature } = require("../middlewares/auth");
+const {
+  validateAnalyzeBlockedDays,
+  validateSearchTimeslots,
+} = require("../utils/validators");
 const classController = require("../controllers/classController");
 const classScheduleController = require("../controllers/classScheduleController");
 
@@ -37,6 +41,32 @@ router.get(
   classScheduleController.findAvailableInstructorSlots
 );
 
+// Phân tích độ bận định kỳ của instructor
+router.post(
+  "/instructor/analyze-blocked-days",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  validateAnalyzeBlockedDays,
+  classScheduleController.analyzeBlockedDays
+);
+
+// Tìm ngày bắt đầu phù hợp theo desired timeslots (API chuyên dụng - tối ưu)
+router.post(
+  "/search-timeslots",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  validateSearchTimeslots,
+  classScheduleController.searchTimeslots
+);
+
+// Lấy lý do chi tiết tại sao một timeslot bị khóa
+router.get(
+  "/timeslot-lock-reasons",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  classScheduleController.getTimeslotLockReasons
+);
+
 router.get(
   "/:classId",
   // verifyToken,
@@ -64,6 +94,50 @@ router.get(
   // verifyToken,
   // authorizeFeature("admin"),
   classController.getClassesByCourseId
+);
+
+// Instructor leave management (should be declared before dynamic routes)
+router.get(
+  "/instructor/leave",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  classScheduleController.listInstructorLeaves
+);
+router.post(
+  "/instructor/leave",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  classScheduleController.addBulkInstructorLeave
+);
+router.post(
+  "/instructor/leave/bulk",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  classScheduleController.addBulkInstructorLeave
+);
+router.delete(
+  "/instructor/leave/:leaveId",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  classScheduleController.deleteInstructorLeave
+);
+router.post(
+  "/instructor/leave/bulk-all",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  classScheduleController.addHolidayForAllInstructors
+);
+router.post(
+  "/instructor/leave/sync-holiday/:instructorId",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  classScheduleController.syncHolidayForInstructor
+);
+router.get(
+  "/instructor/leave/holiday-dates",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  classScheduleController.getHolidayDates
 );
 
 // Instructor APIs
@@ -166,6 +240,14 @@ router.post(
   classScheduleController.createBulkSchedule
 );
 
+// Cập nhật lịch học chi tiết cho lớp (Edit Wizard)
+router.post(
+  "/:classId/schedule/update",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  classScheduleController.updateClassSchedule
+);
+
 // Đếm học viên
 router.get(
   "/:classId/learners/count",
@@ -230,18 +312,6 @@ router.post(
   // verifyToken,
   // authorizeFeature("admin"),
   classScheduleController.checkLearnerConflicts
-);
-
-// =====================================================
-// INSTRUCTOR LEAVE MANAGEMENT ROUTES
-// =====================================================
-
-// Thêm lịch nghỉ hàng loạt
-router.post(
-  "/instructor/leave/bulk",
-  // verifyToken,
-  // authorizeFeature("admin"),
-  classScheduleController.addBulkInstructorLeave
 );
 
 // Kiểm tra cảnh báo xung đột tương lai

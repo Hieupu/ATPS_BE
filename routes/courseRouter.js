@@ -62,6 +62,28 @@ router.get(
   // authorizeFeature("admin"),
   courseController.getCourseClasses
 );
+router.get(
+  "/:id/classes",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  courseController.getCourseClasses
+);
+
+// Check course in use
+router.get(
+  "/:id/check-in-use",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  courseController.checkCourseInUse
+);
+
+// Update course status
+router.put(
+  "/:id/status",
+  // verifyToken,
+  // authorizeFeature("admin"),
+  courseController.updateCourseStatus
+);
 
 // Admin approve/reject course
 router.post(

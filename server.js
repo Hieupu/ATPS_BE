@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const cron = require("node-cron");
 require("./config/db");
 
 // Import new routes
@@ -16,10 +17,13 @@ const materialRouter = require("./routes/materialRouter");
 const sessionRouter = require("./routes/sessionRouter");
 const timeslotRouter = require("./routes/timeslotRouter");
 const accountRouter = require("./routes/accountRouter");
+const staffRouter = require("./routes/staffRouter");
+const adminRouter = require("./routes/adminRouter");
 const newsRouter = require("./routes/newsRouter");
 const refundRouter = require("./routes/refundRouter");
 const promotionRouter = require("./routes/promotionRouter");
 const dashboardRouter = require("./routes/dashboardRouter");
+const emailTemplateRouter = require("./routes/emailTemplateRouter");
 // Removed sessiontimeslotRouter - no longer needed
 const commonRouter = require("./routes/commonRouter");
 
@@ -52,6 +56,8 @@ app.use("/api/courses", courseRouter);
 app.use("/api/attendance", attendanceRouter);
 app.use("/api/enrollments", enrollmentRouter);
 app.use("/api/instructors", instructorRouter);
+app.use("/api/staff", staffRouter);
+app.use("/api/admins", adminRouter);
 app.use("/api/learners", learnerRouter);
 app.use("/api/materials", materialRouter);
 app.use("/api/sessions", sessionRouter);
@@ -62,6 +68,7 @@ app.use("/api/refunds", refundRouter);
 app.use("/api/promotions", promotionRouter);
 app.use("/api/dashboard", dashboardRouter);
 console.log("Dashboard route registered: /api/dashboard");
+app.use("/api/email-templates", emailTemplateRouter);
 // Removed sessiontimeslots route - no longer needed
 app.use("/api/common", commonRouter);
 
@@ -129,6 +136,71 @@ app.use((err, req, res, next) => {
     error: process.env.NODE_ENV === "development" ? err : {},
   });
 });
+
+// ========== SCHEDULED TASKS (Cron Jobs) ==========
+const classService = require("./services/classService");
+
+// Tự động cập nhật status lớp học hàng ngày lúc 00:00 (nửa đêm)
+// Cron expression: "0 0 * * *" = mỗi ngày lúc 00:00
+cron.schedule(
+  "0 0 * * *",
+  async () => {
+    try {
+      console.log("[Cron Job] Bắt đầu tự động cập nhật status lớp học...");
+      const result = await classService.autoUpdateClassStatus();
+      console.log("[Cron Job] Kết quả:", result.message);
+      console.log(
+        "[Cron Job] - Kích hoạt từ APPROVED:",
+        result.activatedClasses?.length || 0
+      );
+      console.log(
+        "[Cron Job] - Chuyển sang ON_GOING:",
+        result.startedClasses?.length || 0
+      );
+      console.log(
+        "[Cron Job] - Chuyển từ ACTIVE sang ON_GOING:",
+        result.startedClasses?.length || 0
+      );
+      console.log("[Cron Job] - Đóng lớp:", result.closedClasses?.length || 0);
+    } catch (error) {
+      console.error("[Cron Job] Lỗi khi tự động cập nhật status:", error);
+    }
+  },
+  {
+    scheduled: true,
+    timezone: "Asia/Ho_Chi_Minh",
+  }
+);
+
+// Tự động cập nhật status lớp học mỗi giờ (để test hoặc cập nhật thường xuyên hơn)
+// Có thể comment lại nếu chỉ muốn chạy 1 lần/ngày
+// Cron expression: "0 * * * *" = mỗi giờ
+cron.schedule(
+  "0 * * * *",
+  async () => {
+    try {
+      console.log(
+        "[Cron Job Hourly] Bắt đầu tự động cập nhật status lớp học (chạy mỗi giờ)..."
+      );
+      const result = await classService.autoUpdateClassStatus();
+      console.log("[Cron Job Hourly] Kết quả:", result.message);
+    } catch (error) {
+      console.error(
+        "[Cron Job Hourly] Lỗi khi tự động cập nhật status:",
+        error
+      );
+    }
+  },
+  {
+    scheduled: true,
+    timezone: "Asia/Ho_Chi_Minh",
+  }
+);
+
+console.log("[Cron Jobs] Đã khởi tạo scheduled tasks:");
+console.log(
+  "[Cron Jobs] - Tự động cập nhật status lớp học: Mỗi ngày lúc 00:00 và mỗi giờ"
+);
 
 const PORT = process.env.PORT || 9999;
 app.listen(PORT, () => {
