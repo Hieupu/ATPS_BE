@@ -211,7 +211,7 @@ class InstructorClassRosterRepository {
     const [[row]] = await db.query(
       `SELECT COUNT(*) AS count 
        FROM attendance 
-       WHERE SessionID = ? AND Status = 'PRESENT'`,
+       WHERE SessionID = ?`,
       [sessionId]
     );
     return Number(row.count) || 0;
