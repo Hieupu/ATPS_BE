@@ -1,18 +1,17 @@
 const connectDB = require("../config/db");
 
 class AttendanceRepository {
-  async getLearnerAttendance(learnerId) {
+async getLearnerAttendance(learnerId) {
     try {
       const db = await connectDB();
       const [rows] = await db.query(
         `SELECT 
-          a.AttendanceID,
-          a.Status,
-          a.Date,
+          COALESCE(a.AttendanceID, NULL) as AttendanceID,
+          COALESCE(a.Status, 'notyet') as Status,
+          s.Date as SessionDate,
           s.SessionID,
           s.Title as SessionTitle,
           s.Description as SessionDescription,
-          s.Date as SessionDate,
           ts.StartTime,
           ts.EndTime,
           ts.Day as DayOfWeek,
@@ -32,15 +31,18 @@ class AttendanceRepository {
           (SELECT COUNT(*) FROM attendance a2 
            INNER JOIN session s2 ON a2.SessionID = s2.SessionID 
            WHERE s2.SessionID = s.SessionID) as TotalLearners
-         FROM attendance a
-         INNER JOIN session s ON a.SessionID = s.SessionID
+         FROM session s
+         LEFT JOIN attendance a ON s.SessionID = a.SessionID AND a.LearnerID = ?
          LEFT JOIN timeslot ts ON s.TimeslotID = ts.TimeslotID
          INNER JOIN instructor i ON s.InstructorID = i.InstructorID
          LEFT JOIN class cl ON s.ClassID = cl.ClassID
          LEFT JOIN course c ON cl.CourseID = c.CourseID
-         WHERE a.LearnerID = ?
+         WHERE EXISTS (
+           SELECT 1 FROM enrollment e 
+           WHERE e.ClassID = s.ClassID AND e.LearnerID = ?
+         )
          ORDER BY s.Date DESC, ts.StartTime DESC`,
-        [learnerId]
+        [learnerId, learnerId]
       );
       return rows;
     } catch (error) {
