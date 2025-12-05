@@ -18,6 +18,15 @@ const getInstructorId = async (accId) => {
   return instructorId;
 };
 
+const getLearnerById = async (accId) => {
+  const learner = await courseRepository.getLearnerByAccountId(accId);
+
+  if (!learner) {
+    throw new Error("Learner không tồn tại");
+  }
+  return learner;
+};
+
 class ServiceError extends Error {
   constructor(message, status = 400) {
     super(message);
@@ -88,6 +97,9 @@ const loginService = async (
     );
 
     profilePicture = instructor?.ProfilePicture || null;
+  } else if (role === "learner") {
+    const learner = await getLearnerById(user.AccID);
+    profilePicture = learner?.ProfilePicture || null;
   }
 
   const expiresIn = rememberMe ? "30d" : "1h";
