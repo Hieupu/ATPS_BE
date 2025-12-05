@@ -1,20 +1,16 @@
 class Learner {
   constructor({
     LearnerID,
-    AccID,
     FullName,
-    DateOfBirth,
     ProfilePicture,
-    Job,
-    Address,
+    Email = null,
+    Phone = null,
   }) {
     this.LearnerID = LearnerID;
-    this.AccID = AccID;
     this.FullName = FullName;
-    this.DateOfBirth = DateOfBirth;
     this.ProfilePicture = ProfilePicture;
-    this.Job = Job;
-    this.Address = Address;
+    this.Email = Email;
+    this.Phone = Phone;
   }
 }
 

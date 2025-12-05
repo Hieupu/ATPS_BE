@@ -1,119 +1,202 @@
-const pool = require("../config/db");
+const connectDB = require("../config/db");
 
 class ProfileRepository {
   async findAccountById(accountId) {
-    const [rows] = await pool.query("SELECT * FROM account WHERE AccID = ?", [
-      accountId,
-    ]);
-    if (!rows.length) return null;
-    const u = rows[0];
-    return {
-      AccID: u.AccID,
-      Username: u.Username,
-      Email: u.Email,
-      Phone: u.Phone,
-      Password: u.Password,
-      Status: u.Status,
-      Provider: u.Provider || "local",
-      Role: u.Role || "learner",
-    };
+    const db = await connectDB();
+    const [rows] = await db.query("SELECT * FROM account WHERE AccID = ?", [accountId]);
+    return rows[0] || null;
   }
 
   async findInstructorByAccountId(accountId) {
-    const [rows] = await pool.query(
-      "SELECT * FROM instructor WHERE AccID = ?",
-      [accountId]
-    );
-    if (!rows.length) return null;
-    return rows[0];
+    const db = await connectDB();
+    const [rows] = await db.query("SELECT * FROM instructor WHERE AccID = ?", [accountId]);
+    return rows[0] || null; // Trả về null nếu không tìm thấy
   }
 
   async findLearnerByAccountId(accountId) {
-    const [rows] = await pool.query("SELECT * FROM learner WHERE AccID = ?", [
-      accountId,
-    ]);
-    if (!rows.length) return null;
-    return rows[0];
+    const db = await connectDB();
+    const [rows] = await db.query("SELECT * FROM learner WHERE AccID = ?", [accountId]);
+    return rows[0] || null; // Trả về null nếu không tìm thấy
   }
 
   async findParentByAccountId(accountId) {
-    const [rows] = await pool.query("SELECT * FROM parent WHERE AccID = ?", [
-      accountId,
-    ]);
-    if (!rows.length) return null;
-    return rows[0];
+    const db = await connectDB();
+    const [rows] = await db.query("SELECT * FROM parent WHERE AccID = ?", [accountId]);
+    return rows[0] || null; // Trả về null nếu không tìm thấy
   }
 
-  async updateAccount(accountId, updateData) {
-    const fields = Object.keys(updateData);
-    const values = Object.values(updateData);
-    const setClause = fields.map((field) => `${field} = ?`).join(", ");
+  async updateAccount(accountId, data) {
+    const db = await connectDB();
+    
+    const updateFields = [];
+    const updateValues = [];
+    
+    if (data.Username !== undefined) {
+      updateFields.push("Username = ?");
+      updateValues.push(data.Username);
+    }
+    
+    if (data.Phone !== undefined) {
+      updateFields.push("Phone = ?");
+      updateValues.push(data.Phone);
+    }
 
-    await pool.query(`UPDATE account SET ${setClause} WHERE AccID = ?`, [
-      ...values,
-      accountId,
-    ]);
+      if (data.Gender !== undefined) {
+      updateFields.push("Gender = ?");
+      updateValues.push(data.Gender);
+    }
+    
+    if (updateFields.length === 0) {
+      return;
+    }
+    
+    updateValues.push(accountId);
+    
+    const [result] = await db.query(
+      `UPDATE account SET ${updateFields.join(", ")} WHERE AccID = ?`,
+      updateValues
+    );
+    
+    console.log(`Updated account: ${result.affectedRows} rows affected`);
+    return result;
   }
 
-  async updateInstructor(accountId, updateData) {
-    const fields = Object.keys(updateData);
-    const values = Object.values(updateData);
-    const setClause = fields.map((field) => `${field} = ?`).join(", ");
-
-    await pool.query(`UPDATE instructor SET ${setClause} WHERE AccID = ?`, [
-      ...values,
-      accountId,
-    ]);
+  async updateInstructor(accountId, data) {
+    const db = await connectDB();
+    
+    const updateFields = [];
+    const updateValues = [];
+    
+    if (data.FullName !== undefined) {
+      updateFields.push("FullName = ?");
+      updateValues.push(data.FullName);
+    }
+    if (data.DateOfBirth !== undefined) {
+      updateFields.push("DateOfBirth = ?");
+      updateValues.push(data.DateOfBirth);
+    }
+    if (data.Job !== undefined) {
+      updateFields.push("Job = ?");
+      updateValues.push(data.Job);
+    }
+    if (data.Address !== undefined) {
+      updateFields.push("Address = ?");
+      updateValues.push(data.Address);
+    }
+    if (data.Major !== undefined) {
+      updateFields.push("Major = ?");
+      updateValues.push(data.Major);
+    }
+    
+    if (updateFields.length === 0) {
+      return;
+    }
+    
+    updateValues.push(accountId);
+    
+    const [result] = await db.query(
+      `UPDATE instructor SET ${updateFields.join(", ")} WHERE AccID = ?`,
+      updateValues
+    );
+    
+    console.log(`Updated instructor: ${result.affectedRows} rows affected`);
+    return result;
   }
 
-  async updateLearner(accountId, updateData) {
-    const fields = Object.keys(updateData);
-    const values = Object.values(updateData);
-    const setClause = fields.map((field) => `${field} = ?`).join(", ");
-
-    await pool.query(`UPDATE learner SET ${setClause} WHERE AccID = ?`, [
-      ...values,
-      accountId,
-    ]);
+  async updateLearner(accountId, data) {
+    const db = await connectDB();
+    
+    const updateFields = [];
+    const updateValues = [];
+    
+    if (data.FullName !== undefined) {
+      updateFields.push("FullName = ?");
+      updateValues.push(data.FullName);
+    }
+    if (data.DateOfBirth !== undefined) {
+      updateFields.push("DateOfBirth = ?");
+      updateValues.push(data.DateOfBirth);
+    }
+    if (data.Job !== undefined) {
+      updateFields.push("Job = ?");
+      updateValues.push(data.Job);
+    }
+    if (data.Address !== undefined) {
+      updateFields.push("Address = ?");
+      updateValues.push(data.Address);
+    }
+    
+    if (updateFields.length === 0) {
+      return;
+    }
+    
+    updateValues.push(accountId);
+    
+    const [result] = await db.query(
+      `UPDATE learner SET ${updateFields.join(", ")} WHERE AccID = ?`,
+      updateValues
+    );
+    
+    console.log(`Updated learner: ${result.affectedRows} rows affected`);
+    return result;
   }
 
-  async updateParent(accountId, updateData) {
-    const fields = Object.keys(updateData);
-    const values = Object.values(updateData);
-    const setClause = fields.map((field) => `${field} = ?`).join(", ");
-
-    await pool.query(`UPDATE parent SET ${setClause} WHERE AccID = ?`, [
-      ...values,
-      accountId,
-    ]);
+  async updateParent(accountId, data) {
+    const db = await connectDB();
+    
+    const updateFields = [];
+    const updateValues = [];
+    
+    if (data.FullName !== undefined) {
+      updateFields.push("FullName = ?");
+      updateValues.push(data.FullName);
+    }
+    if (data.DateOfBirth !== undefined) {
+      updateFields.push("DateOfBirth = ?");
+      updateValues.push(data.DateOfBirth);
+    }
+    if (data.Job !== undefined) {
+      updateFields.push("Job = ?");
+      updateValues.push(data.Job);
+    }
+    if (data.Address !== undefined) {
+      updateFields.push("Address = ?");
+      updateValues.push(data.Address);
+    }
+    
+    if (updateFields.length === 0) {
+      return;
+    }
+    
+    updateValues.push(accountId);
+    
+    const [result] = await db.query(
+      `UPDATE parent SET ${updateFields.join(", ")} WHERE AccID = ?`,
+      updateValues
+    );
+    
+    console.log(`Updated parent: ${result.affectedRows} rows affected`);
+    return result;
   }
 
   async updatePassword(accountId, hashedPassword) {
-    await pool.query("UPDATE account SET Password = ? WHERE AccID = ?", [
-      hashedPassword,
-      accountId,
-    ]);
+    const db = await connectDB();
+    await db.query("UPDATE account SET Password = ? WHERE AccID = ?", [hashedPassword, accountId]);
   }
 
   async updateInstructorAvatar(accountId, avatarUrl) {
-    await pool.query(
-      "UPDATE instructor SET ProfilePicture = ? WHERE AccID = ?",
-      [avatarUrl, accountId]
-    );
+    const db = await connectDB();
+    await db.query("UPDATE instructor SET ProfilePicture = ? WHERE AccID = ?", [avatarUrl, accountId]);
   }
 
   async updateLearnerAvatar(accountId, avatarUrl) {
-    await pool.query("UPDATE learner SET ProfilePicture = ? WHERE AccID = ?", [
-      avatarUrl,
-      accountId,
-    ]);
+    const db = await connectDB();
+    await db.query("UPDATE learner SET ProfilePicture = ? WHERE AccID = ?", [avatarUrl, accountId]);
   }
 
   async updateParentAvatar(accountId, avatarUrl) {
-    await pool.query("UPDATE parent SET ProfilePicture = ? WHERE AccID = ?", [
-      avatarUrl,
-      accountId,
-    ]);
+    const db = await connectDB();
+    await db.query("UPDATE parent SET ProfilePicture = ? WHERE AccID = ?", [avatarUrl, accountId]);
   }
 }
 

@@ -1,33 +1,40 @@
 const mysql = require("mysql2/promise");
+const fs = require("fs");
 require("dotenv").config();
 
-// Create connection pool for better performance
-const pool = mysql.createPool({
-  host: process.env.DB_HOST || "localhost",
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  enableKeepAlive: true,
-  keepAliveInitialDelay: 0,
-  dateStrings: true,
-  timezone: "+07:00", 
-});
+let pool;
 
-// Test the connection
-const testConnection = async () => {
-  try {
-    const connection = await pool.getConnection();
-    console.log("MySQL connected successfully with connection pool");
-    connection.release();
-  } catch (error) {
-    console.error("MySQL connection failed: ", error.message);
-    process.exit(1);
+const connectDB = async () => {
+  if (!pool) {
+    try {
+      pool = mysql.createPool({
+        host: process.env.DB_HOST,
+        port: Number(process.env.DB_PORT),
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME,
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+        timezone: "Z",
+        dateStrings: true,
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 0,
+        // timezone: "+07:00",
+        ssl: {
+          ca: fs.readFileSync("./config/ca.pem"),
+        },
+      });
+
+      const connection = await pool.getConnection();
+      connection.release();
+      console.log("✅ MySQL connected successfully (pool + SSL)");
+    } catch (error) {
+      console.error("❌ MySQL connection failed:", error.message);
+      process.exit(1);
+    }
   }
+  return pool;
 };
 
-testConnection();
-
-module.exports = pool;
+module.exports = connectDB;

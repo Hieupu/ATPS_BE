@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { verifyToken, authorizeFeature } = require("../middlewares/auth");
-const materialController = require("../controllers/materialController");
+const materialController = require("../controllers/adminmaterialController");
 
 // Admin APIs
 router.post(

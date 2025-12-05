@@ -1,30 +1,27 @@
-
+// Instructor.js
 class Instructor {
   constructor({
     InstructorID,
-    AccID,
     FullName,
     DateOfBirth,
     ProfilePicture,
     Job,
     Address,
     CV,
+    AccID,
     Major,
-    InstructorFee,
-    Type, // dbver5: 'fulltime' hoặc 'parttime'
+    Type,
   }) {
     this.InstructorID = InstructorID;
-    this.AccID = AccID;
     this.FullName = FullName;
     this.DateOfBirth = DateOfBirth;
     this.ProfilePicture = ProfilePicture;
     this.Job = Job;
     this.Address = Address;
     this.CV = CV;
+    this.AccID = AccID;
     this.Major = Major;
-    this.InstructorFee = InstructorFee;
-    this.Type = Type || 'fulltime'; // dbver5
+    this.Type = Type;
   }
 }
-
 module.exports = Instructor;

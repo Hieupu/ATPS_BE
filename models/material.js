@@ -1,21 +1,10 @@
 class Material {
-  constructor({
-    MaterialID,
-    Title,
-    Description,
-    FilePath,
-    FileType,
-    UploadDate,
-    SessionID,
-  }) {
+  constructor({ MaterialID, CourseID, Title, FileURL, Status }) {
     this.MaterialID = MaterialID;
+    this.CourseID = CourseID;
     this.Title = Title;
-    this.Description = Description;
-    this.FilePath = FilePath;
-    this.FileType = FileType;
-    this.UploadDate = UploadDate;
-    this.SessionID = SessionID;
+    this.FileURL = FileURL;
+    this.Status = Status;
   }
 }
-
 module.exports = Material;

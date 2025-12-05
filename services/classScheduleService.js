@@ -233,7 +233,8 @@ async function validateReschedule(sessionId, newSchedule) {
     // Note: Khi reschedule, cần loại trừ session hiện tại khỏi kiểm tra
     // Nhưng checkSessionConflictInfo không hỗ trợ excludeSessionId trong signature
     // Ta sẽ kiểm tra thủ công bằng cách query trực tiếp
-    const pool = require("../config/db");
+    const connectDB = require("../config/db");
+    const db = await connectDB();
     const conflictQuery = `
       SELECT 
         s.SessionID,
@@ -251,7 +252,7 @@ async function validateReschedule(sessionId, newSchedule) {
         AND s.SessionID != ?
     `;
 
-    const [conflictsRows] = await pool.execute(conflictQuery, [
+    const [conflictsRows] = await db.execute(conflictQuery, [
       newSessionData.InstructorID,
       newSessionData.Date,
       newSessionData.TimeslotID,
@@ -448,7 +449,8 @@ async function autoCloseEnrollment(classId) {
  */
 async function autoCloseClasses() {
   try {
-    const pool = require("../config/db");
+    const connectDB = require("../config/db");
+    const db = await connectDB();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -460,7 +462,7 @@ async function autoCloseClasses() {
         AND Status NOT IN (?, ?, ?, ?)
     `;
 
-    const [classes] = await pool.execute(query, [
+    const [classes] = await db.execute(query, [
       formatDate(today),
       CLASS_STATUS.CLOSE,
       CLASS_STATUS.DONE,

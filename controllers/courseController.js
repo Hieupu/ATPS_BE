@@ -1,410 +1,359 @@
-const courseService = require("../services/courseService");
-const instructorService = require("../services/instructorService");
-const learnerService = require("../services/learnerService");
-const logService = require("../services/logService");
-
-const courseController = {
-  // Tạo khóa học mới
-  createCourse: async (req, res) => {
-    try {
-      const courseData = req.body;
-      const adminAccID = req.user ? req.user.AccID : null;
-
-      if (!courseData.Title || !courseData.Description) {
-        return res.status(400).json({
-          success: false,
-          message: "Title và Description là bắt buộc",
-        });
-      }
-
-      const newCourse = await courseService.createCourse(courseData);
-
-      // Ghi log CREATE_COURSE
-      if (adminAccID && newCourse?.CourseID) {
-        await logService.logAction({
-          action: "CREATE_COURSE",
-          accId: adminAccID,
-          detail: `CourseID: ${newCourse.CourseID}, Title: ${newCourse.Title}`,
-        });
-      }
-
-      res.status(201).json({
-        success: true,
-        message: "Tạo khóa học thành công",
-        data: newCourse,
-      });
-    } catch (error) {
-      console.error("Error creating course:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi tạo khóa học",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy tất cả khóa học
-  getAllCourses: async (req, res) => {
-    try {
-      // Kiểm tra xem có phải admin không (từ req.user hoặc query param)
-      const isAdmin = req.user?.Role === 'admin' || req.query.isAdmin === 'true';
-      const { status } = req.query;
-      
-      const options = {
-        isAdmin,
-        status: status ? (Array.isArray(status) ? status : [status]) : null,
-      };
-      
-      const courses = await courseService.getAllCourses(options);
-
-      res.json({
-        success: true,
-        message: "Lấy danh sách khóa học thành công",
-        data: courses,
-      });
-    } catch (error) {
-      console.error("Error getting courses:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy danh sách khóa học",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy khóa học theo ID
-  getCourseById: async (req, res) => {
-    try {
-      const courseId = req.params.id;
-
-      if (!courseId) {
-        return res.status(400).json({
-          success: false,
-          message: "Course ID là bắt buộc",
-        });
-      }
-
-      const course = await courseService.getCourseById(courseId);
-
-      if (!course) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy khóa học",
-        });
-      }
-
-      res.json({
-        success: true,
-        message: "Lấy thông tin khóa học thành công",
-        data: course,
-      });
-    } catch (error) {
-      console.error("Error getting course:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy thông tin khóa học",
-        error: error.message,
-      });
-    }
-  },
-
-  // Cập nhật khóa học
-  updateCourse: async (req, res) => {
-    try {
-      const courseId = req.params.id;
-      const updateData = req.body;
-      const adminAccID = req.user ? req.user.AccID : null;
-
-      const updatedCourse = await courseService.updateCourse(
-        courseId,
-        updateData
-      );
-
-      if (!updatedCourse) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy khóa học",
-        });
-      }
-
-      // Ghi log UPDATE_COURSE
-      if (adminAccID && updatedCourse?.CourseID) {
-        await logService.logAction({
-          action: "UPDATE_COURSE",
-          accId: adminAccID,
-          detail: `CourseID: ${updatedCourse.CourseID}, Title: ${updatedCourse.Title}`,
-        });
-      }
-
-      res.json({
-        success: true,
-        message: "Cập nhật khóa học thành công",
-        data: updatedCourse,
-      });
-    } catch (error) {
-      console.error("Error updating course:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi cập nhật khóa học",
-        error: error.message,
-      });
-    }
-  },
-
-  // Xóa khóa học
-  deleteCourse: async (req, res) => {
-    try {
-      const courseId = req.params.id;
-      const adminAccID = req.user ? req.user.AccID : null;
-
-      // Lấy thông tin khóa học trước khi xóa để log
-      let course = null;
-      if (adminAccID) {
-        course = await courseService.getCourseById(courseId);
-      }
-
-      const deleted = await courseService.deleteCourse(courseId);
-
-      if (!deleted) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy khóa học",
-        });
-      }
-
-      // Ghi log DELETE_COURSE
-      if (adminAccID && course) {
-        await logService.logAction({
-          action: "DELETE_COURSE",
-          accId: adminAccID,
-          detail: `CourseID: ${course.CourseID}, Title: ${course.Title}`,
-        });
-      }
-
-      res.json({
-        success: true,
-        message: "Xóa khóa học thành công",
-      });
-    } catch (error) {
-      console.error("Error deleting course:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi xóa khóa học",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy khóa học theo trạng thái
-  getCoursesByStatus: async (req, res) => {
-    try {
-      const { status } = req.query;
-      const courses = await courseService.getCoursesByStatus(status);
-
-      res.json({
-        success: true,
-        message: "Lấy danh sách khóa học theo trạng thái thành công",
-        data: courses,
-      });
-    } catch (error) {
-      console.error("Error getting courses by status:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy danh sách khóa học theo trạng thái",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy khóa học với số lượng đăng ký
-  getCoursesWithEnrollmentCount: async (req, res) => {
-    try {
-      const courses = await courseService.getCoursesWithEnrollmentCount();
-
-      res.json({
-        success: true,
-        message: "Lấy danh sách khóa học với số lượng đăng ký thành công",
-        data: courses,
-      });
-    } catch (error) {
-      console.error("Error getting courses with enrollment count:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy danh sách khóa học với số lượng đăng ký",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy danh sách đăng ký của khóa học
-  getCourseEnrollments: async (req, res) => {
-    try {
-      const courseId = req.params.courseId;
-      const enrollments = await courseService.getCourseEnrollments(courseId);
-
-      res.json({
-        success: true,
-        message: "Lấy danh sách đăng ký khóa học thành công",
-        data: enrollments,
-      });
-    } catch (error) {
-      console.error("Error getting course enrollments:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy danh sách đăng ký khóa học",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy danh sách lớp học của khóa học
-  getCourseClasses: async (req, res) => {
-    try {
-      const courseId = req.params.courseId || req.params.id;
-      const classes = await courseService.getCourseClasses(courseId);
-
-      res.json({
-        success: true,
-        message: "Lấy danh sách lớp học của khóa học thành công",
-        data: classes,
-      });
-    } catch (error) {
-      console.error("Error getting course classes:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy danh sách lớp học của khóa học",
-        error: error.message,
-      });
-    }
-  },
-
-  // Kiểm tra course có đang được sử dụng bởi lớp học không
-  checkCourseInUse: async (req, res) => {
-    try {
-      const courseId = req.params.id;
-      const checkResult = await courseService.checkCourseInUse(courseId);
-
-      res.json({
-        success: true,
-        message: "Kiểm tra khóa học thành công",
-        data: checkResult,
-      });
-    } catch (error) {
-      console.error("Error checking course in use:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi kiểm tra khóa học",
-        error: error.message,
-      });
-    }
-  },
-
-  // Cập nhật trạng thái course với validation
-  updateCourseStatus: async (req, res) => {
-    try {
-      const courseId = req.params.id;
-      const { Status, action } = req.body;
-      const adminAccID = req.user ? req.user.AccID : null;
-
-      if (!Status) {
-        return res.status(400).json({
-          success: false,
-          message: "Status là bắt buộc",
-        });
-      }
-
-      const updatedCourse = await courseService.updateCourseStatus(
-        courseId,
-        Status,
-        action
-      );
-
-      // Ghi log UPDATE_COURSE_STATUS
-      if (adminAccID && updatedCourse?.CourseID) {
-        await logService.logAction({
-          action: "UPDATE_COURSE_STATUS",
-          accId: adminAccID,
-          detail: `CourseID: ${updatedCourse.CourseID}, Status: ${updatedCourse.Status}`,
-        });
-      }
-
-      res.json({
-        success: true,
-        message: "Cập nhật trạng thái khóa học thành công",
-        data: updatedCourse,
-      });
-    } catch (error) {
-      console.error("Error updating course status:", error);
-      const statusCode = error.message.includes("Không thể chuyển") ? 400 : 500;
-      res.status(statusCode).json({
-        success: false,
-        message: error.message || "Lỗi khi cập nhật trạng thái khóa học",
-        error: error.message,
-      });
-    }
-  },
-
-  // Admin duyệt khóa học
-  approveCourse: async (req, res) => {
-    try {
-      const courseId = req.params.id;
-      const { action } = req.body; // 'APPROVE' hoặc 'REJECT'
-      const adminAccID = req.user ? req.user.AccID : null;
-
-      if (!action || !["APPROVE", "REJECT"].includes(action)) {
-        return res.status(400).json({
-          success: false,
-          message: "Action phải là 'APPROVE' hoặc 'REJECT'",
-        });
-      }
-
-      const course = await courseService.getCourseById(courseId);
-      if (!course) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy khóa học",
-        });
-      }
-
-      // Chỉ cho phép duyệt các khóa học đang ở trạng thái IN_REVIEW hoặc DRAFT
-      if (course.Status !== "IN_REVIEW" && course.Status !== "DRAFT") {
-        return res.status(400).json({
-          success: false,
-          message: "Chỉ có thể duyệt khóa học ở trạng thái IN_REVIEW hoặc DRAFT",
-        });
-      }
-
-      const newStatus = action === "APPROVE" ? "APPROVED" : "DRAFT";
-      const updatedCourse = await courseService.updateCourse(courseId, {
-        Status: newStatus,
-      });
-
-      // Ghi log APPROVE_COURSE / REJECT_COURSE
-      if (adminAccID && updatedCourse?.CourseID) {
-        await logService.logAction({
-          action: action === "APPROVE" ? "APPROVE_COURSE" : "REJECT_COURSE",
-          accId: adminAccID,
-          detail: `CourseID: ${updatedCourse.CourseID}, Title: ${updatedCourse.Title}`,
-        });
-      }
-
-      res.json({
-        success: true,
-        message:
-          action === "APPROVE"
-            ? "Duyệt khóa học thành công"
-            : "Từ chối khóa học thành công",
-        data: updatedCourse,
-      });
-    } catch (error) {
-      console.error("Error approving course:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi duyệt khóa học",
-        error: error.message,
-      });
-    }
-  },
+const courseRepository = require("../repositories/courseRepository");
+const profileService = require("../services/profileService");
+const connectDB = require("../config/db");
+const getAllCourses = async (req, res) => {
+  try {
+    const courses = await courseRepository.getAllCoursesWithDetails();
+    res.json(courses);
+  } catch (error) {
+    console.error("Get courses error:", error);
+    res.status(500).json({
+      message: "Failed to fetch courses",
+      error: error.message,
+    });
+  }
 };
 
-module.exports = courseController;
+const searchCourses = async (req, res) => {
+  try {
+    const {
+      search = "",
+      category = null,
+      sort = "newest",
+      page = 1,
+      pageSize = 10,
+    } = req.query;
+    const result = await courseRepository.searchCourses({
+      search,
+      category,
+      sort,
+      page,
+      pageSize,
+    });
+    res.json(result);
+  } catch (error) {
+    console.error("Search courses error:", error);
+    res
+      .status(500)
+      .json({ message: "Failed to search courses", error: error.message });
+  }
+};
+
+// controllers/courseController.js
+const getMyCourses = async (req, res) => {
+  try {
+    const accountId = req.user.id;
+
+    // Lấy LearnerID từ AccountID - sửa theo database mới
+    const learner = await courseRepository.getLearnerByAccountId(accountId);
+
+    if (!learner) {
+      return res.status(404).json({ message: "Learner profile not found" });
+    }
+
+    const learnerId = learner.LearnerID;
+
+    // Lấy danh sách khóa học đã đăng ký
+    const enrolledCourses =
+      await courseRepository.getEnrolledCoursesByLearnerId(learnerId);
+
+    res.json({
+      success: true,
+      data: enrolledCourses,
+    });
+  } catch (error) {
+    console.error("Get my courses error:", error);
+    res.status(500).json({
+      message: "Failed to fetch enrolled courses",
+      error: error.message,
+    });
+  }
+};
+
+const getCourseById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const course = await courseRepository.getCourseWithDetails(id);
+
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    res.json(course);
+  } catch (error) {
+    console.error("Get course error:", error);
+    res.status(500).json({
+      message: "Failed to fetch course",
+      error: error.message,
+    });
+  }
+};
+
+const getClassesByCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const classes = await courseRepository.getClassesByCourse(id);
+
+    res.json({ classes });
+  } catch (error) {
+    console.error("Get classes error:", error);
+    res.status(500).json({
+      message: "Failed to fetch classes",
+      error: error.message,
+    });
+  }
+};
+
+const enrollInCourse = async (req, res) => {
+  try {
+    const { classId } = req.body;
+    const accountId = req.user.id;
+
+    // Lấy LearnerID từ AccountID - sửa theo database mới
+    const learner = await courseRepository.getLearnerByAccountId(accountId);
+
+    if (!learner) {
+      return res.status(404).json({ message: "Learner profile not found" });
+    }
+
+    const learnerId = learner.LearnerID;
+
+    const enrollment = await courseRepository.createEnrollment(
+      learnerId,
+      classId
+    );
+
+    // Tạo thông báo - sửa accId thành AccID theo database mới
+    try {
+      const notificationService = require("../services/notificationService");
+      await notificationService.create({
+        AccID: accountId, // Sửa từ accId thành AccID
+        type: "enroll",
+        content: `Bạn đã đăng ký lớp học (ClassID: ${classId}). Lịch học sẽ được cập nhật trong phần Lộ trình/Materials.`,
+      });
+    } catch (e) {
+      console.warn("Create notification failed (non-blocking):", e.message);
+    }
+
+    res.json({
+      message: "Enrollment successful",
+      enrollment,
+    });
+  } catch (error) {
+    console.error("Enrollment error:", error);
+    res.status(500).json({
+      message: error.message || "Enrollment failed",
+      error: error.message,
+    });
+  }
+};
+
+const getMyClassesInCourse = async (req, res) => {
+  try {
+    const { id: courseId } = req.params;
+    const accountId = req.user.id;
+
+    console.log(`Getting classes for course ${courseId}, account ${accountId}`);
+
+    // Lấy LearnerID từ AccountID - sửa theo database mới
+    const learner = await courseRepository.getLearnerByAccountId(accountId);
+    if (!learner) {
+      return res.status(404).json({ message: "Learner profile not found" });
+    }
+
+    const learnerId = learner.LearnerID;
+    const classes = await courseRepository.getMyClassesInCourse(
+      learnerId,
+      courseId
+    );
+
+    res.json({
+      success: true,
+      classes,
+      count: classes.length,
+    });
+  } catch (error) {
+    console.error("Get my classes error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to fetch your classes",
+    });
+  }
+};
+
+const getCourseAssignments = async (req, res) => {
+  try {
+    const { id: courseId } = req.params;
+    const accountId = req.user.id;
+
+    console.log(
+      `Getting assignments for course ${courseId}, account ${accountId}`
+    );
+
+    // Lấy LearnerID từ AccountID - sửa theo database mới
+    const learner = await courseRepository.getLearnerByAccountId(accountId);
+    if (!learner) {
+      return res.status(404).json({ message: "Learner profile not found" });
+    }
+
+    const learnerId = learner.LearnerID;
+    const assignments = await courseRepository.getCourseAssignments(
+      courseId,
+      learnerId
+    );
+
+    res.json({
+      success: true,
+      assignments,
+      count: assignments.length,
+    });
+  } catch (error) {
+    console.error("Get assignments error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to fetch assignments",
+    });
+  }
+};
+// Thêm vào controller
+const checkEnrollmentStatus = async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const accountId = req.user.id;
+
+    // Lấy LearnerID từ AccountID
+    const learner = await courseRepository.getLearnerByAccountId(accountId);
+    if (!learner) {
+      return res.status(404).json({
+        success: false,
+        message: "Learner profile not found",
+        isEnrolled: false,
+      });
+    }
+
+    const learnerId = learner.LearnerID;
+
+    // Kiểm tra xem đã đăng ký lớp này chưa
+    const db = await connectDB();
+    const [enrollments] = await db.query(
+      `SELECT EnrollmentID, Status 
+       FROM enrollment 
+       WHERE LearnerID = ? AND ClassID = ? AND Status = 'enrolled'`,
+      [learnerId, classId]
+    );
+
+    const isEnrolled = enrollments.length > 0;
+
+    res.json({
+      success: true,
+      isEnrolled,
+      enrollment: isEnrolled ? enrollments[0] : null,
+    });
+  } catch (error) {
+    console.error("Check enrollment error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to check enrollment status",
+      isEnrolled: false,
+    });
+  }
+};
+
+const getPopularCourses = async (req, res) => {
+  try {
+    console.log("[getPopularCourses] route hit");
+    const courses = await courseRepository.getPopularCourses();
+    res.json(courses);
+  } catch (error) {
+    console.error("Get popular courses error:", error);
+    res.status(500).json({
+      message: "Failed to fetch popular courses",
+      error: error.message,
+    });
+  }
+};
+
+const getPopularClasses = async (req, res) => {
+  try {
+    console.log("[getPopularClasses] route hit");
+    const classes = await courseRepository.getPopularClasses();
+    res.json(classes);
+  } catch (error) {
+    console.error("Get popular classes error:", error);
+    res.status(500).json({
+      message: "Failed to fetch popular classes",
+      error: error.message,
+    });
+  }
+};
+
+const getCourseCurriculum = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const curriculum = await courseRepository.getCourseCurriculum(id);
+    return res.json({ curriculum });
+  } catch (error) {
+    console.error("Get course curriculum error:", error);
+    res.status(500).json({
+      message: "Failed to fetch course curriculum",
+      error: error.message,
+    });
+  }
+};
+
+// Add admin endpoint to see all courses regardless of status
+const getAllCoursesAdmin = async (req, res) => {
+  try {
+    const courses = await courseRepository.getAllCoursesAdmin();
+    res.json(courses);
+  } catch (error) {
+    console.error("Get all courses admin error:", error);
+    res.status(500).json({
+      message: "Failed to fetch courses",
+      error: error.message,
+    });
+  }
+};
+
+const getLearnerIdByAccount = async (req, res) => {
+  try {
+    const { accountId } = req.params;
+
+    console.log("[getLearnerIdByAccount] route hit", { accountId });
+
+    // Sửa theo database mới - trả về object learner thay vì chỉ learnerId
+    const learner = await courseRepository.getLearnerByAccountId(accountId);
+
+    if (!learner) {
+      return res
+        .status(404)
+        .json({ message: "Learner not found for this account" });
+    }
+
+    res.json({ learnerId: learner.LearnerID });
+  } catch (error) {
+    console.error("Get learner ID error:", error);
+    res.status(500).json({
+      message: "Failed to get learner ID",
+      error: error.message,
+    });
+  }
+};
+
+module.exports = {
+  getAllCourses,
+  searchCourses,
+  getCourseById,
+  enrollInCourse,
+  getPopularCourses,
+  getAllCoursesAdmin,
+  getMyCourses,
+  getLearnerIdByAccount,
+  getClassesByCourse,
+  getCourseCurriculum,
+  getMyClassesInCourse,
+  getCourseAssignments,
+  getPopularClasses,
+  checkEnrollmentStatus,
+};

@@ -2,7 +2,8 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const { verifyToken, authorizeFeature } = require("../middlewares/auth");
-const instructorController = require("../controllers/instructorController");
+const instructorController = require("../controllers/admininstructorController");
+const publicInstructorController = require("../controllers/instructorController");
 
 // Cấu hình multer để nhận file trong memory (không lưu local, upload trực tiếp lên Cloudinary)
 // Multer cho ảnh (avatar)
@@ -40,7 +41,19 @@ const uploadFile = multer({
   },
 });
 
-// Admin APIs - Tạm thời tắt authentication để test (giống như learnerRouter)
+// =====================================================
+// PUBLIC APIs - MUST come first
+// =====================================================
+
+// Public specific routes - MUST come before dynamic routes
+router.get("/featured", publicInstructorController.getFeaturedInstructors);
+router.get("/", publicInstructorController.getAllInstructors);
+router.get("/:id", publicInstructorController.getInstructorById);
+
+// =====================================================
+// ADMIN APIs - MUST come after public routes
+// =====================================================
+
 // Test route để kiểm tra router hoạt động
 router.get("/test-upload", (req, res) => {
   res.json({ success: true, message: "Upload routes are working" });
@@ -76,85 +89,76 @@ router.post(
   instructorController.uploadCV
 );
 
-router.get(
-  "/",
-  // verifyToken,
-  // authorizeFeature("admin"),
-  instructorController.getAllInstructors
-);
+// Admin CRUD routes
 router.post(
   "/",
-  // verifyToken,
-  // authorizeFeature("admin"),
+  verifyToken,
+  authorizeFeature("admin"),
   instructorController.createInstructor
 );
-router.get(
-  "/:id",
-  // verifyToken,
-  // authorizeFeature("admin"),
-  instructorController.getInstructorById
-);
+
 router.put(
   "/:id",
-  // verifyToken,
-  // authorizeFeature("admin"),
+  verifyToken,
+  authorizeFeature("admin"),
   instructorController.updateInstructor
 );
+
 router.delete(
   "/:id",
-  // verifyToken,
-  // authorizeFeature("admin"),
+  verifyToken,
+  authorizeFeature("admin"),
   instructorController.deleteInstructor
 );
+
 router.get(
   "/:id/courses",
-  // verifyToken,
-  // authorizeFeature("admin"),
+  verifyToken,
+  authorizeFeature("admin"),
   instructorController.getInstructorWithCourses
 );
+
 router.get(
   "/:id/schedule",
-  // verifyToken,
-  // authorizeFeature("admin"),
+  verifyToken,
+  authorizeFeature("admin"),
   instructorController.getInstructorSchedule
 );
+
 router.get(
   "/:id/statistics",
-  // verifyToken,
-  // authorizeFeature("admin"),
+  verifyToken,
+  authorizeFeature("admin"),
   instructorController.getInstructorStatistics
 );
 
-// Instructor APIs - Tạm thời tắt authentication để test
+// Instructor APIs
 router.get(
   "/instructor/:id",
-  // verifyToken,
-  // authorizeFeature("instructor"),
+  verifyToken,
+  authorizeFeature("instructor"),
   instructorController.getInstructorById
 );
+
 router.get(
   "/instructor/:id/courses",
-  // verifyToken,
-  // authorizeFeature("instructor"),
+  verifyToken,
+  authorizeFeature("instructor"),
   instructorController.getInstructorWithCourses
 );
+
 router.get(
   "/instructor/:id/schedule",
-  // verifyToken,
-  // authorizeFeature("instructor"),
+  verifyToken,
+  authorizeFeature("instructor"),
   instructorController.getInstructorSchedule
 );
+
 router.get(
   "/instructor/:id/statistics",
-  // verifyToken,
-  // authorizeFeature("instructor"),
+  verifyToken,
+  authorizeFeature("instructor"),
   instructorController.getInstructorStatistics
-);
-router.put(
-  "/instructor/:id",
-  // verifyToken,
-  // authorizeFeature("instructor"),
-  instructorController.updateInstructor
 );
 
 // Common APIs - Public endpoints (không cần authentication)
@@ -165,14 +169,15 @@ router.get("/public/:id", instructorController.getInstructorById);
 const instructorAvailabilityController = require("../controllers/instructorAvailabilityController");
 router.get(
   "/:id/availability",
-  // verifyToken,
-  // authorizeFeature("instructor"),
+  verifyToken,
+  authorizeFeature("instructor"),
   instructorAvailabilityController.getAvailability
 );
+
 router.post(
   "/:id/availability",
-  // verifyToken,
-  // authorizeFeature("instructor"),
+  verifyToken,
+  authorizeFeature("instructor"),
   instructorAvailabilityController.saveAvailability
 );
 

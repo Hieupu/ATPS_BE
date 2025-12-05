@@ -15,14 +15,17 @@ const updateProfile = async (req, res) => {
   try {
     const { id } = req.user;
     const updateData = req.body;
+    
     const updatedProfile = await profileService.updateProfile(id, updateData);
-    res.json({
-      message: "Profile updated successfully",
-      profile: updatedProfile,
-    });
+    res.json({ message: "Profile updated successfully", profile: updatedProfile });
   } catch (error) {
     console.error("Update profile error:", error);
-    res.status(500).json({ message: error.message });
+    
+    if (error.message.includes("not found") || error.message.includes("invalid")) {
+      res.status(400).json({ message: error.message });
+    } else {
+      res.status(500).json({ message: error.message });
+    }
   }
 };
 
@@ -41,11 +44,16 @@ const changePassword = async (req, res) => {
 const updateAvatar = async (req, res) => {
   try {
     const { id } = req.user;
-    const { avatarUrl } = req.body;
-    const updatedProfile = await profileService.updateAvatar(id, avatarUrl);
-    res.json({
-      message: "Avatar updated successfully",
-      profile: updatedProfile,
+    
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const updatedProfile = await profileService.uploadAvatar(req.file, id);
+    
+    res.json({ 
+      message: "Avatar updated successfully", 
+      profile: updatedProfile 
     });
   } catch (error) {
     console.error("Update avatar error:", error);

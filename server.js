@@ -1,10 +1,66 @@
 const express = require("express");
+const dotenv = require("dotenv");
 const cors = require("cors");
 const path = require("path");
 const cron = require("node-cron");
 require("./config/db");
 
-// Import new routes
+dotenv.config();
+process.env.TZ = "Asia/Ho_Chi_Minh";
+
+const app = express();
+
+// =====================================================
+// CORS CONFIG (Chuẩn Express 5 - Không wildcard lỗi)
+// =====================================================
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://atps-fe-deploy.vercel.app",
+  "https://marketplace.zoom.us/api/v1/apps/validateEndpointUrl/xI4Ki5LnTUOd1ZoGq9jptw/check",
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS: " + origin));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+};
+
+// Không dùng wildcard nữa → Tránh lỗi path-to-regexp
+app.use(cors(corsOptions));
+
+// Express tự handle OPTIONS nên KHÔNG dùng app.options("*")
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Header xử lý Zoom / Cross-Origin
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  res.setHeader("Cross-Origin-Embedder-Policy", "unsafe-none");
+  next();
+});
+
+// =====================================================
+// STATIC FILES
+// =====================================================
+app.use(
+  "/assets",
+  express.static(path.join(__dirname, "public", "assets"), {
+    maxAge: "7d",
+  })
+);
+
+// =====================================================
+// IMPORT ROUTES (GỘP TỪ HAI FILE)
+// =====================================================
+
+// Core routes
 const authRouter = require("./routes/authRouter");
 const profileRouter = require("./routes/profileRouter");
 const classRouter = require("./routes/classRouter");
@@ -24,31 +80,24 @@ const refundRouter = require("./routes/refundRouter");
 const promotionRouter = require("./routes/promotionRouter");
 const dashboardRouter = require("./routes/dashboardRouter");
 const emailTemplateRouter = require("./routes/emailTemplateRouter");
-// Removed sessiontimeslotRouter - no longer needed
 const commonRouter = require("./routes/commonRouter");
 
-// Debug: Log khi dashboard router được import
-console.log("Dashboard router imported successfully");
+// Secondary routes
+const instructorCourseRoutes = require("./routes/instructorCourseRouter");
+const instructorClassRoutes = require("./routes/instructorClassRoutes");
+const instructorExamRoutes = require("./routes/instructorExamRoutes");
+const scheduleRoutes = require("./routes/scheduleRoutes");
+const progressRoutes = require("./routes/progressRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
+const examRoutes = require("./routes/examRoutes");
+const assignmentRoutes = require("./routes/assignmentRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const zoomRoutes = require("./routes/zoomRoutes");
+const learnerassignmentRoutes = require("./routes/learnerassignmentRoutes");
 
-// New routes for workflow 4 steps
-// const instructorMaterialRouter = require("./routes/instructorMaterialRouter");
-// const lessonRouter = require("./routes/lessonRouter");
-
-const app = express();
-
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Serve static assets (images, uploads)
-app.use(
-  "/assets",
-  express.static(path.join(__dirname, "public", "assets"), {
-    maxAge: "7d",
-  })
-);
-
-// New API routes
+// =====================================================
+// ROUTES REGISTER
+// =====================================================
 app.use("/api/auth", authRouter);
 app.use("/api/profile", profileRouter);
 app.use("/api/classes", classRouter);
@@ -56,70 +105,48 @@ app.use("/api/courses", courseRouter);
 app.use("/api/attendance", attendanceRouter);
 app.use("/api/enrollments", enrollmentRouter);
 app.use("/api/instructors", instructorRouter);
+app.use("/api/learners", learnerRouter);
+app.use("/api/accounts", accountRouter);
 app.use("/api/staff", staffRouter);
 app.use("/api/admins", adminRouter);
-app.use("/api/learners", learnerRouter);
-app.use("/api/materials", materialRouter);
-app.use("/api/sessions", sessionRouter);
-app.use("/api/timeslots", timeslotRouter);
-app.use("/api/accounts", accountRouter);
 app.use("/api/news", newsRouter);
 app.use("/api/refunds", refundRouter);
 app.use("/api/promotions", promotionRouter);
 app.use("/api/dashboard", dashboardRouter);
-console.log("Dashboard route registered: /api/dashboard");
+app.use("/api/materials", materialRouter);
+app.use("/api/sessions", sessionRouter);
+app.use("/api/timeslots", timeslotRouter);
 app.use("/api/email-templates", emailTemplateRouter);
-// Removed sessiontimeslots route - no longer needed
 app.use("/api/common", commonRouter);
 
-// New routes for workflow 4 steps
-// app.use("/api/instructor-materials", instructorMaterialRouter);
-// app.use("/api/lessons", lessonRouter);
+// extra
+app.use("/api/schedule", scheduleRoutes);
+app.use("/api/progress", progressRoutes);
+app.use("/api/payment", paymentRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/exams", examRoutes);
+app.use("/api/learnerassignments", learnerassignmentRoutes);
+app.use("/api/zoom", zoomRoutes);
 
-// Legacy API routes (for compatibility)
-app.use("/api/admin/classes", classRouter);
-app.use("/api/admin/courses", courseRouter);
-app.use("/api/admin/timeslots", timeslotRouter);
-app.use("/api/admin/sessions", sessionRouter);
-app.use("/api/instructor/classes", classRouter);
-app.use("/api/instructor/courses", courseRouter);
-app.use("/api/learner/classes", classRouter);
-app.use("/api/common/courses", courseRouter);
+// Instructor prefix
+app.use("/api/instructor/courses", instructorCourseRoutes);
+app.use("/api/instructor", instructorClassRoutes);
+app.use("/api/instructor", instructorExamRoutes);
+app.use("/api/instructor", assignmentRoutes);
 
-// Root route
+// =====================================================
+// ROOT ROUTE
+// =====================================================
 app.get("/", (req, res) => {
   res.json({
     message: "ATPS Backend API",
     version: "1.0.0",
-    description:
-      "Admin Training Platform System - API for managing courses, instructors, and learners",
-    endpoints: {
-      // New API Structure
-      auth: "/api/auth",
-      profile: "/api/profile",
-      classes: "/api/classes",
-      courses: "/api/courses",
-      attendance: "/api/attendance",
-      enrollments: "/api/enrollments",
-      instructors: "/api/instructors",
-      learners: "/api/learners",
-      accounts: "/api/accounts",
-      news: "/api/news",
-      refunds: "/api/refunds",
-      promotions: "/api/promotions",
-      dashboard: "/api/dashboard",
-      materials: "/api/materials",
-      sessions: "/api/sessions",
-      timeslots: "/api/timeslots",
-      // sessiontimeslots removed - replaced by TimeslotID in sessions
-      instructorMaterials: "/api/instructor-materials",
-      lessons: "/api/lessons",
-    },
-    documentation: "/API_DOCUMENTATION.md",
   });
 });
 
-// 404 handler
+// =====================================================
+// 404
+// =====================================================
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -127,83 +154,53 @@ app.use((req, res) => {
   });
 });
 
-// Error handler
+// =====================================================
+// ERROR HANDLER
+// =====================================================
 app.use((err, req, res, next) => {
   console.error("Error:", err);
   res.status(err.status || 500).json({
     success: false,
     message: err.message || "Lỗi server",
-    error: process.env.NODE_ENV === "development" ? err : {},
   });
 });
 
-// ========== SCHEDULED TASKS (Cron Jobs) ==========
+// =====================================================
+// CRON JOBS
+// =====================================================
 const classService = require("./services/classService");
+const instructorExamRepository = require("./repositories/instructorExamRepository");
 
-// Tự động cập nhật status lớp học hàng ngày lúc 00:00 (nửa đêm)
-// Cron expression: "0 0 * * *" = mỗi ngày lúc 00:00
 cron.schedule(
   "0 0 * * *",
   async () => {
     try {
-      console.log("[Cron Job] Bắt đầu tự động cập nhật status lớp học...");
-      const result = await classService.autoUpdateClassStatus();
-      console.log("[Cron Job] Kết quả:", result.message);
-      console.log(
-        "[Cron Job] - Kích hoạt từ APPROVED:",
-        result.activatedClasses?.length || 0
-      );
-      console.log(
-        "[Cron Job] - Chuyển sang ON_GOING:",
-        result.startedClasses?.length || 0
-      );
-      console.log(
-        "[Cron Job] - Chuyển từ ACTIVE sang ON_GOING:",
-        result.startedClasses?.length || 0
-      );
-      console.log("[Cron Job] - Đóng lớp:", result.closedClasses?.length || 0);
+      await classService.autoUpdateClassStatus();
     } catch (error) {
-      console.error("[Cron Job] Lỗi khi tự động cập nhật status:", error);
+      console.error("[Cron Error]:", error);
     }
   },
-  {
-    scheduled: true,
-    timezone: "Asia/Ho_Chi_Minh",
-  }
+  { scheduled: true, timezone: "Asia/Ho_Chi_Minh" }
 );
 
-// Tự động cập nhật status lớp học mỗi giờ (để test hoặc cập nhật thường xuyên hơn)
-// Có thể comment lại nếu chỉ muốn chạy 1 lần/ngày
-// Cron expression: "0 * * * *" = mỗi giờ
 cron.schedule(
   "0 * * * *",
   async () => {
     try {
-      console.log(
-        "[Cron Job Hourly] Bắt đầu tự động cập nhật status lớp học (chạy mỗi giờ)..."
-      );
-      const result = await classService.autoUpdateClassStatus();
-      console.log("[Cron Job Hourly] Kết quả:", result.message);
+      await classService.autoUpdateClassStatus();
     } catch (error) {
-      console.error(
-        "[Cron Job Hourly] Lỗi khi tự động cập nhật status:",
-        error
-      );
+      console.error("[Cron Hourly Error]:", error);
     }
   },
-  {
-    scheduled: true,
-    timezone: "Asia/Ho_Chi_Minh",
-  }
+  { scheduled: true, timezone: "Asia/Ho_Chi_Minh" }
 );
 
-console.log("[Cron Jobs] Đã khởi tạo scheduled tasks:");
-console.log(
-  "[Cron Jobs] - Tự động cập nhật status lớp học: Mỗi ngày lúc 00:00 và mỗi giờ"
-);
-
+// =====================================================
+// SERVER
+// =====================================================
 const PORT = process.env.PORT || 9999;
+
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API Documentation: http://localhost:${PORT}/`);
+  instructorExamRepository.autoUpdateExamStatus();
+  console.log(`Server running at port ${PORT}`);
 });

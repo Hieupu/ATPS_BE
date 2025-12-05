@@ -1,247 +1,198 @@
-const Attendance = require("../models/attendance");
-const SessionTimeslot = require("../models/sessiontimeslot");
+const attendanceService = require("../services/attendanceService");
+const connectDB = require("../config/db");
+const crypto = require("crypto");
 
-const attendanceController = {
-  // Tạo attendance mới
-  createAttendance: async (req, res) => {
-    try {
-      const attendanceData = {
-        LearnerID: req.body.LearnerID,
-        sessiontimeslotID: req.body.sessiontimeslotID,
-        Status: req.body.Status || "Present",
-        Date: req.body.Date || new Date().toISOString().split("T")[0],
-      };
-
-      // Validation
-      if (!attendanceData.LearnerID || !attendanceData.sessiontimeslotID) {
-        return res.status(400).json({
-          success: false,
-          message: "LearnerID và sessiontimeslotID là bắt buộc",
-        });
-      }
-
-      // Kiểm tra SessionTimeslot có tồn tại không
-      const sessionTimeslotExists = await SessionTimeslot.exists(
-        attendanceData.sessiontimeslotID
-      );
-      if (!sessionTimeslotExists) {
-        return res.status(400).json({
-          success: false,
-          message: "Không tìm thấy SessionTimeslot",
-        });
-      }
-
-      const newAttendance = await Attendance.create(attendanceData);
-
-      res.status(201).json({
-        success: true,
-        message: "Tạo điểm danh thành công",
-        data: newAttendance,
-      });
-    } catch (error) {
-      console.error("Error creating attendance:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi tạo điểm danh",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy danh sách điểm danh theo sessiontimeslot
-  getAttendanceBySessionTimeslot: async (req, res) => {
-    try {
-      const { sessiontimeslotId } = req.params;
-
-      const attendanceList = await Attendance.findBySessionTimeslotId(
-        sessiontimeslotId
-      );
-
-      res.status(200).json({
-        success: true,
-        message: "Lấy danh sách điểm danh thành công",
-        data: attendanceList,
-      });
-    } catch (error) {
-      console.error("Error getting attendance:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy danh sách điểm danh",
-        error: error.message,
-      });
-    }
-  },
-
-  // Lấy điểm danh của học viên
-  getAttendanceByLearner: async (req, res) => {
+class AttendanceController {
+  async getLearnerAttendance(req, res) {
     try {
       const { learnerId } = req.params;
 
-      const attendanceList = await Attendance.findByLearnerId(learnerId);
+      if (!learnerId) {
+        return res.status(400).json({ message: "Learner ID is required" });
+      }
 
-      res.status(200).json({
+      const attendance = await attendanceService.getLearnerAttendance(
+        learnerId
+      );
+      return res.json({
         success: true,
-        message: "Lấy điểm danh của học viên thành công",
-        data: attendanceList,
+        attendance,
       });
     } catch (error) {
-      console.error("Error getting learner attendance:", error);
-      res.status(500).json({
+      console.error("Error in getLearnerAttendance:", error);
+      return res.status(500).json({
         success: false,
-        message: "Lỗi khi lấy điểm danh của học viên",
-        error: error.message,
+        message: "Server error",
       });
     }
-  },
+  }
 
-  // Cập nhật trạng thái điểm danh
-  updateAttendance: async (req, res) => {
+  async getAttendanceStats(req, res) {
+    try {
+      const { learnerId } = req.params;
+      const { sessionId } = req.query;
+
+      if (!learnerId) {
+        return res.status(400).json({ message: "Learner ID is required" });
+      }
+
+      const stats = await attendanceService.getAttendanceStats(
+        learnerId,
+        sessionId
+      );
+      return res.json({
+        success: true,
+        ...stats,
+      });
+    } catch (error) {
+      console.error("Error in getAttendanceStats:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Server error",
+      });
+    }
+  }
+
+  async getAttendanceByClass(req, res) {
+    try {
+      const { learnerId } = req.params;
+
+      if (!learnerId) {
+        return res.status(400).json({ message: "Learner ID is required" });
+      }
+
+      const classList = await attendanceService.getAttendanceByClass(learnerId);
+      return res.json({
+        success: true,
+        classes: classList,
+      });
+    } catch (error) {
+      console.error("Error in getAttendanceByClass:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Server error",
+      });
+    }
+  }
+
+  async getAttendanceCalendar(req, res) {
+    try {
+      const { learnerId } = req.params;
+      const { month, year } = req.query;
+
+      if (!learnerId) {
+        return res.status(400).json({ message: "Learner ID is required" });
+      }
+
+      const currentMonth = month || new Date().getMonth() + 1;
+      const currentYear = year || new Date().getFullYear();
+
+      const calendar = await attendanceService.getAttendanceCalendar(
+        learnerId,
+        currentMonth,
+        currentYear
+      );
+
+      return res.json({
+        success: true,
+        calendar,
+        month: currentMonth,
+        year: currentYear,
+      });
+    } catch (error) {
+      console.error("Error in getAttendanceCalendar:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Server error",
+      });
+    }
+  }
+
+  async updateAttendance(req, res) {
     try {
       const { attendanceId } = req.params;
       const { Status } = req.body;
 
       if (!Status) {
-        return res.status(400).json({
-          success: false,
-          message: "Status là bắt buộc",
-        });
+        return res.status(400).json({ message: "Status is required" });
       }
 
-      const updatedAttendance = await Attendance.update(attendanceId, {
-        Status,
-      });
+      const updated = await attendanceService.updateAttendance(
+        attendanceId,
+        Status
+      );
 
-      if (!updatedAttendance) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy điểm danh",
-        });
+      if (!updated) {
+        return res.status(404).json({ message: "Attendance not found" });
       }
 
-      res.status(200).json({
-        success: true,
-        message: "Cập nhật điểm danh thành công",
-        data: updatedAttendance,
-      });
+      return res.json({ message: "Attendance updated successfully" });
     } catch (error) {
-      console.error("Error updating attendance:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi cập nhật điểm danh",
-        error: error.message,
-      });
+      console.error("Error in updateAttendance:", error);
+      return res.status(500).json({ message: error.message || "Server error" });
     }
-  },
+  }
 
-  // Xóa điểm danh
-  deleteAttendance: async (req, res) => {
+  async recordAttendance(req, res) {
     try {
-      const { attendanceId } = req.params;
+      const { learnerId, sessionId, status = "present" } = req.body;
+      const db = await connectDB();
 
-      const deleted = await Attendance.delete(attendanceId);
+      if (!learnerId || !sessionId) {
+        return res
+          .status(400)
+          .json({ message: "LearnerID and SessionID are required" });
+      }
 
-      if (!deleted) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy điểm danh",
+      // Check if attendance already exists
+      const [existing] = await db.query(
+        "SELECT * FROM attendance WHERE LearnerID = ? AND SessionID = ?",
+        [learnerId, sessionId]
+      );
+
+      if (existing.length > 0) {
+        return res.json({
+          message: "Attendance already recorded",
+          attendance: existing[0],
         });
       }
 
-      res.status(200).json({
-        success: true,
-        message: "Xóa điểm danh thành công",
+      // Insert new attendance
+      const [result] = await db.query(
+        `INSERT INTO attendance (LearnerID, SessionID, Status, Date) 
+         VALUES (?, ?, ?, CURDATE())`,
+        [learnerId, sessionId, status]
+      );
+
+      res.json({
+        message: "Attendance recorded successfully",
+        attendanceId: result.insertId,
       });
     } catch (error) {
-      console.error("Error deleting attendance:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi xóa điểm danh",
-        error: error.message,
-      });
+      console.error("Attendance recording error:", error);
+      res.status(500).json({ message: "Failed to record attendance" });
     }
-  },
+  }
 
-  // Lấy thống kê điểm danh
-  getAttendanceStatistics: async (req, res) => {
+  async getAttendanceBySession(req, res) {
     try {
-      const { classId, learnerId } = req.query;
+      const { sessionId } = req.params;
+      const db = await connectDB();
 
-      let statistics;
-      if (classId) {
-        statistics = await Attendance.getStatisticsByClass(classId);
-      } else if (learnerId) {
-        statistics = await Attendance.getStatisticsByLearner(learnerId);
-      } else {
-        return res.status(400).json({
-          success: false,
-          message: "ClassID hoặc LearnerID là bắt buộc",
-        });
-      }
+      const [attendance] = await db.query(
+        `SELECT a.*, l.FullName as LearnerName 
+         FROM attendance a 
+         INNER JOIN learner l ON a.LearnerID = l.LearnerID 
+         WHERE a.SessionID = ?`,
+        [sessionId]
+      );
 
-      res.status(200).json({
-        success: true,
-        message: "Lấy thống kê điểm danh thành công",
-        data: statistics,
-      });
+      res.json({ attendance });
     } catch (error) {
-      console.error("Error getting attendance statistics:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi lấy thống kê điểm danh",
-        error: error.message,
-      });
+      console.error("Get attendance error:", error);
+      res.status(500).json({ message: "Failed to fetch attendance" });
     }
-  },
+  }
+}
 
-  // Điểm danh hàng loạt
-  bulkCreateAttendance: async (req, res) => {
-    try {
-      const { sessiontimeslotId, attendanceList } = req.body;
-
-      if (
-        !sessiontimeslotId ||
-        !attendanceList ||
-        !Array.isArray(attendanceList)
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "SessionTimeslotID và danh sách điểm danh là bắt buộc",
-        });
-      }
-
-      const results = [];
-      for (const attendanceData of attendanceList) {
-        try {
-          const newAttendance = await Attendance.create({
-            LearnerID: attendanceData.LearnerID,
-            sessiontimeslotID: sessiontimeslotId,
-            Status: attendanceData.Status || "Present",
-            Date: attendanceData.Date || new Date().toISOString().split("T")[0],
-          });
-          results.push({ success: true, data: newAttendance });
-        } catch (error) {
-          results.push({
-            success: false,
-            error: error.message,
-            learnerId: attendanceData.LearnerID,
-          });
-        }
-      }
-
-      res.status(201).json({
-        success: true,
-        message: "Tạo điểm danh hàng loạt thành công",
-        data: results,
-      });
-    } catch (error) {
-      console.error("Error creating bulk attendance:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi tạo điểm danh hàng loạt",
-        error: error.message,
-      });
-    }
-  },
-};
-
-module.exports = attendanceController;
+module.exports = new AttendanceController();

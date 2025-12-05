@@ -1,5 +1,11 @@
 class Attendance {
-  constructor({ AttendanceID, LearnerID, SessionID, Status, Date }) {
+  constructor({
+    AttendanceID = null,
+    LearnerID,
+    SessionID,
+    Status, // "PRESENT" | "ABSENT"
+    Date,
+  }) {
     this.AttendanceID = AttendanceID;
     this.LearnerID = LearnerID;
     this.SessionID = SessionID;

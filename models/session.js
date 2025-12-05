@@ -1,23 +1,25 @@
-
 class Session {
   constructor({
     SessionID,
     Title,
-    Description,
-    InstructorID,
-    ClassID,
-    TimeslotID,
     Date,
-    ZoomUUID, // dbver5: UUID phòng Zoom
+    ZoomUUID,
+    StartTime,
+    EndTime,
+    Day,
+    attendedCount = 0,
+    totalStudents = 0,
   }) {
-    this.SessionID = SessionID;
-    this.Title = Title;
-    this.Description = Description;
-    this.InstructorID = InstructorID;
-    this.ClassID = ClassID;
-    this.TimeslotID = TimeslotID;
-    this.Date = Date;
-    this.ZoomUUID = ZoomUUID || null; // dbver5
+    this.sessionId = SessionID;
+    this.title = Title;
+    this.date = Date;
+    this.zoomLink = ZoomUUID;
+    this.startTime = StartTime;
+    this.endTime = EndTime;
+    this.dayOfWeek = Day;
+    this.attendedCount = Number(attendedCount);
+    this.totalStudents = Number(totalStudents);
+    this.isFullyMarked = false;
   }
 }
 

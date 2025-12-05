@@ -6,60 +6,60 @@ const timeslotController = require("../controllers/timeslotController");
 // Admin APIs
 router.get(
   "/",
-  // verifyToken,
-  // authorizeFeature("admin"),
+  verifyToken,
+  authorizeFeature("admin"),
   timeslotController.getAllTimeslots
 );
 
 router.post(
   "/",
-  // verifyToken,
-  // authorizeFeature("admin"),
+  verifyToken,
+  authorizeFeature("admin"),
   timeslotController.createTimeslot
 );
 
 router.get(
   "/:timeslotId",
-  // verifyToken,
-  // authorizeFeature("admin"),
+  verifyToken,
+  authorizeFeature("admin"),
   timeslotController.getTimeslotById
 );
 
 router.put(
   "/:timeslotId",
-  // verifyToken,
-  // authorizeFeature("admin"),
+  verifyToken,
+  authorizeFeature("admin"),
   timeslotController.updateTimeslot
 );
 
 router.delete(
   "/:timeslotId",
-  // verifyToken,
-  // authorizeFeature("admin"),
+  verifyToken,
+  authorizeFeature("admin"),
   timeslotController.deleteTimeslot
 );
 
 // Date range APIs
 router.get(
   "/date-range",
-  // verifyToken,
-  // authorizeFeature("admin"),
+  verifyToken,
+  authorizeFeature("admin"),
   timeslotController.getTimeslotsByDateRange
 );
 
 // Location APIs
 router.get(
   "/location",
-  // verifyToken,
-  // authorizeFeature("admin"),
+  verifyToken,
+  authorizeFeature("admin"),
   timeslotController.getTimeslotsByLocation
 );
 
 // Statistics APIs
 router.get(
   "/admin/statistics/total",
-  // verifyToken,
-  // authorizeFeature("admin"),
+  verifyToken,
+  authorizeFeature("admin"),
   timeslotController.getTotalTimeslots
 );
 
