@@ -50,6 +50,61 @@ class InstructorRepository {
     }
   }
 
+  // Hàm riêng cho admin - có Status và Gender từ account table
+  async getAllInstructorsAdmin() {
+    try {
+      const db = await connectDB();
+      const [rows] = await db.query(
+        `SELECT 
+          i.InstructorID,
+          i.FullName,
+          i.DateOfBirth,
+          i.ProfilePicture,
+          i.Job,
+          i.Address,
+          i.CV,
+          i.Major,
+          i.AccID,
+          i.Type,
+          i.InstructorFee,
+          a.Email,
+          a.Username,
+          a.Phone,
+          a.Status AS AccountStatus,
+          a.Gender AS AccountGender,
+          (SELECT COUNT(DISTINCT c.CourseID) 
+             FROM course c 
+             WHERE c.InstructorID = i.InstructorID AND c.Status = 'PUBLISHED') AS TotalCourses,
+          (SELECT COUNT(DISTINCT e.LearnerID) 
+             FROM enrollment e 
+             JOIN class cl ON e.ClassID = cl.ClassID 
+             JOIN course c ON cl.CourseID = c.CourseID 
+             WHERE c.InstructorID = i.InstructorID AND e.Status = 'enrolled') AS TotalStudents,
+          (SELECT GROUP_CONCAT(cert.Title SEPARATOR '|') 
+             FROM certificate cert 
+             WHERE cert.InstructorID = i.InstructorID AND cert.Status = 'active') AS Certificates
+        FROM instructor i
+        INNER JOIN account a ON i.AccID = a.AccID
+        GROUP BY i.InstructorID, i.FullName, i.DateOfBirth, i.ProfilePicture, 
+                 i.Job, i.Address, i.CV, i.Major, i.AccID, i.Type, i.InstructorFee,
+                 a.Email, a.Username, a.Phone, a.Status, a.Gender
+        ORDER BY i.InstructorID DESC`
+      );
+      // Chuẩn hóa Certificates thành mảng và fee về số
+      // Map AccountStatus và AccountGender thành Status và Gender để frontend dễ sử dụng
+      return rows.map((row) => ({
+        ...row,
+        Status: row.AccountStatus, // Map từ AccountStatus
+        Gender: row.AccountGender, // Map từ AccountGender
+        Certificates: row.Certificates ? row.Certificates.split("|") : [],
+        InstructorFee: Number(row.InstructorFee) || 0,
+      }));
+    } catch (error) {
+      console.error("Database error in getAllInstructorsAdmin:", error);
+      throw error;
+    }
+  }
+
   async searchInstructors({
     search = "",
     major = null,
@@ -284,6 +339,74 @@ class InstructorRepository {
     }
   }
 
+  // Hàm riêng cho admin - có Status và Gender từ account table
+  async getInstructorByIdAdmin(instructorId) {
+    try {
+      const db = await connectDB();
+      const [rows] = await db.query(
+        `SELECT 
+          i.InstructorID,
+          i.FullName,
+          i.DateOfBirth,
+          i.ProfilePicture,
+          i.Job,
+          i.Address,
+          i.CV,
+          i.Major,
+          i.AccID,
+          i.Type,
+          i.InstructorFee,
+          a.Email,
+          a.Username,
+          a.Phone,
+          a.Status AS AccountStatus,
+          a.Gender AS AccountGender
+        FROM instructor i
+        INNER JOIN account a ON i.AccID = a.AccID
+        WHERE i.InstructorID = ?`,
+        [instructorId]
+      );
+
+      if (!rows.length) {
+        return null;
+      }
+
+      const instructor = rows[0];
+
+      const [courseRows] = await db.query(
+        `SELECT 
+          c.CourseID,
+          c.Title,
+          c.Description,
+          c.Duration,
+          c.Status
+        FROM course c
+        WHERE c.InstructorID = ?
+        ORDER BY c.CourseID DESC`,
+        [instructorId]
+      );
+
+      const [certRows] = await db.query(
+        `SELECT CertificateID, Title, FileURL
+        FROM certificate
+        WHERE InstructorID = ?
+        ORDER BY CertificateID DESC`,
+        [instructorId]
+      );
+
+      return {
+        ...instructor,
+        Status: instructor.AccountStatus, // Map từ AccountStatus
+        Gender: instructor.AccountGender, // Map từ AccountGender
+        Courses: courseRows,
+        Certificates: certRows,
+      };
+    } catch (error) {
+      console.error("Database error in getInstructorByIdAdmin:", error);
+      throw error;
+    }
+  }
+
   async getInstructorIdByAccountId(accountId) {
     try {
       const db = await connectDB();
@@ -401,11 +524,13 @@ class InstructorRepository {
       Address,
       Major,
       InstructorFee,
+      Type,
+      CV,
     } = instructorData;
 
     const query = `
-      INSERT INTO instructor (AccID, FullName, DateOfBirth, ProfilePicture, Job, Address, Major, InstructorFee)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO instructor (AccID, FullName, DateOfBirth, ProfilePicture, Job, Address, Major, InstructorFee, Type, CV)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const db = await connectDB();
@@ -418,6 +543,8 @@ class InstructorRepository {
       Address,
       Major,
       InstructorFee,
+      Type || "parttime",
+      CV || null,
     ]);
 
     return { InstructorID: result.insertId, ...instructorData };

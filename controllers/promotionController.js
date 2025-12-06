@@ -8,6 +8,20 @@ const promotionController = {
       const promotionData = req.body;
       const adminAccID = req.user ? req.user.AccID : null;
 
+      // Đảm bảo CreateBy luôn có giá trị từ authenticated user
+      // Middleware verifyToken đã validate AccID tồn tại trong database
+      if (!adminAccID) {
+        console.error("[createPromotion] req.user is missing:", req.user);
+        return res.status(401).json({
+          success: false,
+          message: "Không xác định được người tạo. Vui lòng đăng nhập lại.",
+        });
+      }
+
+      // Override CreateBy từ req.user để đảm bảo an toàn
+      // AccID đã được validate trong middleware verifyToken
+      promotionData.CreateBy = adminAccID;
+
       const newPromotion = await promotionService.createPromotion(
         promotionData
       );
@@ -298,5 +312,3 @@ const promotionController = {
 };
 
 module.exports = promotionController;
-
-

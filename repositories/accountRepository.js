@@ -49,19 +49,39 @@ class AccountRepository {
     );
   }
 
-  async getFeaturesByAccountId(accountId) {
+  async createInstructor(accId) {
     const db = await connectDB();
-    const [rows] = await db.query(
-      `
-      SELECT f.Name
-      FROM feature f
-      JOIN accountfeature af ON f.FeatureID = af.FeatureID
-      WHERE af.AccountID = ?  
-      `,
-      [accountId]
+    await db.query(
+      `INSERT INTO instructor (AccID, FullName, DateOfBirth, ProfilePicture, Job, Address, Major, Type)
+     SELECT AccID, Username, NULL, NULL, NULL, NULL, NULL, 'parttime'
+     FROM account
+     WHERE AccID = ?`,
+      [accId]
     );
-    return rows.map((row) => row.Name);
   }
+
+  async createAdmin(accId) {
+    const db = await connectDB();
+    await db.query(
+      `INSERT INTO admin (AccID, FullName, DateOfBirth, ProfilePicture, Address)
+     SELECT AccID, Username, NULL, NULL, NULL
+     FROM account
+     WHERE AccID = ?`,
+      [accId]
+    );
+  }
+
+  async createStaff(accId) {
+    const db = await connectDB();
+    await db.query(
+      `INSERT INTO staff (AccID, FullName, DateOfBirth, ProfilePicture, Address)
+     SELECT AccID, Username, NULL, NULL, NULL
+     FROM account
+     WHERE AccID = ?`,
+      [accId]
+    );
+  }
+
   // async findAccountByEmail(email) {
   //   if (!email) {
   //     return null;
@@ -111,22 +131,56 @@ class AccountRepository {
     return this.findAccountById(accountId);
   }
 
-  async createAccount({
+  async createAccountForAdmin({
     username,
     email,
-    phone,
+    phone = "",
     password,
+    status = "active",
     provider = "local",
+    gender = "other",
+    role = "learner", // learner, instructor, admin, staff
   }) {
     const db = await connectDB();
     const normalizedEmail = email.trim().toLowerCase();
+    const normalizedUsername =
+      username || normalizedEmail.split("@")[0] || "user";
     try {
       const [result] = await db.query(
-        "INSERT INTO account (Username, Email, Phone, Password, Status, Provider) VALUES (?, ?, ?, ?, ?, ?)",
-        [username, normalizedEmail, phone || "", password, "active", provider]
+        "INSERT INTO account (Username, Email, Phone, Password, Status, Provider, Gender) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          normalizedUsername,
+          normalizedEmail,
+          phone || "",
+          password,
+          status,
+          provider,
+          gender || "other",
+        ]
       );
-      await this.createLearner(result.insertId, username);
-      return result.insertId;
+      const accId = result.insertId;
+
+      // Tạo entity tương ứng dựa trên role
+      // Lưu ý: instructor không tự động tạo ở đây, để controller tự quản lý với đầy đủ thông tin
+      switch (role.toLowerCase()) {
+        case "learner":
+          await this.createLearner(accId);
+          break;
+        case "instructor":
+          // Không tạo instructor ở đây, để controller tự tạo với đầy đủ thông tin
+          break;
+        case "admin":
+          await this.createAdmin(accId);
+          break;
+        case "staff":
+          await this.createStaff(accId);
+          break;
+        default:
+          // Mặc định tạo learner
+          await this.createLearner(accId);
+      }
+
+      return accId;
     } catch (e) {
       if (e.code === "ER_DUP_ENTRY") {
         const err = new Error("Email has been registered!");
@@ -172,14 +226,6 @@ class AccountRepository {
       }
       throw e;
     }
-  }
-
-  async createLearner(accId) {
-    const db = await connectDB();
-    await db.query(
-      "INSERT INTO learner (AccID, FullName, DateOfBirth, ProfilePicture, Job, Address) VALUES (?, ?, ?, ?, ?, ?)",
-      [accId, null, null, null, null, null]
-    );
   }
 
   async getFeaturesByAccountId(accountId) {

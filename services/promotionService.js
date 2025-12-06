@@ -5,7 +5,11 @@ class PromotionService {
   async createPromotion(promotionData) {
     try {
       // Validate required fields
-      if (!promotionData.Code || !promotionData.Discount || !promotionData.StartDate) {
+      if (
+        !promotionData.Code ||
+        !promotionData.Discount ||
+        !promotionData.StartDate
+      ) {
         throw new Error("Code, Discount và StartDate là bắt buộc");
       }
 
@@ -15,13 +19,18 @@ class PromotionService {
       }
 
       // Kiểm tra code đã tồn tại chưa
-      const existingPromotion = await promotionRepository.findByCode(promotionData.Code);
+      const existingPromotion = await promotionRepository.findByCode(
+        promotionData.Code
+      );
       if (existingPromotion) {
         throw new Error("Mã promotion đã tồn tại");
       }
 
       // Validate dates
-      if (promotionData.EndDate && promotionData.EndDate < promotionData.StartDate) {
+      if (
+        promotionData.EndDate &&
+        promotionData.EndDate < promotionData.StartDate
+      ) {
         throw new Error("EndDate phải sau StartDate");
       }
 
@@ -112,14 +121,20 @@ class PromotionService {
 
       // Nếu cập nhật code, kiểm tra code mới có trùng không
       if (updateData.Code && updateData.Code !== existingPromotion.Code) {
-        const existingCode = await promotionRepository.findByCode(updateData.Code);
+        const existingCode = await promotionRepository.findByCode(
+          updateData.Code
+        );
         if (existingCode) {
           throw new Error("Mã promotion đã tồn tại");
         }
         updateData.Code = updateData.Code.toUpperCase();
       }
 
-      return await promotionRepository.update(promotionId, updateData);
+      // Loại bỏ CreateBy khỏi updateData (không được phép update CreateBy)
+      // CreateBy chỉ được set khi tạo mới, không thay đổi khi update
+      const { CreateBy, ...dataToUpdate } = updateData;
+
+      return await promotionRepository.update(promotionId, dataToUpdate);
     } catch (error) {
       throw error;
     }
@@ -160,7 +175,9 @@ class PromotionService {
   // Kích hoạt promotion
   async activatePromotion(promotionId) {
     try {
-      return await promotionRepository.update(promotionId, { Status: "active" });
+      return await promotionRepository.update(promotionId, {
+        Status: "active",
+      });
     } catch (error) {
       throw error;
     }
@@ -169,7 +186,9 @@ class PromotionService {
   // Vô hiệu hóa promotion
   async deactivatePromotion(promotionId) {
     try {
-      return await promotionRepository.update(promotionId, { Status: "inactive" });
+      return await promotionRepository.update(promotionId, {
+        Status: "inactive",
+      });
     } catch (error) {
       throw error;
     }
@@ -177,5 +196,3 @@ class PromotionService {
 }
 
 module.exports = new PromotionService();
-
-

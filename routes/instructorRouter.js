@@ -51,7 +51,7 @@ router.get(
   "/admin/all",
   verifyToken,
   authorizeFeature("admin"),
-  instructorController.getAllInstructors
+  instructorController.getAllInstructorsAdmin
 );
 
 // =====================================================
@@ -146,6 +146,14 @@ router.get(
   verifyToken,
   authorizeFeature("admin"),
   instructorController.getInstructorStatistics
+);
+
+// Admin API for getting instructor by ID (có Status và Gender)
+router.get(
+  "/admin/:id",
+  verifyToken,
+  authorizeFeature("admin"),
+  instructorController.getInstructorByIdAdmin
 );
 
 // Instructor APIs

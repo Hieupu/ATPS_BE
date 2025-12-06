@@ -2,16 +2,16 @@ const courseRepository = require("../repositories/courseRepository");
 const profileService = require("../services/profileService");
 const connectDB = require("../config/db");
 const getAllCourses = async (req, res) => {
-  try {
+    try {
     const courses = await courseRepository.getAllCoursesWithDetails();
     res.json(courses);
-  } catch (error) {
+    } catch (error) {
     console.error("Get courses error:", error);
-    res.status(500).json({
+      res.status(500).json({
       message: "Failed to fetch courses",
-      error: error.message,
-    });
-  }
+        error: error.message,
+      });
+    }
 };
 
 const searchCourses = async (req, res) => {
@@ -41,7 +41,7 @@ const searchCourses = async (req, res) => {
 
 // controllers/courseController.js
 const getMyCourses = async (req, res) => {
-  try {
+    try {
     const accountId = req.user.id;
 
     // Lấy LearnerID từ AccountID - sửa theo database mới
@@ -57,27 +57,27 @@ const getMyCourses = async (req, res) => {
     const enrolledCourses =
       await courseRepository.getEnrolledCoursesByLearnerId(learnerId);
 
-    res.json({
-      success: true,
+      res.json({
+        success: true,
       data: enrolledCourses,
-    });
-  } catch (error) {
+      });
+    } catch (error) {
     console.error("Get my courses error:", error);
-    res.status(500).json({
+      res.status(500).json({
       message: "Failed to fetch enrolled courses",
-      error: error.message,
-    });
-  }
+        error: error.message,
+      });
+    }
 };
 
 const getCourseById = async (req, res) => {
-  try {
+    try {
     const { id } = req.params;
     const course = await courseRepository.getCourseWithDetails(id);
 
     if (!course) {
       return res.status(404).json({ message: "Course not found" });
-    }
+      }
 
     res.json(course);
   } catch (error) {
@@ -85,8 +85,8 @@ const getCourseById = async (req, res) => {
     res.status(500).json({
       message: "Failed to fetch course",
       error: error.message,
-    });
-  }
+        });
+      }
 };
 
 const getClassesByCourse = async (req, res) => {
@@ -96,17 +96,17 @@ const getClassesByCourse = async (req, res) => {
     const classes = await courseRepository.getClassesByCourse(id);
 
     res.json({ classes });
-  } catch (error) {
+    } catch (error) {
     console.error("Get classes error:", error);
-    res.status(500).json({
+      res.status(500).json({
       message: "Failed to fetch classes",
-      error: error.message,
-    });
-  }
+        error: error.message,
+      });
+    }
 };
 
 const enrollInCourse = async (req, res) => {
-  try {
+    try {
     const { classId } = req.body;
     const accountId = req.user.id;
 
@@ -134,23 +134,23 @@ const enrollInCourse = async (req, res) => {
       });
     } catch (e) {
       console.warn("Create notification failed (non-blocking):", e.message);
-    }
+      }
 
-    res.json({
+      res.json({
       message: "Enrollment successful",
       enrollment,
-    });
-  } catch (error) {
+      });
+    } catch (error) {
     console.error("Enrollment error:", error);
-    res.status(500).json({
+      res.status(500).json({
       message: error.message || "Enrollment failed",
-      error: error.message,
-    });
-  }
+        error: error.message,
+      });
+    }
 };
 
 const getMyClassesInCourse = async (req, res) => {
-  try {
+    try {
     const { id: courseId } = req.params;
     const accountId = req.user.id;
 
@@ -160,7 +160,7 @@ const getMyClassesInCourse = async (req, res) => {
     const learner = await courseRepository.getLearnerByAccountId(accountId);
     if (!learner) {
       return res.status(404).json({ message: "Learner profile not found" });
-    }
+      }
 
     const learnerId = learner.LearnerID;
     const classes = await courseRepository.getMyClassesInCourse(
@@ -168,22 +168,22 @@ const getMyClassesInCourse = async (req, res) => {
       courseId
     );
 
-    res.json({
-      success: true,
+      res.json({
+        success: true,
       classes,
       count: classes.length,
-    });
-  } catch (error) {
+      });
+    } catch (error) {
     console.error("Get my classes error:", error);
-    res.status(500).json({
-      success: false,
+      res.status(500).json({
+        success: false,
       message: error.message || "Failed to fetch your classes",
-    });
-  }
+      });
+    }
 };
 
 const getCourseAssignments = async (req, res) => {
-  try {
+    try {
     const { id: courseId } = req.params;
     const accountId = req.user.id;
 
@@ -203,14 +203,14 @@ const getCourseAssignments = async (req, res) => {
       learnerId
     );
 
-    res.json({
-      success: true,
+      res.json({
+        success: true,
       assignments,
       count: assignments.length,
-    });
-  } catch (error) {
+      });
+    } catch (error) {
     console.error("Get assignments error:", error);
-    res.status(500).json({
+      res.status(500).json({
       success: false,
       message: error.message || "Failed to fetch assignments",
     });
@@ -245,15 +245,15 @@ const checkEnrollmentStatus = async (req, res) => {
 
     const isEnrolled = enrollments.length > 0;
 
-    res.json({
-      success: true,
+      res.json({
+        success: true,
       isEnrolled,
       enrollment: isEnrolled ? enrollments[0] : null,
-    });
-  } catch (error) {
+      });
+    } catch (error) {
     console.error("Check enrollment error:", error);
-    res.status(500).json({
-      success: false,
+      res.status(500).json({
+        success: false,
       message: error.message || "Failed to check enrollment status",
       isEnrolled: false,
     });
@@ -269,42 +269,42 @@ const getPopularCourses = async (req, res) => {
     console.error("Get popular courses error:", error);
     res.status(500).json({
       message: "Failed to fetch popular courses",
-      error: error.message,
-    });
-  }
+        error: error.message,
+      });
+    }
 };
 
 const getPopularClasses = async (req, res) => {
-  try {
+    try {
     console.log("[getPopularClasses] route hit");
     const classes = await courseRepository.getPopularClasses();
     res.json(classes);
-  } catch (error) {
+    } catch (error) {
     console.error("Get popular classes error:", error);
-    res.status(500).json({
+      res.status(500).json({
       message: "Failed to fetch popular classes",
-      error: error.message,
-    });
-  }
+        error: error.message,
+      });
+    }
 };
 
 const getCourseCurriculum = async (req, res) => {
-  try {
+    try {
     const { id } = req.params;
     const curriculum = await courseRepository.getCourseCurriculum(id);
     return res.json({ curriculum });
-  } catch (error) {
+    } catch (error) {
     console.error("Get course curriculum error:", error);
-    res.status(500).json({
+      res.status(500).json({
       message: "Failed to fetch course curriculum",
-      error: error.message,
-    });
-  }
+        error: error.message,
+      });
+    }
 };
 
 // Add admin endpoint to see all courses regardless of status
 const getAllCoursesAdmin = async (req, res) => {
-  try {
+    try {
     const courses = await courseRepository.getAllCoursesAdmin();
     res.json(courses);
   } catch (error) {
@@ -312,8 +312,8 @@ const getAllCoursesAdmin = async (req, res) => {
     res.status(500).json({
       message: "Failed to fetch courses",
       error: error.message,
-    });
-  }
+        });
+      }
 };
 
 const getLearnerIdByAccount = async (req, res) => {
@@ -329,16 +329,16 @@ const getLearnerIdByAccount = async (req, res) => {
       return res
         .status(404)
         .json({ message: "Learner not found for this account" });
-    }
+      }
 
     res.json({ learnerId: learner.LearnerID });
-  } catch (error) {
+    } catch (error) {
     console.error("Get learner ID error:", error);
-    res.status(500).json({
+      res.status(500).json({
       message: "Failed to get learner ID",
-      error: error.message,
-    });
-  }
+        error: error.message,
+      });
+    }
 };
 
 module.exports = {

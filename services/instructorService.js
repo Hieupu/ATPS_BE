@@ -39,6 +39,39 @@ class InstructorService {
     return { ...instructor, ...stats, Reviews: reviews };
   }
 
+  // Hàm riêng cho admin - có Status và Gender từ account table
+  async getAllInstructorsAdmin() {
+    try {
+      return await instructorRepository.getAllInstructorsAdmin();
+    } catch (error) {
+      console.error("Error in getAllInstructorsAdmin service:", error);
+      throw error;
+    }
+  }
+
+  async getInstructorByIdAdmin(instructorId) {
+    try {
+      const instructor = await instructorRepository.getInstructorByIdAdmin(
+        instructorId
+      );
+      if (!instructor) return null;
+
+      const stats = await courseRepository
+        .getInstructorStats(instructor.InstructorID)
+        .catch(() => ({ TotalCourses: 0, TotalStudents: 0 }));
+
+      const reviews = await instructorRepository.getInstructorReviews(
+        instructor.InstructorID,
+        20
+      );
+
+      return { ...instructor, ...stats, Reviews: reviews };
+    } catch (error) {
+      console.error("Error in getInstructorByIdAdmin service:", error);
+      throw error;
+    }
+  }
+
   async searchInstructors(params) {
     return await instructorRepository.searchInstructors(params);
   }

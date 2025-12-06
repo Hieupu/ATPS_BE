@@ -1,8 +1,12 @@
 const instructorService = require("../services/instructorService");
 const uploadToCloudinary = require("../utils/uploadCloudinary");
+const accountRepository = require("../repositories/accountRepository");
+const instructorRepository = require("../repositories/instructorRepository");
+const bcrypt = require("bcryptjs");
+const connectDB = require("../config/db");
 
 const instructorController = {
-  // Lấy tất cả giảng viên
+  // Lấy tất cả giảng viên (public - không có Status và Gender)
   getAllInstructors: async (req, res) => {
     try {
       const instructors = await instructorService.getAllInstructors();
@@ -22,7 +26,27 @@ const instructorController = {
     }
   },
 
-  // Lấy một giảng viên theo ID
+  // Lấy tất cả giảng viên cho admin (có Status và Gender từ account table)
+  getAllInstructorsAdmin: async (req, res) => {
+    try {
+      const instructors = await instructorService.getAllInstructorsAdmin();
+
+      res.status(200).json({
+        success: true,
+        message: "Lấy danh sách giảng viên thành công",
+        data: instructors,
+      });
+    } catch (error) {
+      console.error("Error getting instructors for admin:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách giảng viên",
+        error: error.message,
+      });
+    }
+  },
+
+  // Lấy một giảng viên theo ID (public - không có Status và Gender)
   getInstructorById: async (req, res) => {
     try {
       const instructorId = req.params.id;
@@ -59,31 +83,194 @@ const instructorController = {
     }
   },
 
-  // Tạo giảng viên mới
-  createInstructor: async (req, res) => {
+  // Lấy một giảng viên theo ID cho admin (có Status và Gender từ account table)
+  getInstructorByIdAdmin: async (req, res) => {
     try {
-      const instructorData = {
-        AccID: req.body.AccID,
-        FullName: req.body.FullName,
-        DateOfBirth: req.body.DateOfBirth,
-        ProfilePicture: req.body.ProfilePicture,
-        Job: req.body.Job,
-        Address: req.body.Address,
-        Major: req.body.Major,
-        InstructorFee: req.body.InstructorFee,
-      };
+      const instructorId = req.params.id;
+      const instructor = await instructorService.getInstructorByIdAdmin(
+        instructorId
+      );
 
-      // Validation
-      if (!instructorData.AccID || !instructorData.FullName) {
-        return res.status(400).json({
+      if (!instructor) {
+        return res.status(404).json({
           success: false,
-          message: "AccID và FullName là bắt buộc",
+          message: "Không tìm thấy giảng viên",
         });
       }
 
-      const newInstructor = await instructorService.createInstructor(
-        instructorData
+      res.status(200).json({
+        success: true,
+        message: "Lấy thông tin giảng viên thành công",
+        data: instructor,
+      });
+    } catch (error) {
+      console.error("Error getting instructor for admin:", error);
+      if (error.message === "Instructor not found") {
+        return res.status(404).json({
+          success: false,
+          message: "Không tìm thấy giảng viên",
+          error: error.message,
+        });
+      }
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy thông tin giảng viên",
+        error: error.message,
+      });
+    }
+  },
+
+  // Tạo giảng viên mới
+  createInstructor: async (req, res) => {
+    const pool = await connectDB();
+    const connection = await pool.getConnection();
+    let transactionStarted = false;
+
+    try {
+      console.log("[createInstructor] Request received:", {
+        FullName: req.body.FullName,
+        Email: req.body.Email,
+        Type: req.body.Type,
+        Gender: req.body.Gender,
+      });
+
+      const {
+        FullName,
+        Email,
+        Phone,
+        Password,
+        Status,
+        DateOfBirth,
+        ProfilePicture,
+        Job,
+        Address,
+        Major,
+        InstructorFee,
+        Type,
+        Gender,
+      } = req.body;
+
+      // Validation chi tiết
+      const validationErrors = [];
+
+      if (!FullName || !FullName.trim()) {
+        validationErrors.push("FullName là bắt buộc");
+      }
+
+      if (!Email || !Email.trim()) {
+        validationErrors.push("Email là bắt buộc");
+      } else {
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(Email.trim())) {
+          validationErrors.push("Email không đúng định dạng");
+        }
+      }
+
+      if (!Password || !Password.trim()) {
+        validationErrors.push("Password là bắt buộc");
+      } else if (Password.length < 6) {
+        validationErrors.push("Password phải có ít nhất 6 ký tự");
+      }
+
+      // Validate Type enum
+      if (Type && !["fulltime", "parttime"].includes(Type)) {
+        validationErrors.push("Type phải là 'fulltime' hoặc 'parttime'");
+      }
+
+      // Validate Gender enum
+      if (Gender && !["male", "female", "other"].includes(Gender)) {
+        validationErrors.push("Gender phải là 'male', 'female' hoặc 'other'");
+      }
+
+      if (validationErrors.length > 0) {
+        connection.release();
+        return res.status(400).json({
+          success: false,
+          message: "Dữ liệu không hợp lệ",
+          errors: validationErrors,
+        });
+      }
+
+      // Bắt đầu transaction
+      await connection.beginTransaction();
+      transactionStarted = true;
+      console.log("[createInstructor] Transaction started");
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(Password, 10);
+      const username =
+        Email.split("@")[0] || FullName.toLowerCase().replace(/\s+/g, "");
+
+      // Tạo account trước (sử dụng connection từ transaction)
+      const normalizedEmail = Email.trim().toLowerCase();
+      const normalizedUsername =
+        username || normalizedEmail.split("@")[0] || "user";
+
+      console.log("[createInstructor] Creating account...");
+      const [accountResult] = await connection.execute(
+        "INSERT INTO account (Username, Email, Phone, Password, Status, Provider, Gender) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          normalizedUsername,
+          normalizedEmail,
+          Phone || "",
+          hashedPassword,
+          Status || "active",
+          "local",
+          Gender || "other",
+        ]
       );
+      const accId = accountResult.insertId;
+      console.log("[createInstructor] Account created, AccID:", accId);
+
+      // Tạo instructor với AccID vừa tạo
+      const instructorData = {
+        AccID: accId,
+        FullName: FullName,
+        DateOfBirth: DateOfBirth || null,
+        ProfilePicture: ProfilePicture || null,
+        Job: Job || null,
+        Address: Address || null,
+        Major: Major || null,
+        InstructorFee: InstructorFee ? parseFloat(InstructorFee) : null,
+        Type: Type || "parttime",
+        CV: req.body.CV || null,
+      };
+
+      console.log("[createInstructor] Creating instructor...");
+      const [instructorResult] = await connection.execute(
+        `INSERT INTO instructor (AccID, FullName, DateOfBirth, ProfilePicture, Job, Address, Major, InstructorFee, Type, CV)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          instructorData.AccID,
+          instructorData.FullName,
+          instructorData.DateOfBirth,
+          instructorData.ProfilePicture,
+          instructorData.Job,
+          instructorData.Address,
+          instructorData.Major,
+          instructorData.InstructorFee,
+          instructorData.Type,
+          instructorData.CV,
+        ]
+      );
+
+      const newInstructor = {
+        InstructorID: instructorResult.insertId,
+        ...instructorData,
+      };
+
+      console.log(
+        "[createInstructor] Instructor created, InstructorID:",
+        newInstructor.InstructorID
+      );
+
+      // Commit transaction
+      await connection.commit();
+      transactionStarted = false;
+      console.log("[createInstructor] Transaction committed successfully");
+
+      connection.release();
 
       res.status(201).json({
         success: true,
@@ -91,11 +278,46 @@ const instructorController = {
         data: newInstructor,
       });
     } catch (error) {
-      console.error("Error creating instructor:", error);
+      console.error("[createInstructor] Error:", error);
+      console.error("[createInstructor] Error stack:", error.stack);
+
+      // Rollback transaction nếu đã bắt đầu
+      if (transactionStarted) {
+        try {
+          await connection.rollback();
+          console.log("[createInstructor] Transaction rolled back");
+        } catch (rollbackError) {
+          console.error("[createInstructor] Rollback error:", rollbackError);
+        }
+      }
+
+      // Release connection
+      if (connection) {
+        connection.release();
+      }
+
+      // Xử lý lỗi duplicate email
+      if (error.code === "ER_DUP_ENTRY" && error.message?.includes("Email")) {
+        return res.status(400).json({
+          success: false,
+          message: "Email đã được đăng ký",
+          error: "Email has been registered!",
+        });
+      }
+
+      // Xử lý lỗi database
+      if (error.code === "ER_DUP_ENTRY") {
+        return res.status(400).json({
+          success: false,
+          message: "Dữ liệu trùng lặp",
+          error: error.message,
+        });
+      }
+
       res.status(500).json({
         success: false,
         message: "Lỗi khi tạo giảng viên",
-        error: error.message,
+        error: error.message || "Lỗi không xác định",
       });
     }
   },

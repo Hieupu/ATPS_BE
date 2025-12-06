@@ -170,7 +170,15 @@ class PromotionRepository {
       const fields = [];
       const values = [];
 
+      // Các field không được phép update (giữ nguyên giá trị cũ)
+      const restrictedFields = ["CreateBy", "PromotionID"];
+
       Object.keys(updateData).forEach((key) => {
+        // Bỏ qua các field không được phép update
+        if (restrictedFields.includes(key)) {
+          return;
+        }
+
         if (updateData[key] !== undefined) {
           fields.push(`${key} = ?`);
           values.push(updateData[key]);

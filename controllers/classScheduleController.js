@@ -606,6 +606,38 @@ const classScheduleController = {
     }
   },
 
+  // Xóa tất cả lịch nghỉ của một ngày
+  deleteLeavesByDate: async (req, res) => {
+    try {
+      const { date } = req.params;
+      const { status } = req.query;
+
+      if (!date) {
+        return res.status(400).json({
+          success: false,
+          message: "Thiếu tham số date",
+        });
+      }
+
+      const result = await instructorLeaveService.deleteLeavesByDate(
+        date,
+        status || "HOLIDAY"
+      );
+      res.json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+    } catch (error) {
+      console.error("Error deleting leaves by date:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi xóa lịch nghỉ",
+        error: error.message,
+      });
+    }
+  },
+
   // Kiểm tra cảnh báo xung đột tương lai
   checkFutureConflicts: async (req, res) => {
     try {

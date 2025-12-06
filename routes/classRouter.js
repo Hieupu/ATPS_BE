@@ -121,6 +121,12 @@ router.delete(
   authorizeFeature("admin"),
   classScheduleController.deleteInstructorLeave
 );
+router.delete(
+  "/instructor/leave/date/:date",
+  verifyToken,
+  authorizeFeature("admin"),
+  classScheduleController.deleteLeavesByDate
+);
 router.post(
   "/instructor/leave/bulk-all",
   verifyToken,
