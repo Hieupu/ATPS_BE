@@ -13,7 +13,8 @@ const {
   getMyClassesInCourse,
   getCourseAssignments,
   getPopularClasses,
-  checkEnrollmentStatus
+  checkEnrollmentStatus,
+  getScheduleClasses
 } = require("../controllers/courseController");
 const { verifyToken } = require("../middlewares/middware");
 
@@ -36,5 +37,6 @@ router.get("/:id/classes", getClassesByCourse); // More specific first
 router.get("/:id/curriculum", getCourseCurriculum);
 router.get("/:id", getCourseById);
 router.get('/classes/:classId/enrollment-status', verifyToken, checkEnrollmentStatus);
+router.get("/schedule/all-classes", getScheduleClasses);
 
 module.exports = router;

@@ -418,57 +418,233 @@ async getClassesByCourse(courseId) {
   try {
     const db = await connectDB();
 
+    // Main query - optimized
     const [classes] = await db.query(
       `SELECT 
         cl.ClassID,
         cl.CourseID,
         cl.Name as ClassName,
-         cl.ZoomID,
+        cl.ZoomID,
         cl.Zoompass,
         cl.Status,
         cl.Fee,
         cl.Maxstudent,
         cl.Opendate,
+        cl.OpendatePlan,
         cl.Enddate,
         cl.Numofsession,
         i.InstructorID,
         i.FullName as InstructorName,
-        (SELECT COUNT(*) FROM enrollment e WHERE e.ClassID = cl.ClassID AND e.Status = 'enrolled') as StudentCount,
+        COALESCE(enr.StudentCount, 0) as StudentCount,
         COUNT(DISTINCT se.SessionID) as TotalSessions
        FROM class cl
        INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
        LEFT JOIN session se ON cl.ClassID = se.ClassID
+       LEFT JOIN (
+         SELECT ClassID, COUNT(*) as StudentCount 
+         FROM enrollment 
+         WHERE Status = 'enrolled'
+         GROUP BY ClassID
+       ) enr ON cl.ClassID = enr.ClassID
        WHERE cl.CourseID = ? AND cl.Status = 'active'
        GROUP BY cl.ClassID, cl.Name, cl.ZoomID,
-        cl.Zoompass, cl.Status, cl.Fee, cl.Maxstudent, 
-                cl.Opendate, cl.Enddate, cl.Numofsession, i.InstructorID, i.FullName
+         cl.Zoompass, cl.Status, cl.Fee, cl.Maxstudent, 
+         cl.Opendate, cl.Enddate, cl.Numofsession, 
+         i.InstructorID, i.FullName, enr.StudentCount
        ORDER BY cl.ClassID`,
       [courseId]
     );
 
-    // Lấy lịch học cố định hàng tuần từ timeslot
-    for (let classItem of classes) {
-      const [weeklySchedule] = await db.query(
-        `SELECT DISTINCT
-          t.StartTime,
-          t.EndTime,
-          t.Day
-         FROM session s
-         INNER JOIN timeslot t ON s.TimeslotID = t.TimeslotID
-         WHERE s.ClassID = ?
-         GROUP BY t.StartTime, t.EndTime, t.Day
-         ORDER BY 
-           FIELD(t.Day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'),
-           t.StartTime`,
-        [classItem.ClassID]
-      );
-
-      classItem.weeklySchedule = weeklySchedule;
+    // Check if there are any classes before processing
+    if (!classes.length) {
+      return [];
     }
+
+    // Batch all weekly schedule queries to avoid N+1 problem
+    const classIds = classes.map(c => c.ClassID);
+    const [allSchedules] = await db.query(
+      `SELECT 
+         s.ClassID,
+         t.StartTime,
+         t.EndTime,
+         t.Day
+       FROM session s
+       INNER JOIN timeslot t ON s.TimeslotID = t.TimeslotID
+       WHERE s.ClassID IN (?)
+       GROUP BY s.ClassID, t.StartTime, t.EndTime, t.Day
+       ORDER BY s.ClassID,
+         FIELD(t.Day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'),
+         t.StartTime`,
+      [classIds]
+    );
+
+    // Group schedules by ClassID
+    const scheduleMap = allSchedules.reduce((acc, row) => {
+      if (!acc[row.ClassID]) {
+        acc[row.ClassID] = [];
+      }
+      acc[row.ClassID].push({
+        StartTime: row.StartTime,
+        EndTime: row.EndTime,
+        Day: row.Day
+      });
+      return acc;
+    }, {});
+
+    // Assign schedules to each class
+    classes.forEach(classItem => {
+      classItem.weeklySchedule = scheduleMap[classItem.ClassID] || [];
+    });
 
     return classes;
   } catch (error) {
     console.error("Database error in getClassesByCourse:", error);
+    throw error;
+  }
+}
+
+async getScheduleClasses(filters = {}) {
+  try {
+    const db = await connectDB();
+    
+    let query = `
+      SELECT 
+        cl.ClassID,
+        cl.CourseID,
+        cl.Name as ClassName,
+        cl.Status as ClassStatus,
+        cl.Fee,
+        cl.Maxstudent,
+        cl.OpendatePlan,
+        cl.Opendate,
+        cl.EnddatePlan,
+        cl.Enddate,
+        cl.Numofsession,
+        
+        c.Title as CourseTitle,
+        c.Image as CourseImage,
+        c.Duration as CourseDuration,
+        c.Level as CourseLevel,
+        
+        i.FullName as InstructorName,
+        i.ProfilePicture,
+        i.InstructorID,
+        
+        (SELECT COUNT(*) 
+         FROM enrollment e 
+         WHERE e.ClassID = cl.ClassID 
+         AND e.Status = 'enrolled') as EnrolledStudents
+         
+      FROM class cl
+      INNER JOIN course c ON cl.CourseID = c.CourseID AND c.status = 'PUBLISHED'
+      INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
+      WHERE cl.Status IN ('ACTIVE')
+    `;
+    
+    const queryParams = [];
+    
+    // Filter theo tháng
+    if (filters.month) {
+      query += ` AND (MONTH(cl.OpendatePlan) = ? OR MONTH(cl.Opendate) = ?)`;
+      queryParams.push(filters.month, filters.month);
+    }
+    
+    // Filter theo ngày trong tuần
+    if (filters.days) {
+      const daysArray = filters.days.split(',').map(d => d.trim());
+      const placeholders = daysArray.map(() => '?').join(',');
+      query += ` AND cl.ClassID IN (
+        SELECT DISTINCT s.ClassID 
+        FROM session s 
+        INNER JOIN timeslot t ON s.TimeslotID = t.TimeslotID 
+        WHERE t.Day IN (${placeholders})
+      )`;
+      queryParams.push(...daysArray);
+    }
+    
+    // Filter theo khung giờ
+    if (filters.timeSlot) {
+      query += ` AND cl.ClassID IN (
+        SELECT DISTINCT s.ClassID 
+        FROM session s 
+        INNER JOIN timeslot t ON s.TimeslotID = t.TimeslotID 
+        WHERE t.StartTime = ?
+      )`;
+      queryParams.push(filters.timeSlot);
+    }
+    
+    query += ` ORDER BY COALESCE(cl.Opendate, cl.OpendatePlan) ASC`;
+    
+    const [classes] = await db.query(query, queryParams);
+    
+    // Lấy thông tin lịch học cho từng lớp
+    for (let classItem of classes) {
+      const [schedule] = await db.query(
+        `SELECT DISTINCT
+          t.Day,
+          TIME_FORMAT(t.StartTime, '%H:%i') as StartTime,
+          TIME_FORMAT(t.EndTime, '%H:%i') as EndTime,
+          t.StartTime as RawStartTime
+         FROM session s
+         INNER JOIN timeslot t ON s.TimeslotID = t.TimeslotID
+         WHERE s.ClassID = ?
+         ORDER BY 
+           FIELD(t.Day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'),
+           RawStartTime`,  
+        [classItem.ClassID]
+      );
+      
+      // Process schedule như trước...
+      if (schedule.length > 0) {
+        const days = schedule.map(s => {
+          const dayMap = {
+            'Monday': 'T2',
+            'Tuesday': 'T3', 
+            'Wednesday': 'T4',
+            'Thursday': 'T5',
+            'Friday': 'T6',
+            'Saturday': 'T7',
+            'Sunday': 'CN'
+          };
+          return dayMap[s.Day] || s.Day;
+        }).join('/');
+        
+        const firstSchedule = schedule[0];
+        classItem.scheduleDays = days;
+        classItem.scheduleTime = `${firstSchedule.StartTime} - ${firstSchedule.EndTime}`;
+        classItem.location = "Online";
+        classItem.weeklySchedule = schedule;
+      } else {
+        classItem.scheduleDays = "Chưa có lịch";
+        classItem.scheduleTime = "";
+        classItem.location = "Online";
+        classItem.weeklySchedule = [];
+      }
+      
+      classItem.enrollmentPercentage = classItem.Maxstudent > 0 
+        ? Math.round((classItem.EnrolledStudents / classItem.Maxstudent) * 100)
+        : 0;
+      
+      if (classItem.ClassStatus === 'ACTIVE' && classItem.enrollmentPercentage >= 100) {
+        classItem.displayStatus = 'FULL';
+      } else {
+        classItem.displayStatus = classItem.ClassStatus;
+      }
+    }
+    
+    // Filter theo level (thực hiện sau khi có dữ liệu)
+    if (filters.levels) {
+      const levelsArray = filters.levels.split(',').map(l => l.trim());
+      return classes.filter(classItem => {
+        return levelsArray.some(level => 
+          classItem.ClassName.includes(level)
+        );
+      });
+    }
+    
+    return classes;
+  } catch (error) {
+    console.error("Database error in getScheduleClasses:", error);
     throw error;
   }
 }
