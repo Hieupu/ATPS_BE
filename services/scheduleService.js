@@ -203,6 +203,45 @@ class ScheduleService {
     }
   }
 
+  // Thêm function này vào scheduleService
+async getInstructorTimeslotsFromToday(instructorId){
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const db = await connectDB();
+    
+    // Sửa DayOfWeek thành Day (tên cột đúng theo database của bạn)
+    const query = `
+      SELECT 
+        its.*,
+        ts.StartTime,
+        ts.EndTime,
+        ts.Day
+      FROM instructortimeslot its
+      INNER JOIN timeslot ts ON its.TimeslotID = ts.TimeslotID
+      WHERE its.InstructorID = ?
+        AND its.Date >= ?
+      ORDER BY its.Date, ts.StartTime
+    `;
+    
+    const [results] = await db.query(query, [instructorId, today]);
+    
+    return results.map(slot => ({
+      InstructortimeslotID: slot.InstructortimeslotID,
+      TimeslotID: slot.TimeslotID,
+      InstructorID: slot.InstructorID,
+      Date: slot.Date,
+      Status: slot.Status,
+      Note: slot.Note,
+      StartTime: slot.StartTime,
+      EndTime: slot.EndTime,
+      Day: slot.Day // Đổi thành Day
+    }));
+  } catch (error) {
+    console.error('Error fetching instructor timeslots:', error);
+    throw error;
+  }
+};
 async getTimeslotById(timeslotId) {
   try {
         const db = await connectDB();

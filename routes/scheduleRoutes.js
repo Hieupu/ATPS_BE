@@ -89,4 +89,10 @@ router.put(
   scheduleController.cancelMyEnrollment
 );
 
+router.get(
+  "/instructor/:instructorId/timeslots-from-today",
+  verifyToken, 
+  scheduleController.getInstructorTimeslotsFromToday
+);
+
 module.exports = router;

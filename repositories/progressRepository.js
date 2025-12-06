@@ -40,26 +40,27 @@ class ProgressRepository {
                 'ClassEnd', cl2.Enddate,
                 'TotalAssignments', (
                   SELECT COUNT(*)
-                  FROM assignment a
-                  INNER JOIN unit u ON a.UnitID = u.UnitID
-                  WHERE u.CourseID = c.CourseID
-                  AND a.Status IN ('active', 'published', 'scheduled')
+                  FROM exam ex
+                  INNER JOIN unit u ON ex.CourseID = c.CourseID
+                  WHERE ex.CourseID = c.CourseID
+                  AND ex.Type = 'Assignment'
+                  AND ex.Status IN ('Published', 'Published')
                 ),
                 'CompletedAssignments', (
-                  SELECT COUNT(DISTINCT s.AssignmentID)
+                  SELECT COUNT(DISTINCT s.SubmissionID)
                   FROM submission s
-                  INNER JOIN assignment a ON s.AssignmentID = a.AssignmentID
-                  INNER JOIN unit u ON a.UnitID = u.UnitID
-                  WHERE u.CourseID = c.CourseID
+                  INNER JOIN exam ex ON s.AssignmentID = ex.ExamID
+                  WHERE ex.CourseID = c.CourseID
+                  AND ex.Type = 'Assignment'
                   AND s.LearnerID = e2.LearnerID
                   AND s.Status IN ('submitted', 'late')
                 ),
                 'AvgScore', (
                   SELECT COALESCE(AVG(s.Score), 0)
                   FROM submission s
-                  INNER JOIN assignment a ON s.AssignmentID = a.AssignmentID
-                  INNER JOIN unit u ON a.UnitID = u.UnitID
-                  WHERE u.CourseID = c.CourseID
+                  INNER JOIN exam ex ON s.AssignmentID = ex.ExamID
+                  WHERE ex.CourseID = c.CourseID
+                  AND ex.Type = 'Assignment'
                   AND s.LearnerID = e2.LearnerID
                   AND s.Score IS NOT NULL
                 ),
@@ -108,25 +109,25 @@ class ProgressRepository {
                   SELECT CASE
                     WHEN (
                       SELECT COUNT(*)
-                      FROM assignment a
-                      INNER JOIN unit u ON a.UnitID = u.UnitID
-                      WHERE u.CourseID = c.CourseID
-                      AND a.Status IN ('active', 'published', 'scheduled')
+                      FROM exam ex
+                      WHERE ex.CourseID = c.CourseID
+                      AND ex.Type = 'Assignment'
+                      AND ex.Status IN ('Published', 'Published')
                     ) > 0
                     THEN ROUND((
-                      SELECT COUNT(DISTINCT s.AssignmentID)
+                      SELECT COUNT(DISTINCT s.SubmissionID)
                       FROM submission s
-                      INNER JOIN assignment a ON s.AssignmentID = a.AssignmentID
-                      INNER JOIN unit u ON a.UnitID = u.UnitID
-                      WHERE u.CourseID = c.CourseID
+                      INNER JOIN exam ex ON s.AssignmentID = ex.ExamID
+                      WHERE ex.CourseID = c.CourseID
+                      AND ex.Type = 'Assignment'
                       AND s.LearnerID = e2.LearnerID
                       AND s.Status IN ('submitted', 'late')
                     ) / (
                       SELECT COUNT(*)
-                      FROM assignment a
-                      INNER JOIN unit u ON a.UnitID = u.UnitID
-                      WHERE u.CourseID = c.CourseID
-                      AND a.Status IN ('active', 'published', 'scheduled')
+                      FROM exam ex
+                      WHERE ex.CourseID = c.CourseID
+                      AND ex.Type = 'Assignment'
+                      AND ex.Status IN ('Published', 'Published')
                     ) * 100)
                     ELSE 0
                   END
@@ -162,29 +163,28 @@ class ProgressRepository {
            AND l.Status = 'VISIBLE'
            AND u.Status = 'VISIBLE') as TotalLessonDuration,
           
-          -- Đếm tổng số assignments (bỏ điều kiện unit status)
+          -- Đếm tổng số assignments (dùng bảng exam với Type = 'Assignment')
           (SELECT COUNT(*) 
-           FROM assignment a
-           INNER JOIN unit u ON a.UnitID = u.UnitID
-           WHERE u.CourseID = c.CourseID 
-          AND a.Status IN ('active', 'published', 'scheduled')) as TotalAssignments,
+           FROM exam ex 
+           WHERE ex.CourseID = c.CourseID 
+           AND ex.Type = 'Assignment'
+           AND ex.Status IN ('Published', 'Published')) as TotalAssignments,
           
           -- Đếm số assignments đã hoàn thành
-          (SELECT COUNT(DISTINCT a.AssignmentID)
-           FROM assignment a
-           INNER JOIN unit u ON a.UnitID = u.UnitID
-           INNER JOIN submission s ON s.AssignmentID = a.AssignmentID
-           WHERE u.CourseID = c.CourseID 
-          AND s.LearnerID = e.LearnerID
-          AND s.Status IN ('submitted', 'late', 'graded')
-          AND a.Status IN ('active', 'published', 'scheduled')) as CompletedAssignments,
+          (SELECT COUNT(DISTINCT s.SubmissionID)
+           FROM submission s
+           INNER JOIN exam ex ON s.AssignmentID = ex.ExamID
+           WHERE ex.CourseID = c.CourseID 
+           AND ex.Type = 'Assignment'
+           AND s.LearnerID = e.LearnerID
+           AND s.Status IN ('submitted', 'late', 'graded')) as CompletedAssignments,
           
           -- Điểm trung bình assignments
           (SELECT COALESCE(AVG(s.Score), 0)
            FROM submission s
-           INNER JOIN assignment a ON s.AssignmentID = a.AssignmentID
-           INNER JOIN unit u ON a.UnitID = u.UnitID
-           WHERE u.CourseID = c.CourseID 
+           INNER JOIN exam ex ON s.AssignmentID = ex.ExamID
+           WHERE ex.CourseID = c.CourseID 
+           AND ex.Type = 'Assignment'
            AND s.LearnerID = e.LearnerID
            AND s.Score IS NOT NULL) as AvgAssignmentScore,
           
@@ -231,16 +231,18 @@ class ProgressRepository {
            AND e2.LearnerID = e.LearnerID
            AND a.Status = 'present') as TotalStudyMinutes,
           
-          -- Đếm số exams
+          -- Đếm số exams (Type = 'Exam')
           (SELECT COUNT(*) 
            FROM exam ex 
-           WHERE ex.CourseID = c.CourseID) as TotalExams,
+           WHERE ex.CourseID = c.CourseID
+           AND ex.Type = 'Exam') as TotalExams,
           
           -- Đếm số exams đã hoàn thành
           (SELECT COUNT(DISTINCT er.ExamID)
            FROM examresult er
            INNER JOIN exam ex ON er.ExamID = ex.ExamID
            WHERE ex.CourseID = c.CourseID 
+           AND ex.Type = 'Exam'
            AND er.LearnerID = e.LearnerID) as CompletedExams,
           
           -- Điểm trung bình exams
@@ -248,6 +250,7 @@ class ProgressRepository {
            FROM examresult er
            INNER JOIN exam ex ON er.ExamID = ex.ExamID
            WHERE ex.CourseID = c.CourseID 
+           AND ex.Type = 'Exam'
            AND er.LearnerID = e.LearnerID) as AvgExamScore,
           
           -- Thông tin payment (tổng từ tất cả enrollments)
@@ -386,27 +389,35 @@ class ProgressRepository {
           COUNT(DISTINCT l.LessonID) as TotalLessons,
           COALESCE(SUM(l.Duration), 0) as TotalLessonDuration,
           
-          COUNT(DISTINCT a.AssignmentID) as TotalAssignments,
+          -- Đếm assignments trong unit (nếu có liên kết trực tiếp)
+          -- Nếu không có liên kết trực tiếp, có thể dùng course để filter
+          (SELECT COUNT(*)
+           FROM exam ex
+           WHERE ex.CourseID = c.CourseID
+           AND ex.Type = 'Assignment'
+           AND ex.Status IN ('Published', 'Published')) as TotalAssignments,
           
-          (SELECT COUNT(DISTINCT s.AssignmentID)
+          (SELECT COUNT(DISTINCT s.SubmissionID)
            FROM submission s
-           INNER JOIN assignment a2 ON s.AssignmentID = a2.AssignmentID
-           WHERE a2.UnitID = u.UnitID
+           INNER JOIN exam ex ON s.AssignmentID = ex.ExamID
+           WHERE ex.CourseID = c.CourseID
+           AND ex.Type = 'Assignment'
            AND s.LearnerID = ?
            AND s.Status IN ('submitted', 'late')) as CompletedAssignments,
           
           (SELECT COALESCE(AVG(s.Score), 0)
            FROM submission s
-           INNER JOIN assignment a2 ON s.AssignmentID = a2.AssignmentID
-           WHERE a2.UnitID = u.UnitID
+           INNER JOIN exam ex ON s.AssignmentID = ex.ExamID
+           WHERE ex.CourseID = c.CourseID
+           AND ex.Type = 'Assignment'
            AND s.LearnerID = ?) as AvgUnitScore
           
         FROM unit u
+        INNER JOIN course c ON u.CourseID = c.CourseID
         LEFT JOIN lesson l ON u.UnitID = l.UnitID AND l.Status = 'VISIBLE'
-        LEFT JOIN assignment a ON u.UnitID = a.UnitID AND a.Status IN ('active', 'published', 'scheduled')
         WHERE u.CourseID = ?
         AND u.Status = 'VISIBLE'
-        GROUP BY u.UnitID, u.Title, u.Description, u.Duration, u.OrderIndex
+        GROUP BY u.UnitID, u.Title, u.Description, u.Duration, u.OrderIndex, c.CourseID
         ORDER BY u.OrderIndex ASC
       `;
 
@@ -442,7 +453,7 @@ class ProgressRepository {
           COUNT(DISTINCT c.CourseID) as TotalCourses,
           
           COALESCE(SUM(
-            CASE WHEN e.Status = 'Enrolled' THEN 1 ELSE 0 END
+            CASE WHEN e.Status IN ('Enrolled', 'enrolled', 'ACTIVE', 'active') THEN 1 ELSE 0 END
           ), 0) as ActiveCourses,
           
           COALESCE(SUM(

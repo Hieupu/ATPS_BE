@@ -1,4 +1,5 @@
 const attendanceRepository = require("../repositories/attendanceRepository");
+const profileRepository = require("../repositories/profileRepository");
 
 class AttendanceService {
   async getLearnerAttendance(learnerId) {
@@ -181,6 +182,84 @@ class AttendanceService {
     if (rate >= 75) return "Khá";
     if (rate >= 65) return "Trung bình";
     return "Cần cải thiện";
+  }
+
+  async attendanceLogic(accId, startTime, endTime, date, sessionId, timestamp, type) {
+    try {
+      const learner = await profileRepository.findLearnerByAccountId(accId);
+      if (!learner) {
+        console.log("Learner not found:", accId);
+        return { error: "Learner not found" };
+      }
+
+      const sessionStart = new Date(`${date}T${startTime}`);
+      const sessionEnd   = new Date(`${date}T${endTime}`);
+      const actionTime   = new Date(timestamp);
+
+      const THIRTY_MIN = 30 * 60 * 1000;
+      const sessionDurationMs = sessionEnd - sessionStart;
+      const eightyPercentMs = sessionDurationMs * 0.8;
+
+      let finalStatus = "ABSENT";
+      let finalNote   = "";
+
+      if (type === "join") {
+        if (actionTime - sessionStart <= THIRTY_MIN) {
+          finalStatus = "PRESENT";
+          finalNote   = "Tham gia đúng giờ (auto attendance)";
+        } else {
+          finalStatus = "ABSENT";
+          finalNote   = "Đi muộn hơn 30 phút";
+        }
+
+        await attendanceRepository.recordAttendance(
+          learner.LearnerID,
+          sessionId,
+          finalStatus,
+          finalNote
+        );
+
+        return { learnerId: learner.LearnerID, sessionId, status: finalStatus, note: finalNote };
+      }else if (type === "leave") {
+        const attendedMs = actionTime - sessionStart;
+
+        if (attendedMs >= eightyPercentMs) {
+          finalStatus = "PRESENT";
+          finalNote   = "Tham gia đầy đủ buổi học";
+        } else {
+          finalStatus = "ABSENT";
+          finalNote   = `Rời phòng quá sớm ${actionTime}`;
+        }
+
+        await attendanceRepository.recordAttendance(
+          learner.LearnerID,
+          sessionId,
+          finalStatus,
+          finalNote
+        );
+
+        return { 
+          learnerId: learner.LearnerID, 
+          sessionId, 
+          status: finalStatus, 
+          note: finalNote 
+        };
+      }else {
+        finalStatus = "ABSENT";
+        finalNote   = "Không tham gia buổi học";
+
+        await attendanceRepository.recordAttendance(
+          learner.LearnerID,
+          sessionId,
+          finalStatus,
+          finalNote
+        );
+      }
+
+    } catch (error) {
+      console.error("attendanceLogic error:", error);
+      return { error: error.message };
+    }
   }
 }
 
