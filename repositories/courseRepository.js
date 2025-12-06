@@ -199,12 +199,72 @@ class CourseRepository {
     }
   }
 
-async getEnrolledCoursesByLearnerId(learnerId) {
-  try {
-    const db = await connectDB();
+  async findAll() {
+    try {
+      const db = await connectDB();
+      const [rows] = await db.query(`
+        SELECT 
+          c.CourseID,
+          c.Title,
+          c.Description,
+          c.Duration,
+          c.Image,
+          c.Level,
+          c.Status,
+          c.Code,
+          i.InstructorID,
+          i.FullName as InstructorName,
+          i.ProfilePicture as InstructorAvatar,
+          i.Major as InstructorMajor
+        FROM course c
+        LEFT JOIN instructor i ON c.InstructorID = i.InstructorID
+        ORDER BY c.CourseID DESC
+      `);
+      return rows;
+    } catch (error) {
+      console.error("Database error in findAll:", error);
+      throw error;
+    }
+  }
 
-    const [rows] = await db.query(
-      `
+  async findByStatus(status) {
+    try {
+      const db = await connectDB();
+      const [rows] = await db.query(
+        `
+        SELECT 
+          c.CourseID,
+          c.Title,
+          c.Description,
+          c.Duration,
+          c.Image,
+          c.Level,
+          c.Status,
+          c.Code,
+          i.InstructorID,
+          i.FullName as InstructorName,
+          i.ProfilePicture as InstructorAvatar,
+          i.Major as InstructorMajor
+        FROM course c
+        LEFT JOIN instructor i ON c.InstructorID = i.InstructorID
+        WHERE c.Status = ?
+        ORDER BY c.CourseID DESC
+      `,
+        [status]
+      );
+      return rows;
+    } catch (error) {
+      console.error("Database error in findByStatus:", error);
+      throw error;
+    }
+  }
+
+  async getEnrolledCoursesByLearnerId(learnerId) {
+    try {
+      const db = await connectDB();
+
+      const [rows] = await db.query(
+        `
       SELECT 
         c.CourseID,
         c.Title,
@@ -228,20 +288,20 @@ async getEnrolledCoursesByLearnerId(learnerId) {
       GROUP BY c.CourseID
       ORDER BY LastEnrollmentDate DESC
       `,
-      [learnerId]
-    );
+        [learnerId]
+      );
 
-    return rows;
-  } catch (error) {
-    console.error("Database error in getEnrolledCoursesByLearnerId:", error);
-    throw error;
+      return rows;
+    } catch (error) {
+      console.error("Database error in getEnrolledCoursesByLearnerId:", error);
+      throw error;
+    }
   }
-}
 
-async getPopularClasses() {
-  try {
-    const db = await connectDB();
-    const [rows] = await db.query(`
+  async getPopularClasses() {
+    try {
+      const db = await connectDB();
+      const [rows] = await db.query(`
       SELECT 
         cl.ClassID,
         cl.Name as ClassName,
@@ -269,12 +329,12 @@ async getPopularClasses() {
       ORDER BY cl.Opendate DESC
       LIMIT 6
     `);
-    return rows;
-  } catch (error) {
-    console.error("Database error in getPopularClasses:", error);
-    throw error;
+      return rows;
+    } catch (error) {
+      console.error("Database error in getPopularClasses:", error);
+      throw error;
+    }
   }
-}
 
   async getLearnerByAccountId(accountId) {
     try {
@@ -289,6 +349,22 @@ async getPopularClasses() {
       throw error;
     }
   }
+  async findById(courseId) {
+    try {
+      const db = await connectDB();
+      const [rows] = await db.query(
+        `SELECT CourseID, Title, Description, Duration, Image, Level, Status, Code, InstructorID
+         FROM course 
+         WHERE CourseID = ?`,
+        [courseId]
+      );
+      return rows[0] || null;
+    } catch (error) {
+      console.error("Database error in findById:", error);
+      throw error;
+    }
+  }
+
   async getCourseWithDetails(courseId) {
     try {
       const db = await connectDB();
@@ -415,12 +491,12 @@ async getPopularClasses() {
       };
     }
   }
-async getClassesByCourse(courseId) {
-  try {
-    const db = await connectDB();
+  async getClassesByCourse(courseId) {
+    try {
+      const db = await connectDB();
 
-    const [classes] = await db.query(
-      `SELECT 
+      const [classes] = await db.query(
+        `SELECT 
         cl.ClassID,
         cl.CourseID,
         cl.Name as ClassName,
@@ -444,13 +520,13 @@ async getClassesByCourse(courseId) {
         cl.Zoompass, cl.Status, cl.Fee, cl.Maxstudent, 
                 cl.Opendate, cl.Enddate, cl.Numofsession, i.InstructorID, i.FullName
        ORDER BY cl.ClassID`,
-      [courseId]
-    );
+        [courseId]
+      );
 
-    // Lấy lịch học cố định hàng tuần từ timeslot
-    for (let classItem of classes) {
-      const [weeklySchedule] = await db.query(
-        `SELECT DISTINCT
+      // Lấy lịch học cố định hàng tuần từ timeslot
+      for (let classItem of classes) {
+        const [weeklySchedule] = await db.query(
+          `SELECT DISTINCT
           t.StartTime,
           t.EndTime,
           t.Day
@@ -461,18 +537,18 @@ async getClassesByCourse(courseId) {
          ORDER BY 
            FIELD(t.Day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'),
            t.StartTime`,
-        [classItem.ClassID]
-      );
+          [classItem.ClassID]
+        );
 
-      classItem.weeklySchedule = weeklySchedule;
+        classItem.weeklySchedule = weeklySchedule;
+      }
+
+      return classes;
+    } catch (error) {
+      console.error("Database error in getClassesByCourse:", error);
+      throw error;
     }
-
-    return classes;
-  } catch (error) {
-    console.error("Database error in getClassesByCourse:", error);
-    throw error;
   }
-}
 
   async getCourseCurriculum(courseId) {
     try {
@@ -626,11 +702,11 @@ async getClassesByCourse(courseId) {
     }
   }
 
-async getPopularCourses() {
-  try {
-    const db = await connectDB();
+  async getPopularCourses() {
+    try {
+      const db = await connectDB();
 
-    const [rows] = await db.query(`
+      const [rows] = await db.query(`
       SELECT 
         c.CourseID,
         c.Title,
@@ -659,12 +735,12 @@ async getPopularCourses() {
       LIMIT 6
     `);
 
-    return rows;
-  } catch (error) {
-    console.error("Database error in getPopularCourses:", error);
-    throw error;
+      return rows;
+    } catch (error) {
+      console.error("Database error in getPopularCourses:", error);
+      throw error;
+    }
   }
-}
 
   async getAllCoursesAdmin() {
     try {
@@ -796,7 +872,7 @@ async getPopularCourses() {
 
       return assignments.map((assignment) => ({
         AssignmentID: assignment.AssignmentID,
-         UnitID: assignment.UnitID,
+        UnitID: assignment.UnitID,
         Title: assignment.Title,
         Description: assignment.Description,
         Deadline: assignment.Deadline,
@@ -825,10 +901,10 @@ async getPopularCourses() {
     }
   }
 
-    async checkEnrollment(courseId, learnerId) {
+  async checkEnrollment(courseId, learnerId) {
     try {
       const db = await connectDB();
-      
+
       const [enrollments] = await db.query(
         `SELECT 
           e.EnrollmentID,

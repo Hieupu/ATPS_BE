@@ -211,7 +211,7 @@ class InstructorClassRosterRepository {
             WHEN t.StartTime = '10:20:00' THEN 2
             WHEN t.StartTime = '13:00:00' THEN 3
             WHEN t.StartTime = '15:20:00' THEN 4
-            WHEN t.StartTime = '17:40:00' THEN 5
+            WHEN t.StartTime = '18:00:00' THEN 5
             WHEN t.StartTime = '20:00:00' THEN 6
             ELSE 0 
           END as timeslotId
@@ -236,7 +236,7 @@ class InstructorClassRosterRepository {
             WHEN t.StartTime = '10:20:00' THEN 2
             WHEN t.StartTime = '13:00:00' THEN 3
             WHEN t.StartTime = '15:20:00' THEN 4
-            WHEN t.StartTime = '17:40:00' THEN 5
+            WHEN t.StartTime = '18:00:00' THEN 5
             WHEN t.StartTime = '20:00:00' THEN 6
             ELSE 0 
           END as timeslotId
@@ -266,7 +266,7 @@ class InstructorClassRosterRepository {
               WHEN t.StartTime = '10:20:00' THEN 2
               WHEN t.StartTime = '13:00:00' THEN 3
               WHEN t.StartTime = '15:20:00' THEN 4
-              WHEN t.StartTime = '17:40:00' THEN 5
+              WHEN t.StartTime = '18:00:00' THEN 5
               WHEN t.StartTime = '20:00:00' THEN 6
               ELSE 0 
             END as MappedID
@@ -305,37 +305,44 @@ class InstructorClassRosterRepository {
 
       if (toInsert.length > 0) {
         for (const slot of toInsert) {
-          let startTime;
+          let startTime, endTime;
           switch (slot.timeslotId) {
             case 1:
               startTime = "08:00:00";
+              endTime = "10:00:00";
               break;
             case 2:
               startTime = "10:20:00";
+              endTime = "12:20:00";
               break;
             case 3:
               startTime = "13:00:00";
+              endTime = "15:00:00";
               break;
             case 4:
               startTime = "15:20:00";
+              endTime = "17:20:00";
               break;
             case 5:
-              startTime = "17:40:00";
+              startTime = "18:00:00";
+              endTime = "20:00:00";
               break;
             case 6:
               startTime = "20:00:00";
+              endTime = "22:00:00";
               break;
           }
 
-          if (startTime) {
+          if (startTime && endTime) {
             await connection.query(
               `INSERT INTO instructortimeslot (TimeslotID, InstructorID, Date, Status, Note)
                SELECT TimeslotID, ?, ?, 'AVAILABLE', 'Đăng ký rảnh'
                FROM timeslot
                WHERE StartTime = ? 
-                 AND Day = DAYNAME(?) 
+                 AND EndTime = ?
+                 AND (Day = DAYNAME(?) OR Day IS NULL)
                LIMIT 1`,
-              [instructorId, slot.date, startTime, slot.date]
+              [instructorId, slot.date, startTime, endTime, slot.date]
             );
           }
         }

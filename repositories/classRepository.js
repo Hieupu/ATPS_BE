@@ -1,4 +1,4 @@
-const pool = require("../config/db");
+const connectDB = require("../config/db");
 
 /**
  * ClassRepository - dbver5
@@ -11,6 +11,7 @@ const pool = require("../config/db");
  */
 class ClassRepository {
   async create(classData) {
+    const pool = await connectDB();
     const {
       Name,
       CourseID,
@@ -56,6 +57,7 @@ class ClassRepository {
   }
 
   async findById(id) {
+    const pool = await connectDB();
     if (!id) {
       throw new Error("ID is required");
     }
@@ -80,6 +82,7 @@ class ClassRepository {
   }
 
   async findAll() {
+    const pool = await connectDB();
     const query = `
       SELECT 
         c.*,
@@ -97,6 +100,7 @@ class ClassRepository {
   }
 
   async findByCourseId(courseId) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         c.*,
@@ -112,6 +116,7 @@ class ClassRepository {
   }
 
   async findByInstructorId(instructorId) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         c.*,
@@ -128,6 +133,7 @@ class ClassRepository {
   }
 
   async update(id, updateData) {
+    const pool = await connectDB();
     const fields = Object.keys(updateData);
     const values = Object.values(updateData);
     const setClause = fields.map((field) => `${field} = ?`).join(", ");
@@ -141,12 +147,14 @@ class ClassRepository {
   }
 
   async delete(id) {
+    const pool = await connectDB();
     const query = `DELETE FROM \`class\` WHERE ClassID = ?`;
     const [result] = await pool.execute(query, [id]);
     return result.affectedRows > 0;
   }
 
   async exists(id) {
+    const pool = await connectDB();
     const query = `SELECT 1 FROM \`class\` WHERE ClassID = ?`;
     const [rows] = await pool.execute(query, [id]);
     return rows.length > 0;
@@ -168,6 +176,7 @@ class ClassRepository {
 
   // Cập nhật lớp (workflow method - override update above)
   async updateWorkflow(classId, updateData) {
+    const pool = await connectDB();
     const fields = Object.keys(updateData)
       .map((key) => `${key} = ?`)
       .join(", ");
@@ -186,6 +195,7 @@ class ClassRepository {
 
   // Lấy lớp theo status
   async findByStatus(status, options = {}) {
+    const pool = await connectDB();
     const { limit = 10, offset = 0 } = options;
 
     const query = `
@@ -212,6 +222,7 @@ class ClassRepository {
 
   // Đếm lớp theo status
   async countByStatus(status) {
+    const pool = await connectDB();
     const query = `
       SELECT COUNT(*) as total
       FROM class 
@@ -224,6 +235,7 @@ class ClassRepository {
 
   // Lấy lớp có thể đăng ký (OPEN - dbver5)
   async findAvailableClasses(options = {}) {
+    const pool = await connectDB();
     const { limit = 10, offset = 0, search = "" } = options;
 
     let query = `
@@ -262,6 +274,7 @@ class ClassRepository {
 
   // Đếm lớp có thể đăng ký (OPEN - dbver5)
   async countAvailableClasses(search = "") {
+    const pool = await connectDB();
     let query = `
       SELECT COUNT(*) as total
       FROM \`class\` c

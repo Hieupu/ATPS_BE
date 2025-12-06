@@ -15,22 +15,35 @@ class InstructorRepository {
           i.CV,
           i.Major,
           i.AccID,
+          i.Type,
+          i.InstructorFee,
           a.Email,
           a.Username,
           a.Phone,
-          COUNT(DISTINCT c.CourseID) as TotalCourses,
-          COUNT(DISTINCT e.LearnerID) as TotalStudents
+          (SELECT COUNT(DISTINCT c.CourseID) 
+             FROM course c 
+             WHERE c.InstructorID = i.InstructorID AND c.Status = 'PUBLISHED') AS TotalCourses,
+          (SELECT COUNT(DISTINCT e.LearnerID) 
+             FROM enrollment e 
+             JOIN class cl ON e.ClassID = cl.ClassID 
+             JOIN course c ON cl.CourseID = c.CourseID 
+             WHERE c.InstructorID = i.InstructorID AND e.Status = 'enrolled') AS TotalStudents,
+          (SELECT GROUP_CONCAT(cert.Title SEPARATOR '|') 
+             FROM certificate cert 
+             WHERE cert.InstructorID = i.InstructorID AND cert.Status = 'active') AS Certificates
         FROM instructor i
         INNER JOIN account a ON i.AccID = a.AccID
-        LEFT JOIN course c ON i.InstructorID = c.InstructorID
-        LEFT JOIN enrollment e ON c.CourseID = (
-          SELECT cl.CourseID FROM class cl WHERE cl.ClassID = e.ClassID
-        )
         GROUP BY i.InstructorID, i.FullName, i.DateOfBirth, i.ProfilePicture, 
-                 i.Job, i.Address, i.CV, i.Major, i.AccID, a.Email, a.Username, a.Phone
+                 i.Job, i.Address, i.CV, i.Major, i.AccID, i.Type, i.InstructorFee,
+                 a.Email, a.Username, a.Phone
         ORDER BY i.InstructorID DESC`
       );
-      return rows;
+      // Chuẩn hóa Certificates thành mảng và fee về số
+      return rows.map((row) => ({
+        ...row,
+        Certificates: row.Certificates ? row.Certificates.split("|") : [],
+        InstructorFee: Number(row.InstructorFee) || 0,
+      }));
     } catch (error) {
       console.error("Database error in getAllInstructors:", error);
       throw error;

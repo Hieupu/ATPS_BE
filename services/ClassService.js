@@ -8,7 +8,7 @@ const attendanceRepository = require("../repositories/attendanceRepository");
 const paymentRepository = require("../repositories/paymentRepository");
 const refundRepository = require("../repositories/refundRepository");
 const { generateSessions } = require("../utils/scheduleUtils");
-const pool = require("../config/db");
+const connectDB = require("../config/db");
 
 class ClassService {
   async createClass(data) {
@@ -231,14 +231,14 @@ class ClassService {
       // Tự động kích hoạt các lớp từ APPROVED sang ACTIVE
       const activatedClasses = await this.autoActivateClasses();
 
-      // Tự động chuyển các lớp từ ACTIVE sang ON_GOING khi đến ngày bắt đầu dự kiến (OpendatePlan)
+      // Tự động chuyển các lớp từ ACTIVE sang ONGOING khi đến ngày bắt đầu dự kiến (OpendatePlan)
       const startedClasses = await this.autoStartClass();
 
       return {
         activatedClasses: activatedClasses,
         startedClasses: startedClasses,
         closedClasses: closedClasses,
-        message: `Đã kích hoạt ${activatedClasses.length} lớp từ APPROVED sang ACTIVE, chuyển ${startedClasses.length} lớp từ ACTIVE sang ON_GOING, đóng ${closedClasses.length} lớp học`,
+        message: `Đã kích hoạt ${activatedClasses.length} lớp từ APPROVED sang ACTIVE, chuyển ${startedClasses.length} lớp từ ACTIVE sang ONGOING, đóng ${closedClasses.length} lớp học`,
       };
     } catch (error) {
       throw error;
@@ -330,6 +330,7 @@ class ClassService {
             )
         `;
 
+        const pool = await connectDB();
         const [conflicts] = await pool.execute(conflictQuery, [
           instructorId,
           newTimeslot.date,
@@ -491,7 +492,7 @@ class ClassService {
    */
   async getEnrollmentCount(classId) {
     try {
-      const pool = require("../config/db");
+      const pool = await connectDB();
       const query = `
         SELECT COUNT(*) as count
         FROM enrollment
@@ -560,7 +561,7 @@ class ClassService {
    */
   async autoCloseClass() {
     try {
-      const pool = require("../config/db");
+      const pool = await connectDB();
       const { CLASS_STATUS } = require("../constants/classStatus");
 
       // Tìm các lớp đã kết thúc nhưng chưa đóng
@@ -573,7 +574,7 @@ class ClassService {
       `;
 
       const [classes] = await pool.execute(query, [
-        CLASS_STATUS.ON_GOING,
+        CLASS_STATUS.ONGOING,
         CLASS_STATUS.ACTIVE,
       ]);
 
@@ -607,7 +608,7 @@ class ClassService {
    */
   async autoActivateClasses() {
     try {
-      const pool = require("../config/db");
+      const pool = await connectDB();
       const { CLASS_STATUS } = require("../constants/classStatus");
 
       // Tìm các lớp APPROVED đã đủ điều kiện:
@@ -660,14 +661,14 @@ class ClassService {
 
   // ========== HÀM TỰ ĐỘNG CHUYỂN TỪ ACTIVE SANG ON_GOING ==========
   /**
-   * Hàm Tự động Chuyển từ ACTIVE sang ON_GOING: Tự động chuyển status từ ACTIVE sang ON_GOING
+   * Hàm Tự động Chuyển từ ACTIVE sang ONGOING: Tự động chuyển status từ ACTIVE sang ONGOING
    * khi đến ngày bắt đầu dự kiến (OpendatePlan <= CURDATE())
    * Nên chạy hàng ngày (cron job)
-   * @returns {Array} - Danh sách các lớp đã được chuyển từ ACTIVE sang ON_GOING
+   * @returns {Array} - Danh sách các lớp đã được chuyển từ ACTIVE sang ONGOING
    */
   async autoStartClass() {
     try {
-      const pool = require("../config/db");
+      const pool = await connectDB();
       const { CLASS_STATUS } = require("../constants/classStatus");
 
       // Tìm các lớp có status ACTIVE và đã đến ngày bắt đầu dự kiến (OpendatePlan)
@@ -685,7 +686,7 @@ class ClassService {
 
       for (const classItem of classes) {
         await classRepository.update(classItem.ClassID, {
-          Status: CLASS_STATUS.ON_GOING,
+          Status: CLASS_STATUS.ONGOING,
         });
 
         startedClasses.push({
@@ -696,7 +697,7 @@ class ClassService {
       }
 
       console.log(
-        `Đã tự động chuyển ${startedClasses.length} lớp từ ACTIVE sang ON_GOING`
+        `Đã tự động chuyển ${startedClasses.length} lớp từ ACTIVE sang ONGOING`
       );
       return startedClasses;
     } catch (error) {

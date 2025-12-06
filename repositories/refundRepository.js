@@ -1,4 +1,4 @@
-const pool = require("../config/db");
+const connectDB = require("../config/db");
 
 class RefundRepository {
   // Tạo yêu cầu hoàn tiền
@@ -11,7 +11,8 @@ class RefundRepository {
         VALUES (?, ?, ?, ?)
       `;
 
-      const [result] = await pool.execute(query, [
+      const db = await connectDB();
+      const [result] = await db.execute(query, [
         RequestDate || new Date(),
         Reason,
         Status || "pending",
@@ -83,7 +84,8 @@ class RefundRepository {
       const safeOffset = Number(offset) || 0;
       query += ` ORDER BY r.RequestDate DESC LIMIT ${safeLimit} OFFSET ${safeOffset}`;
 
-      const [rows] = await pool.execute(query, params);
+      const db = await connectDB();
+      const [rows] = await db.execute(query, params);
 
       return rows;
     } catch (error) {
@@ -120,7 +122,8 @@ class RefundRepository {
         params.push(searchTerm, searchTerm, searchTerm);
       }
 
-      const [rows] = await pool.execute(query, params);
+      const db = await connectDB();
+      const [rows] = await db.execute(query, params);
       return rows[0].total;
     } catch (error) {
       throw error;
@@ -157,7 +160,8 @@ class RefundRepository {
         WHERE r.RefundID = ?
       `;
 
-      const [rows] = await pool.execute(query, [refundId]);
+      const db = await connectDB();
+      const [rows] = await db.execute(query, [refundId]);
 
       return rows[0] || null;
     } catch (error) {
@@ -188,7 +192,8 @@ class RefundRepository {
         ", "
       )} WHERE RefundID = ?`;
 
-      const [result] = await pool.execute(query, values);
+      const db = await connectDB();
+      const [result] = await db.execute(query, values);
 
       if (result.affectedRows === 0) {
         return null;
@@ -205,7 +210,8 @@ class RefundRepository {
     try {
       const query = `DELETE FROM refundrequest WHERE RefundID = ?`;
 
-      const [result] = await pool.execute(query, [refundId]);
+      const db = await connectDB();
+      const [result] = await db.execute(query, [refundId]);
 
       return result.affectedRows > 0;
     } catch (error) {
@@ -243,7 +249,8 @@ class RefundRepository {
         ORDER BY r.RequestDate DESC
       `;
 
-      const [rows] = await pool.execute(query, [status]);
+      const db = await connectDB();
+      const [rows] = await db.execute(query, [status]);
 
       return rows;
     } catch (error) {
@@ -262,7 +269,8 @@ class RefundRepository {
         ORDER BY r.RequestDate DESC
       `;
 
-      const [rows] = await pool.execute(query, [enrollmentId]);
+      const db = await connectDB();
+      const [rows] = await db.execute(query, [enrollmentId]);
       return rows;
     } catch (error) {
       throw error;

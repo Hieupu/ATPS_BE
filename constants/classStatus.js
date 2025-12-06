@@ -1,17 +1,17 @@
 /**
  * Class Status Constants - dbver5 (Updated)
- * 
+ *
  * Quy trình status:
- * DRAFT -> APPROVED -> ACTIVE -> ON_GOING -> CLOSE
+ * DRAFT -> APPROVED -> ACTIVE -> ONGOING -> CLOSE
  * Hoặc có thể CANCEL ở bất kỳ giai đoạn nào
- * 
+ *
  * - DRAFT: Nháp (admin tạo lớp)
  * - APPROVED: Admin đã duyệt (tạo nháp rồi approve)
  * - ACTIVE: Đang tuyển sinh (tự động chuyển từ APPROVED khi đủ điều kiện)
- * - ON_GOING: Đang diễn ra
+ * - ONGOING: Đang diễn ra
  * - CLOSE: Đã kết thúc
  * - CANCEL: Đã hủy
- * 
+ *
  * Lưu ý: Đã loại bỏ WAITING và PENDING vì admin đã chọn course từ bước 1
  */
 
@@ -28,7 +28,8 @@ const CLASS_STATUS = {
   PUBLISHED: "ACTIVE", // Alias cho ACTIVE (backward compatibility)
 
   // Đang diễn ra: Lớp đã bắt đầu học
-  ON_GOING: "ON_GOING",
+  ONGOING: "ONGOING",
+  ON_GOING: "ONGOING", // Alias for backward compatibility
 
   // Đã kết thúc: Lớp đã hoàn thành
   CLOSE: "CLOSE",
@@ -61,11 +62,21 @@ function getAllStatuses() {
 function canTransitionTo(currentStatus, newStatus) {
   // Normalize status (hỗ trợ alias)
   const normalize = (status) => {
-    if (status === CLASS_STATUS.OPEN || status === CLASS_STATUS.PUBLISHED) return CLASS_STATUS.ACTIVE;
-    if (status === CLASS_STATUS.CLOSED || status === CLASS_STATUS.DONE || status === CLASS_STATUS.COMPLETED) return CLASS_STATUS.CLOSE;
+    if (status === CLASS_STATUS.OPEN || status === CLASS_STATUS.PUBLISHED)
+      return CLASS_STATUS.ACTIVE;
+    if (
+      status === CLASS_STATUS.CLOSED ||
+      status === CLASS_STATUS.DONE ||
+      status === CLASS_STATUS.COMPLETED
+    )
+      return CLASS_STATUS.CLOSE;
     if (status === CLASS_STATUS.CANCELLED) return CLASS_STATUS.CANCEL;
     // Hỗ trợ backward compatibility cho WAITING và PENDING (chuyển về DRAFT hoặc APPROVED)
-    if (status === "WAITING" || status === "PENDING" || status === "PENDING_APPROVAL") {
+    if (
+      status === "WAITING" ||
+      status === "PENDING" ||
+      status === "PENDING_APPROVAL"
+    ) {
       return CLASS_STATUS.DRAFT; // Chuyển về DRAFT để tương thích
     }
     return status;
@@ -75,22 +86,10 @@ function canTransitionTo(currentStatus, newStatus) {
   const target = normalize(newStatus);
 
   const transitions = {
-    [CLASS_STATUS.DRAFT]: [
-      CLASS_STATUS.APPROVED,
-      CLASS_STATUS.CANCEL,
-    ],
-    [CLASS_STATUS.APPROVED]: [
-      CLASS_STATUS.ACTIVE,
-      CLASS_STATUS.CANCEL,
-    ],
-    [CLASS_STATUS.ACTIVE]: [
-      CLASS_STATUS.ON_GOING,
-      CLASS_STATUS.CANCEL,
-    ],
-    [CLASS_STATUS.ON_GOING]: [
-      CLASS_STATUS.CLOSE,
-      CLASS_STATUS.CANCEL,
-    ],
+    [CLASS_STATUS.DRAFT]: [CLASS_STATUS.APPROVED, CLASS_STATUS.CANCEL],
+    [CLASS_STATUS.APPROVED]: [CLASS_STATUS.ACTIVE, CLASS_STATUS.CANCEL],
+    [CLASS_STATUS.ACTIVE]: [CLASS_STATUS.ONGOING, CLASS_STATUS.CANCEL],
+    [CLASS_STATUS.ONGOING]: [CLASS_STATUS.CLOSE, CLASS_STATUS.CANCEL],
     [CLASS_STATUS.CLOSE]: [], // Không thể chuyển từ CLOSE
     [CLASS_STATUS.CANCEL]: [], // Không thể chuyển từ CANCEL
   };
@@ -104,4 +103,3 @@ module.exports = {
   getAllStatuses,
   canTransitionTo,
 };
-

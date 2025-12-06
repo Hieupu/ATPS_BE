@@ -1,4 +1,4 @@
-const pool = require("../config/db");
+const connectDB = require("../config/db");
 const logService = require("./logService");
 
 const SUCCESS_PAYMENT_STATUSES = [
@@ -21,6 +21,7 @@ class DashboardService {
   // Lấy tổng quan thống kê
   async getDashboardStats(yearParam) {
     try {
+      const pool = await connectDB();
       const selectedYear =
         parseInt(yearParam, 10) > 0
           ? parseInt(yearParam, 10)
@@ -144,7 +145,7 @@ class DashboardService {
 
       // Tổng số lớp đã bắt đầu
       const [startedClasses] = await pool.execute(
-        `SELECT COUNT(*) as total FROM \`class\` WHERE Status IN ('ON_GOING', 'CLOSE')`
+        `SELECT COUNT(*) as total FROM \`class\` WHERE Status IN ('ONGOING', 'CLOSE')`
       );
 
       // Tính phần trăm thay đổi
@@ -292,7 +293,7 @@ class DashboardService {
                   i.Type,
                   COALESCE(SUM(
                     CASE 
-                      WHEN c.Status IN ('ACTIVE','ON_GOING') THEN 1 
+                      WHEN c.Status IN ('ACTIVE','ONGOING') THEN 1 
                       ELSE 0 
                     END
                   ), 0) AS activeClasses
@@ -723,6 +724,7 @@ class DashboardService {
   // Lấy thống kê theo khoảng thời gian
   async getStatsByDateRange(startDate, endDate) {
     try {
+      const pool = await connectDB();
       const { clause: successStatusCondition, params: successStatusParams } =
         buildSuccessStatusCondition();
       const paymentParams = [...successStatusParams, startDate, endDate];

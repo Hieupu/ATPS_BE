@@ -17,7 +17,10 @@ const { getDayOfWeek } = require("../utils/sessionValidation");
 async function addBulkInstructorLeave(params) {
   const { InstructorID, Date, Status, Note, blockEntireDay } = params;
 
-  console.log("[instructorLeaveService] addBulkInstructorLeave params:", params);
+  console.log(
+    "[instructorLeaveService] addBulkInstructorLeave params:",
+    params
+  );
 
   if (!InstructorID || !Date || !Status) {
     throw new Error("Thiếu tham số bắt buộc");
@@ -160,7 +163,8 @@ async function checkFutureConflicts(params) {
     throw new Error("Thiếu tham số bắt buộc");
   }
 
-  const pool = require("../config/db");
+  const connectDB = require("../config/db");
+  const pool = await connectDB();
 
   // Tìm tất cả các session bị ảnh hưởng
   const conflictQuery = `
@@ -427,8 +431,16 @@ async function deleteInstructorLeave(leaveId) {
 
 // Thêm lịch nghỉ HOLIDAY cho tất cả giảng viên
 async function addHolidayForAllInstructors(data) {
-  const { Date: startDateStr, EndDate: endDateStr, Status, Note, blockEntireDay, TimeslotID, TimeslotIDs } = data;
-  
+  const {
+    Date: startDateStr,
+    EndDate: endDateStr,
+    Status,
+    Note,
+    blockEntireDay,
+    TimeslotID,
+    TimeslotIDs,
+  } = data;
+
   if (!startDateStr || Status !== "HOLIDAY") {
     throw new Error("Date là bắt buộc và Status phải là HOLIDAY");
   }
@@ -462,7 +474,8 @@ async function addHolidayForAllInstructors(data) {
             TimeslotID: null,
           });
         } else {
-          const timeslotIdsToAdd = TimeslotIDs || (TimeslotID ? [TimeslotID] : []);
+          const timeslotIdsToAdd =
+            TimeslotIDs || (TimeslotID ? [TimeslotID] : []);
           for (const timeslotId of timeslotIdsToAdd) {
             await addBulkInstructorLeave({
               InstructorID: instructor.InstructorID,
@@ -489,7 +502,9 @@ async function addHolidayForAllInstructors(data) {
     added: successCount,
     errors: errorCount,
     errorDetails: errors,
-    message: `Đã thêm ${successCount} lịch nghỉ cho tất cả giảng viên${errorCount > 0 ? `. Có ${errorCount} lỗi.` : ""}`,
+    message: `Đã thêm ${successCount} lịch nghỉ cho tất cả giảng viên${
+      errorCount > 0 ? `. Có ${errorCount} lỗi.` : ""
+    }`,
   };
 }
 
@@ -500,11 +515,12 @@ async function syncHolidayForInstructor(instructorId) {
   }
 
   // Lấy tất cả unique DATE từ instructortimeslot có Status = HOLIDAY
-  const pool = require("../config/db");
+  const connectDB = require("../config/db");
+  const pool = await connectDB();
   const [holidayDates] = await pool.execute(
     `SELECT DISTINCT Date FROM instructortimeslot WHERE UPPER(Status) = 'HOLIDAY' ORDER BY Date ASC`
   );
-  const uniqueDates = holidayDates.map(row => row.Date);
+  const uniqueDates = holidayDates.map((row) => row.Date);
 
   if (uniqueDates.length === 0) {
     return {
@@ -521,10 +537,10 @@ async function syncHolidayForInstructor(instructorId) {
     limit: 10000,
     offset: 0,
   });
-  const existingDates = new Set(existingLeaves.map(h => h.Date));
+  const existingDates = new Set(existingLeaves.map((h) => h.Date));
 
   // Tạo instructortimeslot cho những DATE chưa có
-  const datesToAdd = uniqueDates.filter(date => !existingDates.has(date));
+  const datesToAdd = uniqueDates.filter((date) => !existingDates.has(date));
   let addedCount = 0;
   const errors = [];
 
@@ -549,9 +565,16 @@ async function syncHolidayForInstructor(instructorId) {
         addedCount++;
       } else {
         // Nếu không có mẫu, tạo với blockEntireDay
-        const dayOfWeek = require("../utils/sessionValidation").getDayOfWeek(date);
-        const allTimeslots = await require("../repositories/timeslotRepository").findAll({ limit: 1000 });
-        const slotsForDay = allTimeslots.data.filter((ts) => ts.Day === dayOfWeek);
+        const dayOfWeek = require("../utils/sessionValidation").getDayOfWeek(
+          date
+        );
+        const allTimeslots =
+          await require("../repositories/timeslotRepository").findAll({
+            limit: 1000,
+          });
+        const slotsForDay = allTimeslots.data.filter(
+          (ts) => ts.Day === dayOfWeek
+        );
 
         for (const slot of slotsForDay) {
           await instructorTimeslotRepository.create({
@@ -574,17 +597,20 @@ async function syncHolidayForInstructor(instructorId) {
     dates: datesToAdd,
     errors: errors.length,
     errorDetails: errors,
-    message: `Đã thêm ${addedCount} ngày nghỉ HOLIDAY cho giảng viên${errors.length > 0 ? `. Có ${errors.length} lỗi.` : ""}`,
+    message: `Đã thêm ${addedCount} ngày nghỉ HOLIDAY cho giảng viên${
+      errors.length > 0 ? `. Có ${errors.length} lỗi.` : ""
+    }`,
   };
 }
 
 // Lấy danh sách unique DATE có Status = HOLIDAY
 async function getHolidayDates() {
-  const pool = require("../config/db");
+  const connectDB = require("../config/db");
+  const pool = await connectDB();
   const [rows] = await pool.execute(
     `SELECT DISTINCT Date FROM instructortimeslot WHERE UPPER(Status) = 'HOLIDAY' ORDER BY Date ASC`
   );
-  return rows.map(row => row.Date);
+  return rows.map((row) => row.Date);
 }
 
 module.exports = {

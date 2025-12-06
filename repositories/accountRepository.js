@@ -88,7 +88,8 @@ class AccountRepository {
   // }
 
   async findAccountById(accountId) {
-    const [rows] = await connectDB.query("SELECT * FROM account WHERE AccID = ?", [
+    const db = await connectDB();
+    const [rows] = await db.query("SELECT * FROM account WHERE AccID = ?", [
       accountId,
     ]);
     if (!rows.length) return null;
@@ -117,9 +118,10 @@ class AccountRepository {
     password,
     provider = "local",
   }) {
+    const db = await connectDB();
     const normalizedEmail = email.trim().toLowerCase();
     try {
-      const [result] = await connectDB.query(
+      const [result] = await db.query(
         "INSERT INTO account (Username, Email, Phone, Password, Status, Provider) VALUES (?, ?, ?, ?, ?, ?)",
         [username, normalizedEmail, phone || "", password, "active", provider]
       );
@@ -144,11 +146,12 @@ class AccountRepository {
     provider = "local",
     gender = "other",
   }) {
+    const db = await connectDB();
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedUsername =
       username || normalizedEmail.split("@")[0] || "user";
     try {
-      const [result] = await connectDB.query(
+      const [result] = await db.query(
         "INSERT INTO account (Username, Email, Phone, Password, Status, Provider, Gender) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [
           normalizedUsername,
@@ -172,14 +175,16 @@ class AccountRepository {
   }
 
   async createLearner(accId) {
-    await connectDB.query(
+    const db = await connectDB();
+    await db.query(
       "INSERT INTO learner (AccID, FullName, DateOfBirth, ProfilePicture, Job, Address) VALUES (?, ?, ?, ?, ?, ?)",
       [accId, null, null, null, null, null]
     );
   }
 
   async getFeaturesByAccountId(accountId) {
-    const [rows] = await connectDB.query(
+    const db = await connectDB();
+    const [rows] = await db.query(
       `
       SELECT f.Name
       FROM atps.feature f
@@ -219,7 +224,8 @@ class AccountRepository {
     const values = Object.values(filteredData);
     const setClause = fields.map((field) => `${field} = ?`).join(", ");
 
-    const [result] = await connectDB.query(
+    const db = await connectDB();
+    const [result] = await db.query(
       `UPDATE account SET ${setClause} WHERE AccID = ?`,
       [...values, accountId]
     );
@@ -228,7 +234,8 @@ class AccountRepository {
   }
 
   async updatePassword(accountId, hashedPassword) {
-    await connectDB.query("UPDATE account SET Password = ? WHERE AccID = ?", [
+    const db = await connectDB();
+    await db.query("UPDATE account SET Password = ? WHERE AccID = ?", [
       hashedPassword,
       accountId,
     ]);

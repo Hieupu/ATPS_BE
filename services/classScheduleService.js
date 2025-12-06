@@ -410,7 +410,7 @@ async function autoCloseEnrollment(classId) {
 
     const currentStatus = classData[0].Status;
 
-    // Nếu lớp đã đầy và đang ở trạng thái ACTIVE, có thể tự động chuyển sang ON_GOING
+    // Nếu lớp đã đầy và đang ở trạng thái ACTIVE, có thể tự động chuyển sang ONGOING
     if (fullCheck.isFull && currentStatus === CLASS_STATUS.ACTIVE) {
       // Kiểm tra xem lớp đã bắt đầu chưa (có session trong quá khứ hoặc hôm nay)
       const sessions = await sessionRepository.findByClassId(classId);
@@ -425,7 +425,7 @@ async function autoCloseEnrollment(classId) {
 
       if (hasStarted) {
         await classService.updateClass(classId, {
-          Status: CLASS_STATUS.ON_GOING,
+          Status: CLASS_STATUS.ONGOING,
         });
         return {
           updated: true,

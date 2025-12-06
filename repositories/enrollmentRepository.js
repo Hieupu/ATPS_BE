@@ -1,7 +1,8 @@
-const pool = require("../config/db");
+const connectDB = require("../config/db");
 
 class EnrollmentRepository {
   async create(enrollmentData) {
+    const pool = await connectDB();
     const { LearnerID, ClassID, EnrollmentDate, Status } = enrollmentData;
 
     const query = `
@@ -20,6 +21,7 @@ class EnrollmentRepository {
   }
 
   async findById(id) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         e.*,
@@ -38,6 +40,7 @@ class EnrollmentRepository {
   }
 
   async findByLearnerId(learnerId) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         e.*,
@@ -69,6 +72,7 @@ class EnrollmentRepository {
   }
 
   async findByClassId(classId) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         e.*,
@@ -96,6 +100,7 @@ class EnrollmentRepository {
   }
 
   async findByCourseId(courseId) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         e.*,
@@ -115,12 +120,14 @@ class EnrollmentRepository {
   }
 
   async deleteByClassId(classId) {
+    const pool = await connectDB();
     const query = `DELETE FROM enrollment WHERE ClassID = ?`;
     const [result] = await pool.execute(query, [classId]);
     return result.affectedRows;
   }
 
   async findAll() {
+    const pool = await connectDB();
     const query = `
       SELECT 
         e.*,
@@ -139,6 +146,7 @@ class EnrollmentRepository {
   }
 
   async update(id, updateData) {
+    const pool = await connectDB();
     const fields = Object.keys(updateData);
     const values = Object.values(updateData);
     const setClause = fields.map((field) => `${field} = ?`).join(", ");
@@ -152,18 +160,21 @@ class EnrollmentRepository {
   }
 
   async delete(id) {
+    const pool = await connectDB();
     const query = `DELETE FROM enrollment WHERE EnrollmentID = ?`;
     const [result] = await pool.execute(query, [id]);
     return result.affectedRows > 0;
   }
 
   async exists(id) {
+    const pool = await connectDB();
     const query = `SELECT 1 FROM enrollment WHERE EnrollmentID = ?`;
     const [rows] = await pool.execute(query, [id]);
     return rows.length > 0;
   }
 
   async checkEnrollmentExists(learnerId, classId) {
+    const pool = await connectDB();
     const query = `SELECT 1 FROM enrollment WHERE LearnerID = ? AND ClassID = ?`;
     const [rows] = await pool.execute(query, [learnerId, classId]);
     return rows.length > 0;

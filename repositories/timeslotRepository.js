@@ -1,4 +1,4 @@
-const pool = require("../config/db");
+const connectDB = require("../config/db");
 
 /**
  * TimeslotRepository - dbver5
@@ -8,6 +8,7 @@ const pool = require("../config/db");
  */
 class TimeslotRepository {
   async create(timeslotData) {
+    const pool = await connectDB();
     const { StartTime, EndTime, Day } = timeslotData;
 
     // dbver5: Hỗ trợ trường Day (thứ trong tuần)
@@ -33,6 +34,7 @@ class TimeslotRepository {
   }
 
   async findById(id) {
+    const pool = await connectDB();
     if (!id) {
       throw new Error("ID is required");
     }
@@ -42,6 +44,7 @@ class TimeslotRepository {
   }
 
   async findAll(options = {}) {
+    const pool = await connectDB();
     const rawPage = options.page;
     const rawLimit = options.limit;
     const parsedLimit = parseInt(rawLimit, 10);
@@ -119,6 +122,7 @@ class TimeslotRepository {
   }
 
   async update(id, updateData) {
+    const pool = await connectDB();
     const fields = Object.keys(updateData);
     const values = Object.values(updateData);
     const setClause = fields.map((field) => `${field} = ?`).join(", ");
@@ -132,24 +136,28 @@ class TimeslotRepository {
   }
 
   async delete(id) {
+    const pool = await connectDB();
     const query = `DELETE FROM timeslot WHERE TimeslotID = ?`;
     const [result] = await pool.execute(query, [id]);
     return result.affectedRows > 0;
   }
 
   async exists(id) {
+    const pool = await connectDB();
     const query = `SELECT 1 FROM timeslot WHERE TimeslotID = ?`;
     const [rows] = await pool.execute(query, [id]);
     return rows.length > 0;
   }
 
   async getTotalCount() {
+    const pool = await connectDB();
     const query = `SELECT COUNT(*) as total FROM timeslot`;
     const [rows] = await pool.execute(query);
     return rows[0].total;
   }
 
   async findByDateRange(startDate, endDate) {
+    const pool = await connectDB();
     // dbver5: timeslot không có Date, phải join với session
     const query = `
       SELECT 
@@ -179,6 +187,7 @@ class TimeslotRepository {
 
   // Lấy timeslots theo ClassID (dbver5 - session trực tiếp có TimeslotID)
   async findByClassId(classId) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         t.TimeslotID,
@@ -207,6 +216,7 @@ class TimeslotRepository {
 
   // Lấy timeslots theo CourseID (dbver5 - session trực tiếp có TimeslotID)
   async findByCourseId(courseId) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         t.TimeslotID,
@@ -233,6 +243,7 @@ class TimeslotRepository {
 
   // Lấy lịch học của học viên (dbver5 - session trực tiếp có TimeslotID)
   async getLearnerSchedule(learnerId) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         t.TimeslotID,
@@ -264,6 +275,7 @@ class TimeslotRepository {
 
   // Lấy session đầu tiên và cuối cùng của một lớp (dbver5)
   async getClassSessionTimeRange(classId) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         MIN(CONCAT(s.Date, ' ', t.StartTime)) as firstSessionDateTime,
@@ -285,6 +297,7 @@ class TimeslotRepository {
 
   // Lấy session đầu tiên và cuối cùng của một khóa học (dbver5)
   async getCourseSessionTimeRange(courseId) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         MIN(CONCAT(s.Date, ' ', t.StartTime)) as firstSessionDateTime,
@@ -309,6 +322,7 @@ class TimeslotRepository {
 
   // Lấy tất cả timeslots với thông tin session đầu tiên và cuối cùng (dbver5)
   async getTimeslotsWithSessionRange(classId = null, courseId = null) {
+    const pool = await connectDB();
     let whereClause = "WHERE 1=1";
     const params = [];
 
@@ -365,6 +379,7 @@ class TimeslotRepository {
 
   // Lấy thống kê chi tiết về timeslots và sessions (dbver5)
   async getSessionStatistics(classId = null, courseId = null) {
+    const pool = await connectDB();
     let whereClause = "WHERE 1=1";
     const params = [];
 
@@ -402,6 +417,7 @@ class TimeslotRepository {
 
   // Lấy danh sách lớp với thông tin thời gian session (dbver5)
   async getClassesWithTimeInfo() {
+    const pool = await connectDB();
     const query = `
       SELECT 
         cl.ClassID,
@@ -477,6 +493,7 @@ class TimeslotRepository {
 
   // Lấy schedule cho một class (dbver5)
   async getClassSchedule(classId) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         s.SessionID,
@@ -528,6 +545,7 @@ class TimeslotRepository {
 
   // Lấy class sessions theo format frontend cần (dbver5 schema - không có sessiontimeslot)
   async getClassSessionsForFrontend(classId) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         s.SessionID,
@@ -556,6 +574,7 @@ class TimeslotRepository {
 
   // Lấy ca học đã có sẵn trong DB của một lớp cụ thể (dbver5)
   async getExistingTimeslotsForClass(classId) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         t.TimeslotID,
@@ -600,6 +619,7 @@ class TimeslotRepository {
 
   // Lấy tất cả ca học đã có sẵn trong DB với thông tin lớp (dbver5)
   async getAllExistingTimeslotsWithClassInfo() {
+    const pool = await connectDB();
     const query = `
       SELECT 
         t.TimeslotID,
@@ -633,6 +653,7 @@ class TimeslotRepository {
 
   // Lấy thống kê ca học cho classlist (dbver5)
   async getClassListWithTimeStats() {
+    const pool = await connectDB();
     const query = `
       SELECT 
         cl.ClassID,
@@ -679,6 +700,7 @@ class TimeslotRepository {
 
   // Lấy danh sách học sinh đã enroll vào lớp
   async getEnrolledLearners(classId) {
+    const pool = await connectDB();
     const query = `
       SELECT 
         e.EnrollmentID,
@@ -710,6 +732,7 @@ class TimeslotRepository {
 
   // Lấy danh sách học sinh đã enroll với thông tin lớp
   async getAllEnrolledLearnersWithClassInfo() {
+    const pool = await connectDB();
     const query = `
       SELECT 
         e.EnrollmentID,
@@ -750,6 +773,7 @@ class TimeslotRepository {
 
   // Lấy thống kê enrollment cho classlist
   async getClassEnrollmentStats() {
+    const pool = await connectDB();
     const query = `
       SELECT 
         cl.ClassID,

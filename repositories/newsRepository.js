@@ -1,4 +1,4 @@
-const pool = require("../config/db");
+const connectDB = require("../config/db");
 
 class NewsRepository {
   // Tạo tin tức mới
@@ -11,6 +11,7 @@ class NewsRepository {
         VALUES (?, ?, ?, ?, ?, ?)
       `;
 
+      const pool = await connectDB();
       const [result] = await pool.execute(query, [
         Title,
         Content,
@@ -87,6 +88,7 @@ class NewsRepository {
 
       query += ` ORDER BY n.PostedDate DESC LIMIT ${limitInt} OFFSET ${offsetInt}`;
 
+      const pool = await connectDB();
       const [rows] = await pool.execute(query, params);
 
       return rows;
@@ -113,6 +115,7 @@ class NewsRepository {
         params.push(`%${search}%`, `%${search}%`);
       }
 
+      const pool = await connectDB();
       const [rows] = await pool.execute(query, params);
       return rows[0].total;
     } catch (error) {
@@ -140,6 +143,7 @@ class NewsRepository {
         WHERE n.NewsID = ?
       `;
 
+      const pool = await connectDB();
       const [rows] = await pool.execute(query, [newsId]);
 
       return rows[0] || null;
@@ -169,6 +173,7 @@ class NewsRepository {
 
       const query = `UPDATE news SET ${fields.join(", ")} WHERE NewsID = ?`;
 
+      const pool = await connectDB();
       const [result] = await pool.execute(query, values);
 
       if (result.affectedRows === 0) {
@@ -186,6 +191,7 @@ class NewsRepository {
     try {
       const query = `DELETE FROM news WHERE NewsID = ?`;
 
+      const pool = await connectDB();
       const [result] = await pool.execute(query, [newsId]);
 
       return result.affectedRows > 0;
@@ -213,6 +219,7 @@ class NewsRepository {
         ORDER BY n.PostedDate DESC
       `;
 
+      const pool = await connectDB();
       const [rows] = await pool.execute(query, [status]);
 
       return rows;

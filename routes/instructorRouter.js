@@ -42,11 +42,27 @@ const uploadFile = multer({
 });
 
 // =====================================================
-// PUBLIC APIs - MUST come first
+// ADMIN APIs - MUST come BEFORE public routes to avoid conflicts
+// =====================================================
+
+// Admin-specific endpoint for getting all instructors
+// Format: { success: true, data: [...] }
+router.get(
+  "/admin/all",
+  verifyToken,
+  authorizeFeature("admin"),
+  instructorController.getAllInstructors
+);
+
+// =====================================================
+// PUBLIC APIs - MUST come after admin routes
 // =====================================================
 
 // Public specific routes - MUST come before dynamic routes
 router.get("/featured", publicInstructorController.getFeaturedInstructors);
+// Explicit public aliases must stay above the catch-all "/:id"
+router.get("/public", publicInstructorController.getAllInstructors);
+router.get("/public/:id", publicInstructorController.getInstructorById);
 router.get("/", publicInstructorController.getAllInstructors);
 router.get("/:id", publicInstructorController.getInstructorById);
 
@@ -162,8 +178,8 @@ router.get(
 );
 
 // Common APIs - Public endpoints (không cần authentication)
-router.get("/public", instructorController.getAllInstructors);
-router.get("/public/:id", instructorController.getInstructorById);
+// (đặt ở trên để tránh bị shadow bởi "/:id")
+// Moved lên trên cùng public section
 
 // Availability APIs - Lịch bận để dạy
 const instructorAvailabilityController = require("../controllers/instructorAvailabilityController");

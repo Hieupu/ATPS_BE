@@ -1,17 +1,19 @@
-const pool = require("../config/db");
+const connectDB = require("../config/db");
 
 class PromotionRepository {
   // Tạo promotion mới
   async create(promotionData) {
     try {
-      const { Code, Discount, StartDate, EndDate, CreateBy, Status } = promotionData;
+      const { Code, Discount, StartDate, EndDate, CreateBy, Status } =
+        promotionData;
 
       const query = `
         INSERT INTO promotion (Code, Discount, StartDate, EndDate, CreateBy, Status)
         VALUES (?, ?, ?, ?, ?, ?)
       `;
 
-      const [result] = await pool.execute(query, [
+      const db = await connectDB();
+      const [result] = await db.execute(query, [
         Code,
         Discount,
         StartDate,
@@ -67,7 +69,8 @@ class PromotionRepository {
 
       query += ` ORDER BY p.StartDate DESC LIMIT ${safeLimit} OFFSET ${safeOffset}`;
 
-      const [rows] = await pool.execute(query, params);
+      const db = await connectDB();
+      const [rows] = await db.execute(query, params);
 
       return rows;
     } catch (error) {
@@ -98,7 +101,8 @@ class PromotionRepository {
         params.push(`%${search}%`, `%${search}%`);
       }
 
-      const [rows] = await pool.execute(query, params);
+      const db = await connectDB();
+      const [rows] = await db.execute(query, params);
       return rows[0].total;
     } catch (error) {
       throw error;
@@ -124,7 +128,8 @@ class PromotionRepository {
         WHERE p.PromotionID = ?
       `;
 
-      const [rows] = await pool.execute(query, [promotionId]);
+      const db = await connectDB();
+      const [rows] = await db.execute(query, [promotionId]);
 
       return rows[0] || null;
     } catch (error) {
@@ -150,7 +155,8 @@ class PromotionRepository {
         WHERE p.Code = ?
       `;
 
-      const [rows] = await pool.execute(query, [code]);
+      const db = await connectDB();
+      const [rows] = await db.execute(query, [code]);
 
       return rows[0] || null;
     } catch (error) {
@@ -177,9 +183,12 @@ class PromotionRepository {
 
       values.push(promotionId);
 
-      const query = `UPDATE promotion SET ${fields.join(", ")} WHERE PromotionID = ?`;
+      const query = `UPDATE promotion SET ${fields.join(
+        ", "
+      )} WHERE PromotionID = ?`;
 
-      const [result] = await pool.execute(query, values);
+      const db = await connectDB();
+      const [result] = await db.execute(query, values);
 
       if (result.affectedRows === 0) {
         return null;
@@ -196,7 +205,8 @@ class PromotionRepository {
     try {
       const query = `DELETE FROM promotion WHERE PromotionID = ?`;
 
-      const [result] = await pool.execute(query, [promotionId]);
+      const db = await connectDB();
+      const [result] = await db.execute(query, [promotionId]);
 
       return result.affectedRows > 0;
     } catch (error) {
@@ -213,7 +223,8 @@ class PromotionRepository {
           AND EndDate IS NOT NULL
           AND EndDate < NOW()
       `;
-      await pool.execute(query);
+      const db = await connectDB();
+      await db.execute(query);
     } catch (error) {
       throw error;
     }
@@ -238,7 +249,8 @@ class PromotionRepository {
         ORDER BY p.StartDate DESC
       `;
 
-      const [rows] = await pool.execute(query, [status]);
+      const db = await connectDB();
+      const [rows] = await db.execute(query, [status]);
 
       return rows;
     } catch (error) {
@@ -265,7 +277,8 @@ class PromotionRepository {
           AND (p.EndDate IS NULL OR p.EndDate >= ?)
       `;
 
-      const [rows] = await pool.execute(query, [code, now, now]);
+      const db = await connectDB();
+      const [rows] = await db.execute(query, [code, now, now]);
 
       return rows[0] || null;
     } catch (error) {
@@ -275,5 +288,3 @@ class PromotionRepository {
 }
 
 module.exports = new PromotionRepository();
-
-

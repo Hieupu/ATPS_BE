@@ -1,9 +1,10 @@
-const pool = require("../config/db");
+const connectDB = require("../config/db");
 
 class StaffRepository {
   // Lấy staff theo ID
   async findById(staffId) {
     try {
+      const pool = await connectDB();
       const query = `
         SELECT 
           s.StaffID,
@@ -29,6 +30,7 @@ class StaffRepository {
   }
 
   async create(staffData) {
+    const pool = await connectDB();
     const { AccID, FullName, DateOfBirth, ProfilePicture, Address } = staffData;
 
     const query = `
@@ -50,6 +52,7 @@ class StaffRepository {
   // Lấy staff theo AccID
   async findByAccID(accId) {
     try {
+      const pool = await connectDB();
       const query = `
         SELECT 
           s.StaffID,
@@ -77,10 +80,10 @@ class StaffRepository {
   // Lấy tất cả staff
   async findAll(options = {}) {
     try {
-    const { page = 1, limit = 10, search = "" } = options;
-    const safeLimit = Number(limit) > 0 ? Number(limit) : 10;
-    const safeOffset =
-      Number(page) > 0 ? (Number(page) - 1) * safeLimit : 0;
+      const pool = await connectDB();
+      const { page = 1, limit = 10, search = "" } = options;
+      const safeLimit = Number(limit) > 0 ? Number(limit) : 10;
+      const safeOffset = Number(page) > 0 ? (Number(page) - 1) * safeLimit : 0;
 
       let query = `
         SELECT 
@@ -100,12 +103,12 @@ class StaffRepository {
 
       const params = [];
 
-    if (search) {
+      if (search) {
         query += ` AND (s.FullName LIKE ? OR a.Email LIKE ?)`;
         params.push(`%${search}%`, `%${search}%`);
       }
 
-    query += ` ORDER BY s.StaffID DESC LIMIT ${safeLimit} OFFSET ${safeOffset}`;
+      query += ` ORDER BY s.StaffID DESC LIMIT ${safeLimit} OFFSET ${safeOffset}`;
 
       const [rows] = await pool.execute(query, params);
 
@@ -139,6 +142,7 @@ class StaffRepository {
     const setClause = fields.map((field) => `${field} = ?`).join(", ");
 
     const query = `UPDATE staff SET ${setClause} WHERE StaffID = ?`;
+    const pool = await connectDB();
     const [result] = await pool.execute(query, [...values, staffId]);
 
     if (result.affectedRows === 0) return null;
@@ -147,6 +151,7 @@ class StaffRepository {
   }
 
   async delete(staffId) {
+    const pool = await connectDB();
     const query = `DELETE FROM staff WHERE StaffID = ?`;
     const [result] = await pool.execute(query, [staffId]);
     return result.affectedRows > 0;
@@ -154,5 +159,3 @@ class StaffRepository {
 }
 
 module.exports = new StaffRepository();
-
-

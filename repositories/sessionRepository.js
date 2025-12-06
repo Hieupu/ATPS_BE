@@ -1,4 +1,4 @@
-const pool = require("../config/db");
+const connectDB = require("../config/db");
 
 /**
  * SessionRepository - dbver5
@@ -31,6 +31,7 @@ class SessionRepository {
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
 
+    const pool = await connectDB();
     const [result] = await pool.execute(query, [
       Title,
       Description,
@@ -69,6 +70,7 @@ class SessionRepository {
       WHERE s.SessionID = ?
     `;
 
+    const pool = await connectDB();
     const [rows] = await pool.execute(query, [sessionId]);
     return rows;
   }
@@ -89,6 +91,7 @@ class SessionRepository {
       ORDER BY s.Date ASC
     `;
 
+    const pool = await connectDB();
     const [rows] = await pool.execute(query);
     return rows;
   }
@@ -110,6 +113,7 @@ class SessionRepository {
       ORDER BY s.Date ASC
     `;
 
+    const pool = await connectDB();
     const [rows] = await pool.execute(query, [classId]);
     return rows;
   }
@@ -134,6 +138,7 @@ class SessionRepository {
       WHERE SessionID = ?
     `;
 
+    const pool = await connectDB();
     const [result] = await pool.execute(query, values);
     return result;
   }
@@ -144,6 +149,7 @@ class SessionRepository {
       throw new Error("SessionID là bắt buộc");
     }
     const query = `DELETE FROM session WHERE SessionID = ?`;
+    const pool = await connectDB();
     const [result] = await pool.execute(query, [sessionId]);
     return result;
   }
@@ -172,6 +178,7 @@ class SessionRepository {
       ) VALUES ${values}
     `;
 
+    const pool = await connectDB();
     const [result] = await pool.execute(query, params);
     return result;
   }
@@ -218,6 +225,7 @@ class SessionRepository {
 
     query += " ORDER BY s.Date ASC, t.StartTime ASC";
 
+    const pool = await connectDB();
     const [rows] = await pool.execute(query, params);
     return rows;
   }
@@ -239,6 +247,7 @@ class SessionRepository {
       ORDER BY s.Date ASC
     `;
 
+    const pool = await connectDB();
     const [rows] = await pool.execute(query, [timeslotId]);
     return rows;
   }
@@ -262,6 +271,7 @@ class SessionRepository {
       ORDER BY s.Date ASC, t.StartTime ASC
     `;
 
+    const pool = await connectDB();
     const [rows] = await pool.execute(query, [instructorId, startDate, endDate]);
     return rows;
   }
