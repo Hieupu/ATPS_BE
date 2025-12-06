@@ -109,6 +109,47 @@ const getClassesByCourse = async (req, res) => {
   }
 };
 
+const getScheduleClasses = async (req, res) => {
+  try {
+    const { 
+      status = 'active', 
+      dateFrom, 
+      dateTo, 
+      instructorId,
+      courseId,
+      month,      // Thêm tham số mới
+      levels,     // Thêm tham số mới
+      days,       // Thêm tham số mới
+      timeSlot    // Thêm tham số mới
+    } = req.query;
+
+    const classes = await courseRepository.getScheduleClasses({
+      status,
+      dateFrom,
+      dateTo,
+      instructorId,
+      courseId,
+      month,      // Truyền thêm vào repository
+      levels,     // Truyền thêm vào repository
+      days,       // Truyền thêm vào repository
+      timeSlot    // Truyền thêm vào repository
+    });
+
+    res.json({
+      success: true,
+      data: classes,
+      total: classes.length
+    });
+  } catch (error) {
+    console.error("Get schedule classes error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch schedule classes",
+      error: error.message,
+    });
+  }
+};
+
 const enrollInCourse = async (req, res) => {
   try {
     const { classId } = req.body;
@@ -348,5 +389,6 @@ module.exports = {
   getMyClassesInCourse,
   getCourseAssignments,
   getPopularClasses,
-  checkEnrollmentStatus
+  checkEnrollmentStatus,
+  getScheduleClasses
 };

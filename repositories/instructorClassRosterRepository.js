@@ -127,6 +127,7 @@ class InstructorClassRosterRepository {
   }
 
   //Lịch buổi học theo classid va instructorid
+
   async getSessions(classId, instructorId) {
     const db = await connectDB();
     const [rows] = await db.query(
@@ -137,12 +138,19 @@ class InstructorClassRosterRepository {
         s.ZoomUUID,
         t.StartTime,
         t.EndTime,
-        t.Day
-     FROM session s
-     JOIN timeslot t ON s.TimeslotID = t.TimeslotID
-     WHERE s.ClassID = ?
-     AND s.InstructorID = ?
-     ORDER BY s.Date ASC, t.StartTime ASC`,
+        t.Day,
+        scr.Status AS ChangeReqStatus 
+      FROM session s
+      JOIN timeslot t ON s.TimeslotID = t.TimeslotID
+      
+      
+      LEFT JOIN session_change_request scr 
+        ON s.SessionID = scr.SessionID 
+        AND scr.Status = 'PENDING'
+        
+      WHERE s.ClassID = ?
+      AND s.InstructorID = ?
+      ORDER BY s.Date ASC, t.StartTime ASC`,
       [classId, instructorId]
     );
 
@@ -154,8 +162,11 @@ class InstructorClassRosterRepository {
       startTime: row.StartTime,
       endTime: row.EndTime,
       dayOfWeek: row.Day,
+
+      changeReqStatus: row.ChangeReqStatus || null,
     }));
   }
+
   //lấy buổi học theo instructor
   async getSessionsByInstructor(instructorId) {
     const db = await connectDB();
@@ -171,10 +182,17 @@ class InstructorClassRosterRepository {
         c.Name,
         c.CourseID,
         c.ZoomID, 
-        c.Zoompass   
+        c.Zoompass,
+        scr.Status AS ChangeReqStatus  
       FROM session s
       JOIN timeslot t ON s.TimeslotID = t.TimeslotID
       JOIN class c ON s.ClassID = c.ClassID
+      
+   
+      LEFT JOIN session_change_request scr 
+        ON s.SessionID = scr.SessionID 
+        AND scr.Status = 'PENDING'
+      
       WHERE s.InstructorID = ?
       ORDER BY s.Date ASC, t.StartTime ASC`,
       [instructorId]
@@ -190,11 +208,13 @@ class InstructorClassRosterRepository {
       classId: row.ClassID,
       className: row.Name,
       courseId: row.CourseID,
-
       ZoomID: row.ZoomID,
       ZoomPass: row.Zoompass,
+
+      changeReqStatus: row.ChangeReqStatus || null,
     }));
   }
+
   async getTotalEnrolledStudents(classId) {
     const db = await connectDB();
     const [[row]] = await db.query(
@@ -421,6 +441,197 @@ class InstructorClassRosterRepository {
             ]
           );
         }
+      }
+
+      await connection.commit();
+      return true;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  // Tạo yêu cầu đổi lịch mới
+  async createChangeRequest(
+    sessionId,
+    instructorId,
+    newDate,
+    newTimeslotId,
+    reason
+  ) {
+    const db = await connectDB();
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const [result] = await connection.query(
+        `INSERT INTO session_change_request 
+         (SessionID, InstructorID, NewDate, NewTimeslotID, Reason, Status, CreatedDate) 
+         VALUES (?, ?, ?, ?, ?, 'PENDING', NOW())`,
+        [sessionId, instructorId, newDate, newTimeslotId, reason]
+      );
+      const newRequestId = result.insertId;
+
+      const [instructorRows] = await connection.query(
+        `SELECT FullName FROM instructor WHERE InstructorID = ?`,
+        [instructorId]
+      );
+      const instructorName = instructorRows[0]
+        ? instructorRows[0].FullName
+        : "Giảng viên";
+
+      const [admins] = await connection.query(`SELECT AccID FROM admin`);
+
+      if (admins.length > 0) {
+        const notiContent = `${instructorName} đã gửi một yêu cầu đổi lịch mới.`;
+        const notiType = "CHANGE_REQUEST";
+        const notiStatus = "unread";
+
+        const notificationValues = admins.map((admin) => [
+          notiContent,
+          notiType,
+          notiStatus,
+          admin.AccID,
+        ]);
+
+        await connection.query(
+          `INSERT INTO notification (Content, Type, Status, AccID) VALUES ?`,
+          [notificationValues]
+        );
+      }
+
+      await connection.commit();
+
+      return newRequestId;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async getSessionById(sessionId) {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      `SELECT SessionID, InstructorID FROM session WHERE SessionID = ?`,
+      [sessionId]
+    );
+    return rows[0];
+  }
+
+  //admin duyệt yêu cầu đổi lịch
+  // 1. Admin DUYỆT yêu cầu đổi lịch (Đã sửa lỗi Timestamp)
+  async approveChangeRequest(requestId, adminId) {
+    const db = await connectDB();
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      // B1: Lấy thông tin request
+      const [reqRows] = await connection.query(
+        `SELECT * FROM session_change_request WHERE RequestID = ? FOR UPDATE`,
+        [requestId]
+      );
+
+      if (reqRows.length === 0) throw new Error("Yêu cầu không tồn tại.");
+      const request = reqRows[0];
+
+      if (request.Status !== "PENDING") {
+        throw new Error("Yêu cầu này đã được xử lý trước đó.");
+      }
+
+      // B2: Cập nhật lịch chính thức
+      await connection.query(
+        `UPDATE session 
+         SET Date = ?, TimeslotID = ? 
+         WHERE SessionID = ?`,
+        [request.NewDate, request.NewTimeslotID, request.SessionID]
+      );
+
+      // B3: Cập nhật trạng thái Request
+      await connection.query(
+        `UPDATE session_change_request 
+         SET Status = 'APPROVED', ApprovedBy = ? 
+         WHERE RequestID = ?`,
+        [adminId, requestId]
+      );
+
+      // B4: Gửi thông báo (ĐÃ SỬA: Bỏ cột Timestamp)
+      const [instRows] = await connection.query(
+        `SELECT AccID FROM instructor WHERE InstructorID = ?`,
+        [request.InstructorID]
+      );
+
+      if (instRows.length > 0) {
+        const instructorAccId = instRows[0].AccID;
+        const message = `Yêu cầu đổi lịch của bạn đã được Admin chấp nhận.`;
+
+        await connection.query(
+          `INSERT INTO notification (Content, Type, Status, AccID) 
+           VALUES (?, 'REQUEST_APPROVED', 'unread', ?)`,
+          [message, instructorAccId]
+        );
+      }
+
+      await connection.commit();
+      return true;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  // 2. Admin TỪ CHỐI yêu cầu (Đã sửa lỗi Timestamp)
+  async rejectChangeRequest(requestId, adminId, rejectReason) {
+    const db = await connectDB();
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const [reqRows] = await connection.query(
+        `SELECT * FROM session_change_request WHERE RequestID = ? FOR UPDATE`,
+        [requestId]
+      );
+
+      if (reqRows.length === 0) throw new Error("Yêu cầu không tồn tại.");
+      if (reqRows[0].Status !== "PENDING")
+        throw new Error("Yêu cầu này đã được xử lý.");
+
+      const request = reqRows[0];
+
+      // B2: Cập nhật trạng thái REJECTED
+      await connection.query(
+        `UPDATE session_change_request 
+         SET Status = 'REJECTED', ApprovedBy = ? 
+         WHERE RequestID = ?`,
+        [adminId, requestId]
+      );
+
+      // B3: Gửi thông báo (ĐÃ SỬA: Bỏ cột Timestamp)
+      const [instRows] = await connection.query(
+        `SELECT AccID FROM instructor WHERE InstructorID = ?`,
+        [request.InstructorID]
+      );
+
+      if (instRows.length > 0) {
+        const instructorAccId = instRows[0].AccID;
+        const message = `Yêu cầu đổi lịch đã bị từ chối. Lý do: ${
+          rejectReason || "Không có"
+        }`;
+
+        await connection.query(
+          `INSERT INTO notification (Content, Type, Status, AccID) 
+           VALUES (?, 'REQUEST_REJECTED', 'unread', ?)`,
+          [message, instructorAccId]
+        );
       }
 
       await connection.commit();

@@ -10,6 +10,9 @@ const {
   getInstructorAvailability,
   saveInstructorAvailability,
   addInstructorAvailability,
+  requestSessionChange,
+  approveSessionChange,
+  rejectSessionChange,
 } = require("../controllers/instructorClassController");
 
 const { verifyToken, authorizeRole } = require("../middlewares/middware");
@@ -92,6 +95,30 @@ router.post(
   verifyToken,
   authorizeRole("instructor"),
   addInstructorAvailability
+);
+// 11. Yêu cầu đổi lịch buổi học
+router.post(
+  "/session/request-change",
+  verifyToken,
+  authorizeRole("instructor"),
+  requestSessionChange
+);
+
+// Route Admin Duyệt yêu cầu
+// 1. Duyệt yêu cầu (Approve)
+router.put(
+  "/session/request/:requestId/approve",
+  verifyToken,
+  authorizeRole("admin"),
+  approveSessionChange
+);
+
+// 2. Từ chối yêu cầu (Reject)
+router.put(
+  "/session/request/:requestId/reject",
+  verifyToken,
+  authorizeRole("admin"),
+  rejectSessionChange
 );
 
 module.exports = router;

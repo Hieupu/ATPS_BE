@@ -43,7 +43,7 @@ class InstructorCourseRepository {
     return rows[0].InstructorID;
   }
 
-async getLearnerByAccountId(accId) {
+  async getLearnerByAccountId(accId) {
     const db = await connectDB();
     const [rows] = await db.query(
       `SELECT 
@@ -62,7 +62,7 @@ async getLearnerByAccountId(accId) {
 
     if (!rows.length) return null;
     return rows[0];
-}
+  }
 
   async listByInstructor(instructorId) {
     const db = await connectDB();
@@ -79,16 +79,40 @@ async getLearnerByAccountId(accId) {
         c.Level,
         c.Status,
         c.Code,
-        i.FullName AS InstructorName
-     FROM course c
-     LEFT JOIN instructor i 
+        i.FullName AS InstructorName,
+        
+        -- 1. Đếm số lượng Chương (Unit)
+        (SELECT COUNT(*) 
+         FROM unit u 
+         WHERE u.CourseID = c.CourseID 
+           AND u.Status != 'DELETED') AS UnitCount,
+
+        -- 2. Đếm số lượng Bài học (Lesson)
+        -- Phải JOIN với bảng unit để biết lesson đó thuộc course nào
+        (SELECT COUNT(*) 
+         FROM lesson l 
+         INNER JOIN unit u ON l.UnitID = u.UnitID
+         WHERE u.CourseID = c.CourseID 
+           AND l.Status != 'DELETED' 
+           AND u.Status != 'DELETED') AS LessonCount,
+
+        -- 3. Đếm số lượng Tài liệu (Material)
+        -- Dựa vào bảng 'material' trong database
+        (SELECT COUNT(*) 
+         FROM material m 
+         WHERE m.CourseID = c.CourseID 
+           AND m.Status != 'DELETED') AS MaterialMissingCount
+
+      FROM course c
+      LEFT JOIN instructor i 
         ON c.InstructorID = i.InstructorID
-     WHERE c.InstructorID = ?
-       AND c.Status <> 'DELETED'
-     ORDER BY c.CourseID DESC`,
+      WHERE c.InstructorID = ?
+        AND c.Status <> 'DELETED'
+      ORDER BY c.CourseID DESC`,
       [instructorId]
     );
-    return rows.map((r) => new Course(r));
+
+    return rows;
   }
 
   async create(courseData) {

@@ -22,7 +22,7 @@ const instructorCourseRoutes = require("./routes/instructorCourseRouter");
 const instructorClassRoutes = require("./routes/instructorClassRoutes");
 const instructorExamRoutes = require("./routes/instructorExamRoutes");
 const instructorExamRepository = require("./repositories/instructorExamRepository");
-process.env.TZ = 'Asia/Ho_Chi_Minh';
+process.env.TZ = "Asia/Ho_Chi_Minh";
 const slotReservationRoutes = require("./routes/slotReservationRoutes");
 
 dotenv.config();
@@ -62,7 +62,7 @@ app.use("/api", router);
 app.use("/api/profile", profileRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/instructors", instructorRoutes);
-app.use("/api/instructor/courses", instructorCourseRoutes);
+app.use("/api/instructor", instructorCourseRoutes);
 app.use("/api/instructor", instructorClassRoutes);
 app.use("/api/schedule", scheduleRoutes);
 app.use("/api/attendance", attendanceRoutes);
@@ -75,7 +75,7 @@ app.use("/api/instructor", assignmentRoutes);
 app.use("/api/instructor", instructorExamRoutes);
 app.use("/api/zoom", zoomRoutes);
 app.use("/api/learnerassignments", learnerassignmentRoutes);
-app.use('/api/slot-reservation', slotReservationRoutes);
+app.use("/api/slot-reservation", slotReservationRoutes);
 
 const PORT = process.env.PORT || 9999;
 connectDB().then(() => {
