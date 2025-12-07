@@ -31,63 +31,31 @@ class InstructorController {
       console.log("maxFee:", maxFee, "->", maxFeeNum);
       console.log("timeslots:", timeslotArray);
 
-      // Only call searchInstructors if there are actual filters (not just default page/pageSize)
-      const hasFilters =
+      if (
         search ||
         major ||
         type ||
         timeslotArray.length > 0 ||
         minFeeNum > 0 ||
-        maxFeeNum < 1000000;
-      // Only consider pagination if page > 1 (not just different pageSize)
-      const hasPagination = page && Number(page) > 1;
-
-      if (hasFilters || hasPagination) {
-        console.log(
-          "[getAllInstructors] Calling searchInstructors with params:",
-          {
-            search,
-            major,
-            type,
-            timeslots: timeslotArray,
-            minFee: minFeeNum,
-            maxFee: maxFeeNum,
-            page,
-            pageSize,
-          }
-        );
+        maxFeeNum < 1000000 ||
+        page ||
+        pageSize
+      ) {
         const result = await instructorService.searchInstructors({
           search,
           major,
           type,
           timeslots: timeslotArray,
-          minFee: minFeeNum,
-          maxFee: maxFeeNum,
+          minFee: minFeeNum, // THÊM minFee
+          maxFee: maxFeeNum, // THÊM maxFee
           page,
           pageSize,
-        });
-        console.log("[getAllInstructors] searchInstructors result:", {
-          itemsCount: result?.items?.length || 0,
-          total: result?.total || 0,
-          hasItems: !!result?.items,
-          resultKeys: result ? Object.keys(result) : [],
         });
         return res.json(result);
       }
 
-      console.log("[getAllInstructors] No filters, calling listInstructors");
       const results = await instructorService.listInstructors();
-      console.log(
-        "[getAllInstructors] listInstructors result count:",
-        results?.length || 0
-      );
-      // Return consistent format: { items, total, page, pageSize }
-      return res.json({
-        items: results || [],
-        total: results?.length || 0,
-        page: 1,
-        pageSize: results?.length || 0,
-      });
+      return res.json({ instructors: results });
     } catch (error) {
       console.error("Error in getAllInstructors:", error);
       return res.status(500).json({ message: "Server error" });
