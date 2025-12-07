@@ -8,6 +8,10 @@ const {
   getInstructorScheduleService,
   getInstructorAvailabilityService,
   saveInstructorAvailabilityService,
+  addInstructorAvailabilityService,
+  requestSessionChangeService,
+  approveRequestService,
+  rejectRequestService,
 } = require("../services/instructorClassService");
 const courseRepository = require("../repositories/instructorCourseRepository");
 
@@ -155,13 +159,10 @@ const getInstructorSchedule = async (req, res) => {
 //  Lấy danh sách lịch rảnh (Availability)
 const getInstructorAvailability = async (req, res) => {
   try {
-  
     const instructorId = await getInstructorId(Number(req.user.id));
 
- 
     const { startDate, endDate } = req.query;
 
-  
     const result = await getInstructorAvailabilityService(
       instructorId,
       startDate,
@@ -202,6 +203,85 @@ const saveInstructorAvailability = async (req, res) => {
   }
 };
 
+const addInstructorAvailability = async (req, res) => {
+  try {
+    const instructorId = await getInstructorId(Number(req.user.id));
+
+    const { slots } = req.body;
+
+    // Gọi Service xử lý (Logic chỉ thêm, không xóa)
+    const result = await addInstructorAvailabilityService(instructorId, slots);
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("addInstructorAvailability error:", error);
+    res.status(error.status || 500).json({
+      message: error.message || "Lỗi khi đăng ký thêm lịch rảnh",
+    });
+  }
+};
+
+const requestSessionChange = async (req, res) => {
+  try {
+    const instructorId = await getInstructorId(Number(req.user.id));
+
+    const payload = req.body;
+
+    const result = await requestSessionChangeService(instructorId, payload);
+
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(error.status || 500).json({
+      message: error.message || "Lỗi khi gửi yêu cầu đổi lịch",
+    });
+  }
+};
+
+// 1. Admin Duyệt yêu cầu đổi lịch
+const approveSessionChange = async (req, res) => {
+  try {
+    // Lấy Admin ID từ token (AccID)
+    const adminId = req.user.id;
+
+    // Lấy requestId từ URL params (VD: /request/:id/approve)
+    const { requestId } = req.params;
+
+    // Gọi Service
+    const result = await approveRequestService(adminId, requestId);
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Approve error:", error);
+    res.status(error.status || 500).json({
+      message: error.message || "Lỗi khi duyệt yêu cầu đổi lịch",
+    });
+  }
+};
+
+// 2. Admin Từ chối yêu cầu đổi lịch
+const rejectSessionChange = async (req, res) => {
+  try {
+    const adminId = req.user.id;
+    const { requestId } = req.params;
+
+    // Lấy lý do từ chối từ Body request
+    const { reason } = req.body;
+
+    // Gọi Service
+    const result = await rejectRequestService(adminId, {
+      requestId,
+      reason,
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Reject error:", error);
+    res.status(error.status || 500).json({
+      message: error.message || "Lỗi khi từ chối yêu cầu đổi lịch",
+    });
+  }
+};
+
 module.exports = {
   listInstructorClasses,
   getInstructorClassDetail,
@@ -212,4 +292,8 @@ module.exports = {
   getInstructorSchedule,
   getInstructorAvailability,
   saveInstructorAvailability,
+  addInstructorAvailability,
+  requestSessionChange,
+  approveSessionChange,
+  rejectSessionChange,
 };

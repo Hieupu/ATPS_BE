@@ -200,15 +200,15 @@ class AttendanceService {
       const sessionDurationMs = sessionEnd - sessionStart;
       const eightyPercentMs = sessionDurationMs * 0.8;
 
-      let finalStatus = "absent";
+      let finalStatus = "ABSENT";
       let finalNote   = "";
 
       if (type === "join") {
         if (actionTime - sessionStart <= THIRTY_MIN) {
-          finalStatus = "present";
+          finalStatus = "PRESENT";
           finalNote   = "Tham gia đúng giờ (auto attendance)";
         } else {
-          finalStatus = "absent";
+          finalStatus = "ABSENT";
           finalNote   = "Đi muộn hơn 30 phút";
         }
 
@@ -224,10 +224,10 @@ class AttendanceService {
         const attendedMs = actionTime - sessionStart;
 
         if (attendedMs >= eightyPercentMs) {
-          finalStatus = "present";
+          finalStatus = "PRESENT";
           finalNote   = "Tham gia đầy đủ buổi học";
         } else {
-          finalStatus = "absent";
+          finalStatus = "ABSENT";
           finalNote   = `Rời phòng quá sớm ${actionTime}`;
         }
 
@@ -245,7 +245,7 @@ class AttendanceService {
           note: finalNote 
         };
       }else {
-        finalStatus = "absent";
+        finalStatus = "ABSENT";
         finalNote   = "Không tham gia buổi học";
 
         await attendanceRepository.recordAttendance(

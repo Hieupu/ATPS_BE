@@ -19,6 +19,35 @@ class ScheduleController {
     }
   }
 
+  // Thêm function controller mới
+async getInstructorTimeslotsFromToday(req, res){
+  try {
+    const { instructorId } = req.params;
+
+    if (!instructorId) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Instructor ID is required" 
+      });
+    }
+
+    const timeslots = await scheduleService.getInstructorTimeslotsFromToday(instructorId);
+    
+    return res.json({
+      success: true,
+      data: timeslots,
+      count: timeslots.length
+    });
+  } catch (error) {
+    console.error("Error in getInstructorTimeslotsFromToday:", error);
+    return res.status(500).json({ 
+      success: false,
+      message: "Server error",
+      error: error.message 
+    });
+  }
+};
+
   async getInstructorSchedule(req, res) {
     try {
       const { instructorId } = req.params;

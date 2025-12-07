@@ -1,49 +1,61 @@
 const express = require("express");
 const {
-  // Exam Management
+  // Exam CRUD
   createExam,
   updateExam,
   getExams,
   getExamDetail,
   deleteExam,
-  getArchivedExams,
   archiveExam,
-  
-  // Section Management 
+  unarchiveExam,
+  getArchivedExams,
+
+  // Exam Instances
+  createExamInstance,
+  updateExamInstance,
+  deleteExamInstance,
+  getExamInstances,
+  getAvailableClasses,
+  getAvailableUnits,
+  checkAndUpdateInstanceStatus,
+
+  // Section Management
   createExamSection,
   updateExamSection,
   deleteExamSection,
   getSections,
   getSectionDetail,
-  
+
   // Question Bank
   createQuestion,
   getQuestions,
   getQuestionDetail,
   updateQuestion,
   deleteQuestion,
-  
-  // Classes
-  getClassesByCourse,
-  
+
   // Section-Question Management
   addQuestionsToSection,
   removeQuestionFromSection,
   updateQuestionOrder,
-  
+
   // Grading
   getExamResults,
   getLearnerSubmission,
   autoGradeExam,
   manualGradeExam,
 
-  // Status Check
-  checkAndUpdateExamStatus,
-  unarchiveExam
+  importQuestionsExcelController
 } = require("../controllers/instructorExamController");
 const { verifyToken } = require("../middlewares/middware");
 
+const multer = require("multer");
+
 const router = express.Router();
+
+const upload = multer({
+  storage: multer.memoryStorage()
+});
+
 router.use(verifyToken);
 
 // ==================== EXAM ROUTES ====================
@@ -54,6 +66,16 @@ router.get("/exams/:examId", getExamDetail);
 router.put("/exams/:examId", updateExam);
 router.delete("/exams/:examId", deleteExam);
 router.post("/exams/:examId/archive", archiveExam);
+router.post("/exams/:examId/unarchive", unarchiveExam);
+
+// ==================== EXAM INSTANCE ROUTES ====================
+router.get("/exams/:examId/instances", getExamInstances);
+router.post("/exams/:examId/instances", createExamInstance);
+router.put("/exams/:examId/instances/:instanceId", updateExamInstance);
+router.delete("/exams/:examId/instances/:instanceId", deleteExamInstance);
+router.get("/available-classes", getAvailableClasses);
+router.get("/available-units", getAvailableUnits);
+router.post("/instances/check-status", checkAndUpdateInstanceStatus);
 
 // ==================== SECTION MANAGEMENT ROUTES ====================
 router.get("/exams/:examId/sections", getSections);
@@ -74,16 +96,17 @@ router.post("/exams/:examId/sections/:sectionId/questions", addQuestionsToSectio
 router.delete("/exams/:examId/sections/:sectionId/questions/:questionId", removeQuestionFromSection);
 router.put("/exams/:examId/sections/:sectionId/questions/:questionId/order", updateQuestionOrder);
 
-// ==================== CLASSES ROUTES ====================
-router.get("/courses/:courseId/classes", getClassesByCourse);
-
 // ==================== GRADING ROUTES ====================
-router.get("/exams/:examId/classes/:classId/results", getExamResults);
+router.get("/instances/:instanceId/results", getExamResults);
 router.get("/exams/:examId/learners/:learnerId/submission", getLearnerSubmission);
 router.post("/exams/:examId/learners/:learnerId/auto-grade", autoGradeExam);
 router.post("/exams/:examId/learners/:learnerId/manual-grade", manualGradeExam);
-router.post("/exams/check-status", checkAndUpdateExamStatus);
-router.post("/exams/:examId/unarchive", unarchiveExam);
 
+
+router.post(
+  "/exams/:examId/sections/:sectionId/questions/import",
+  upload.single("file"),
+  importQuestionsExcelController
+);
 
 module.exports = router;

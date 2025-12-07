@@ -26,7 +26,7 @@ class InstructorAttendanceRepository {
       learnerId: row.LearnerID,
       fullName: row.FullName,
       avatar: row.ProfilePicture,
-      status: row.Status || "PRESENT",
+      status: row.Status || "ABSENT",
       note: row.Note || "",
     }));
   }

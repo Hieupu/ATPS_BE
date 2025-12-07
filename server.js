@@ -74,13 +74,8 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const zoomRoutes = require("./routes/zoomRoutes");
 const commonRouter = require("./routes/commonRouter");
-
-// Removed/Deprecated routes (commented out - no longer needed)
-// const sessiontimeslotRouter = require("./routes/sessiontimeslotRouter"); // Replaced by TimeslotID in sessions
-// const instructorMaterialRouter = require("./routes/instructorMaterialRouter"); // Workflow 4 steps - not implemented
-// const lessonRouter = require("./routes/lessonRouter"); // Workflow 4 steps - not implemented
-
-// Initialize Express app
+const slotReservationRoutes = require("./routes/slotReservationRoutes");
+dotenv.config();
 const app = express();
 
 // ========== CORS CONFIGURATION ==========
@@ -142,8 +137,9 @@ app.use("/api/classes", classRouter);
 
 // Instructor routes
 app.use("/api/instructors", instructorRoutes);
-app.use("/api/instructors", instructorRouter);
-app.use("/api/instructor/courses", instructorCourseRoutes);
+app.use("/api/instructor", instructorCourseRoutes);
+// app.use("/api/instructors", instructorRouter);
+// app.use("/api/instructor/courses", instructorCourseRoutes);
 app.use("/api/instructor", instructorClassRoutes);
 app.use("/api/instructor", assignmentRoutes);
 app.use("/api/instructor", instructorExamRoutes);
@@ -158,7 +154,7 @@ app.use("/api/timeslots", timeslotRouter);
 app.use("/api/schedule", scheduleRoutes);
 
 // Attendance & Progress routes
-app.use("/api/attendance", attendanceRouter);
+// app.use("/api/attendances", attendanceRouter);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/progress", progressRoutes);
 
@@ -186,6 +182,9 @@ app.use("/api/email-templates", emailTemplateRouter);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/zoom", zoomRoutes);
+app.use("/api/learnerassignments", learnerassignmentRoutes);
+app.use("/api/slot-reservation", slotReservationRoutes);
+
 app.use("/api/common", commonRouter);
 
 // Legacy API routes (for compatibility)
@@ -309,19 +308,8 @@ console.log(
 
 // ========== START SERVER ==========
 const PORT = process.env.PORT || 9999;
-
-connectDB()
-  .then(() => {
-    // Auto update exam status on startup
-    instructorExamRepository.autoUpdateExamStatus();
-
-    app.listen(PORT, () => {
-      console.log(`✅ Server running on port ${PORT}`);
-      console.log(`📚 API Documentation: http://localhost:${PORT}/`);
-      console.log(`⏰ Cron jobs initialized successfully`);
-    });
-  })
-  .catch((error) => {
-    console.error("❌ Failed to start server:", error);
-    process.exit(1);
+connectDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`@ Server running on port ${PORT}`);
   });
+});

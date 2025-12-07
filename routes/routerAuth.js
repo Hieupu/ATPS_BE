@@ -10,9 +10,9 @@ const {
   facebookAuth,
   facebookAuthCallback,
   getAllAccountsController,
-     forgotPassword,
-    verifyResetCode,
-    resetPassword
+  forgotPassword,
+  verifyResetCode,
+  resetPassword,
 } = require("../controllers/authController");
 const { verifyToken, authorizeFeature } = require("../middlewares/middware");
 const router = express.Router();
