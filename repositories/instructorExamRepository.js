@@ -146,26 +146,95 @@ class InstructorExamRepository {
   /**
    * Tạo exam instance (phiên thi cụ thể)
    */
-  async createExamInstance(data) {
+async createExamInstance(data) {
     const db = await connectDB();
-    const sql = `
-      INSERT INTO exam_instances 
-      (ExamId, UnitId, ClassId, StartTime, EndTime, isRandomQuestion, isRandomAnswer, Status, Attempt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `;
-    const [result] = await db.query(sql, [
-      data.examId,
-      data.unitId || null,
-      data.classId || null,
-      data.startTime,
-      data.endTime,
-      data.isRandomQuestion ? 1 : 0,
-      data.isRandomAnswer ? 1 : 0,
-      data.status || 'Scheduled',
-      data.attempt || 100
-    ]);
-    return result.insertId;
-  }
+
+    const {
+        examId,
+        unitId,
+        classId,
+        startTime,
+        endTime,
+        isRandomQuestion,
+        isRandomAnswer,
+        attempt
+    } = data;
+
+    const Status = "Scheduled";
+    const resultIds = [];
+    let unitIds = [];
+    let classIds = [];
+
+    if (Array.isArray(unitId)) {
+        unitIds = unitId;
+    } else if (unitId != null) {
+        unitIds = [unitId];
+    }
+
+    if (Array.isArray(classId)) {
+        classIds = classId;
+    } else if (classId != null) {
+        classIds = [classId];
+    }
+
+    console.log("🔍 CREATE EXAM INSTANCE - NORMALIZED:");
+    console.log("  - unitIds:", unitIds, "isArray:", Array.isArray(unitIds));
+    console.log("  - classIds:", classIds, "isArray:", Array.isArray(classIds));
+
+    /** ---------------------- CASE 1: ASSIGNMENT (unitId là mảng) ---------------------- */
+    if (unitIds.length > 0) {
+        for (const uid of unitIds) {
+            const sql = `
+                INSERT INTO exam_instances 
+                (ExamId, UnitId, ClassId, StartTime, EndTime, isRandomQuestion, isRandomAnswer, Status, Attempt)
+                VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)
+            `;
+
+            const [res] = await db.query(sql, [
+                examId,
+                uid,
+                startTime || null,
+                endTime || null,
+                isRandomQuestion ? 1 : 0,
+                isRandomAnswer ? 1 : 0,
+                Status,
+                attempt || 1
+            ]);
+
+            resultIds.push(res.insertId);
+        }
+        return resultIds;
+    }
+
+    /** ---------------------- CASE 2: EXAM (classId là mảng) ---------------------- */
+    if (classIds.length > 0) {
+        for (const cid of classIds) {
+            const sql = `
+                INSERT INTO exam_instances 
+                (ExamId, UnitId, ClassId, StartTime, EndTime, isRandomQuestion, isRandomAnswer, Status, Attempt)
+                VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)
+            `;
+
+            const [res] = await db.query(sql, [
+                examId,
+                cid,
+                startTime || null,
+                endTime || null,
+                isRandomQuestion ? 1 : 0,
+                isRandomAnswer ? 1 : 0,
+                Status,
+                attempt || 1
+            ]);
+
+            resultIds.push(res.insertId);
+        }
+        return resultIds;
+    }
+
+    /** ---------------------- CASE 3: Sai format ---------------------- */
+    throw new Error("Invalid instance payload: classId hoặc unitId phải là mảng");
+}
+
 
   /**
    * Cập nhật exam instance

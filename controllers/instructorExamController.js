@@ -8,6 +8,7 @@ const {
   archiveExamService,
   unarchiveExamService,
   getArchivedExamsService,
+  createFullExamService ,
 
   // Exam Instances
   createExamInstanceService,
@@ -917,6 +918,26 @@ const getInstructorCourses = async (req, res) => {
   }
 };
 
+const createFullExamController = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    const payload = req.body;
+    const result = await createFullExamService(instructorAccId, payload);
+    return res.status(201).json({
+      success: true,
+      message: "Tạo bài thi,sections,instance thành công",
+      data: result
+    });
+
+  } catch (err) {
+    console.error("Create Full Exam Error:", err);
+    return res.status(400).json({ 
+      success: false, 
+      message: err.message 
+    });
+  }
+};
+
 
 // ==================== EXPORTS ====================
 
@@ -930,6 +951,7 @@ module.exports = {
   archiveExam,
   unarchiveExam,
   getArchivedExams,
+  createFullExamController,
 
   // Exam Instances
   createExamInstance,

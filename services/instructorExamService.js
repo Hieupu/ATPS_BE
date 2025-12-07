@@ -45,52 +45,86 @@ function validateExamData(data) {
 }
 
 function validateInstanceData(data) {
-  // StartTime & EndTime
-  const startTime = assertValidDateStr(data.startTime, "Thời gian bắt đầu");
-  const endTime = assertValidDateStr(data.endTime, "Thời gian kết thúc");
 
-  if (endTime <= startTime) {
-    throw new Error("Thời gian kết thúc phải sau thời gian bắt đầu");
+  // Nếu gán bài EXAM → bắt buộc nhập thời gian
+  if (data.instanceType === "Exam") {
+
+    const startTime = assertValidDateStr(data.startTime, "Thời gian bắt đầu");
+    const endTime = assertValidDateStr(data.endTime, "Thời gian kết thúc");
+
+    if (endTime <= startTime) {
+      throw new Error("Thời gian kết thúc phải sau thời gian bắt đầu");
+    }
   }
 
-  // Must have either ClassId or UnitId
+  // Nếu Assignment → KHÔNG cần thời gian, nhưng nếu có thì validate
+  if (data.instanceType === "Assignment") {
+
+    if (data.startTime && data.endTime) {
+      const start = new Date(data.startTime);
+      const end = new Date(data.endTime);
+
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        throw new Error("Thời gian không hợp lệ");
+      }
+      if (end <= start) {
+        throw new Error("Thời gian kết thúc phải sau thời gian bắt đầu");
+      }
+    }
+  }
+
+  // Validate Unit / Class
   if (!data.classId && !data.unitId) {
     throw new Error("Phải gán cho Class hoặc Unit");
   }
-
   if (data.classId && data.unitId) {
     throw new Error("Chỉ có thể gán cho Class HOẶC Unit, không thể cả hai");
   }
 
-  // Status
-  if (data.status && !INSTANCE_STATUSES.includes(data.status)) {
-    throw new Error(`Trạng thái không hợp lệ. Cho phép: ${INSTANCE_STATUSES.join(", ")}`);
-  }
-
-  // Attempt
-  if (data.attempt && (data.attempt < 1 || data.attempt > 100)) {
-    throw new Error("Số lần làm bài phải từ 1 đến 100");
+  // Validate Attempt
+  if (!data.attempt || data.attempt < 1) {
+    throw new Error("Số lần làm bài phải ≥ 1");
   }
 
   return data;
 }
+
 function validateInstanceUpdateData(data) {
-  if (!data.startTime || !data.endTime) {
-    throw new Error("Cần cung cấp thời gian bắt đầu và kết thúc");
+  if (!data.instanceType) throw new Error("Loại bài là bắt buộc");
+
+  if (data.instanceType === "Exam") {
+    if (!data.classId || !Array.isArray(data.classId) || data.classId.length === 0) {
+      throw new Error("classId phải là mảng không rỗng cho Exam");
+    }
+    if (!data.startTime || !data.endTime) {
+      throw new Error("Exam bắt buộc phải có thời gian");
+    }
   }
 
-  const start = new Date(data.startTime);
-  const end = new Date(data.endTime);
-
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-    throw new Error("Thời gian không hợp lệ");
+  if (data.instanceType === "Assignment") {
+    if (!data.unitId || !Array.isArray(data.unitId) || data.unitId.length === 0) {
+      throw new Error("unitId phải là mảng không rỗng cho Assignment");
+    }
+    if ((data.startTime && !data.endTime) || (!data.startTime && data.endTime)) {
+      throw new Error("Assignment phải có đủ Start và End time nếu đặt");
+    }
   }
 
-  if (end <= start) {
-    throw new Error("Thời gian kết thúc phải sau thời gian bắt đầu");
+  if (data.startTime && data.endTime) {
+    const start = new Date(data.startTime);
+    const end = new Date(data.endTime);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new Error("Thời gian không hợp lệ");
+    }
+    if (end <= start) {
+      throw new Error("End time phải sau Start time");
+    }
+  }
+
+  if (data.attempt != null && (isNaN(data.attempt) || data.attempt < 1)) {
+    throw new Error("attempt phải >= 1");
   }
 }
-
 
 function validateSectionData(data) {
   if (!data.type || !SECTION_TYPES.includes(data.type)) {
@@ -462,33 +496,33 @@ const createExamInstanceService = async (instructorAccId, examId, data) => {
  * Cập nhật exam instance
  */
 const updateExamInstanceService = async (instructorAccId, examId, instanceId, data) => {
+  // 1. VALIDATE INPUT
   validateInstanceUpdateData(data);
 
+  // 2. LẤY INSTRUCTOR ID
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
+  // 3. KIỂM TRA QUYỀN SỞ HỮU
   const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
+  // 4. LẤY INSTANCE HIỆN TẠI (CHỈ ĐỂ LẤY GIÁ TRỊ MẶC ĐỊNH)
   const instance = await instructorExamRepository.getInstanceById(instanceId);
   if (!instance) throw new Error("Không tìm thấy phiên thi");
+  if (instance.ExamId != examId) throw new Error("Instance không thuộc exam này");
 
-  if (instance.ExamId != examId) {
-    throw new Error("Instance không thuộc exam này");
-  }
+  // 5. CHUẨN HÓA classId / unitId THÀNH MẢNG
+  const classIds = data.classId != null 
+    ? (Array.isArray(data.classId) ? data.classId : [data.classId])
+    : [];
 
-  let classIds = [];
-  let unitIds = [];
+  const unitIds = data.unitId != null 
+    ? (Array.isArray(data.unitId) ? data.unitId : [data.unitId])
+    : [];
 
-  if (Array.isArray(data.classId)) classIds = data.classId;
-  else if (data.classId) classIds = [data.classId];
-
-  if (Array.isArray(data.unitId)) unitIds = data.unitId;
-  else if (data.unitId) unitIds = [data.unitId];
-
-  // Nếu đổi class או unit
+  // 6. TRƯỜNG HỢP ĐỔI CLASS/UNIT → XÓA CŨ, TẠO MỚI
   if (classIds.length > 0 || unitIds.length > 0) {
-
     if (classIds.length > 0 && unitIds.length > 0) {
       throw new Error("Không thể update sang cả Class và Unit cùng lúc");
     }
@@ -499,17 +533,17 @@ const updateExamInstanceService = async (instructorAccId, examId, instanceId, da
     const newInstances = [];
     const targetList = classIds.length > 0 ? classIds : unitIds;
 
-    for (const id of targetList) {
+    for (const targetId of targetList) {
       const newData = {
         examId,
-        classId: classIds.length > 0 ? id : null,
-        unitId: unitIds.length > 0 ? id : null,
+        classId: classIds.length > 0 ? targetId : null,
+        unitId: unitIds.length > 0 ? targetId : null,
         startTime: data.startTime,
         endTime: data.endTime,
         isRandomQuestion: data.isRandomQuestion ?? instance.IsRandomQuestion,
         isRandomAnswer: data.isRandomAnswer ?? instance.IsRandomAnswer,
         status: data.status ?? instance.Status,
-        attempt: data.attempt ?? instance.Attempt
+        attempt: data.attempt ?? instance.Attempt,
       };
 
       const newInstanceId = await instructorExamRepository.createExamInstance(newData);
@@ -519,27 +553,27 @@ const updateExamInstanceService = async (instructorAccId, examId, instanceId, da
     return {
       success: true,
       message: "Cập nhật instance thành công (đổi class/unit)",
-      instances: newInstances
+      instances: newInstances,
     };
   }
 
+  // 7. TRƯỜNG HỢP CHỈ CẬP NHẬT THÔNG TIN THƯỜNG
   const instanceData = {
     startTime: data.startTime,
     endTime: data.endTime,
     isRandomQuestion: data.isRandomQuestion ?? instance.IsRandomQuestion,
     isRandomAnswer: data.isRandomAnswer ?? instance.IsRandomAnswer,
     status: data.status ?? instance.Status,
-    attempt: data.attempt ?? instance.Attempt
+    attempt: data.attempt ?? instance.Attempt,
   };
 
   await instructorExamRepository.updateExamInstance(instanceId, instanceData);
 
   return {
     success: true,
-    message: "Cập nhật phiên thi thành công"
+    message: "Cập nhật phiên thi thành công",
   };
 };
-
 
 
 /**
@@ -1195,6 +1229,125 @@ const importQuestionsFromExcel = async (instructorAccId, examId, sectionId, file
     errors,
   };
 };
+const createFullExamService = async (instructorAccId, data) => {
+  // 1) Validate exam
+  validateExamData(data.exam);
+
+  // 2) Validate instance
+  validateInstanceData(data.instance);
+
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  if (!instructorId) throw new Error("Không tìm thấy giảng viên");
+
+  // --- Tạo exam ---
+  const examId = await instructorExamRepository.createExam({
+    title: data.exam.title,
+    description: data.exam.description,
+    status: "Draft",
+    type: "Exam",
+    instructorId
+  });
+
+  // --- Tạo sections ---
+  if (Array.isArray(data.sections)) {
+    for (const parent of data.sections) {
+      const parentId = await instructorExamRepository.createExamSection(examId, {
+        type: parent.type,
+        title: parent.title,
+        orderIndex: parent.orderIndex,
+        parentSectionId: null,
+        fileURL: parent.fileURL || null
+      });
+
+      // Child sections
+      if (Array.isArray(parent.childSections)) {
+        for (const child of parent.childSections) {
+          const childId = await instructorExamRepository.createExamSection(examId, {
+            type: child.type,
+            title: child.title,
+            orderIndex: child.orderIndex,
+            parentSectionId: parentId,
+            fileURL: child.fileURL || null
+          });
+
+          // ✅ BƯỚC 1: TẠO CÂU HỎI MỚI (newQuestions)
+          const createdQuestionIds = [];
+          
+          if (Array.isArray(child.newQuestions) && child.newQuestions.length > 0) {
+            for (const newQ of child.newQuestions) {
+              // Validate câu hỏi mới
+              validateQuestionData(newQ);
+
+              // Chuẩn hóa correctAnswer cho matching
+              let correctAnswer = newQ.correctAnswer;
+              if (newQ.type === "matching") {
+                if (typeof correctAnswer !== "string") {
+                  correctAnswer = JSON.stringify(correctAnswer || {});
+                }
+              }
+
+              // Tạo question
+              const questionId = await instructorExamRepository.createQuestion({
+                content: newQ.content.trim(),
+                type: newQ.type,
+                correctAnswer: correctAnswer,
+                instructorId,
+                status: "Active",
+                topic: newQ.topic || null,
+                level: newQ.level || "Medium",
+                point: newQ.point || 1
+              });
+
+              // Tạo options cho multiple_choice
+              if (newQ.type === "multiple_choice" && Array.isArray(newQ.options)) {
+                await instructorExamRepository.createQuestionOptions(questionId, newQ.options);
+              }
+
+              createdQuestionIds.push(questionId);
+            }
+          }
+
+          // ✅ BƯỚC 2: GẮN CÂU HỎI (cả có sẵn + mới tạo)
+          const allQuestionIds = [
+            ...(child.questions || []),        // Câu hỏi từ ngân hàng
+            ...createdQuestionIds              // Câu hỏi vừa tạo
+          ];
+
+          if (allQuestionIds.length > 0) {
+            await instructorExamRepository.addQuestionsToSection(childId, allQuestionIds);
+          }
+        }
+      }
+
+      // Questions trực tiếp trong parent (nếu có)
+      if (parent.questions?.length > 0) {
+        await instructorExamRepository.addQuestionsToSection(parentId, parent.questions);
+      }
+    }
+  }
+
+  // --- Tạo instance ---
+  const instancePayload = {
+    examId,
+    classId: data.instance.classId,
+    unitId: data.instance.unitId,
+    startTime: data.instance.startTime,
+    endTime: data.instance.endTime,
+    isRandomQuestion: data.instance.isRandomQuestion,
+    isRandomAnswer: data.instance.isRandomAnswer,
+    attempt: data.instance.attempt,
+    status: "Scheduled"
+  };
+
+  const instanceId = await instructorExamRepository.createExamInstance(instancePayload);
+
+  return {
+    examId,
+    instanceId,
+    message: "Tạo full exam hoàn tất"
+  };
+};
+
 
 
 module.exports = {
@@ -1207,6 +1360,7 @@ module.exports = {
   archiveExamService,
   unarchiveExamService,
   getArchivedExamsService,
+  createFullExamService,
 
   // Exam Instances
   createExamInstanceService,

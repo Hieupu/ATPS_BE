@@ -9,6 +9,7 @@ const {
   archiveExam,
   unarchiveExam,
   getArchivedExams,
+  createFullExamController,
 
   // Exam Instances
   createExamInstance,
@@ -62,6 +63,7 @@ router.use(verifyToken);
 // ==================== EXAM ROUTES ====================
 router.get("/exams", getExams);
 router.post("/exams", createExam);
+router.post("/exams/full", createFullExamController);
 router.get("/exams/archived", getArchivedExams);
 router.get("/exams/:examId", getExamDetail);
 router.put("/exams/:examId", updateExam);
