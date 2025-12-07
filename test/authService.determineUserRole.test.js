@@ -1,0 +1,88 @@
+jest.mock("../config/db", () => jest.fn());
+
+const connectDB = require("../config/db");
+const { determineUserRole } = require("../services/authService");
+
+describe("authService - determineUserRole", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test("UTCID01 - accountId là instructor -> trả về 'instructor'", async () => {
+    const mockQuery = jest
+      .fn()
+      .mockResolvedValueOnce([[{ InstructorID: 1 }]])
+      .mockResolvedValue([[]]);
+
+    connectDB.mockResolvedValue({ query: mockQuery });
+
+    const role = await determineUserRole(1);
+    expect(role).toBe("instructor");
+  });
+
+  test("UTCID02 - accountId là learner -> trả về 'learner'", async () => {
+    const mockQuery = jest
+      .fn()
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[{ LearnerID: 2 }]])
+      .mockResolvedValue([[]]);
+
+    connectDB.mockResolvedValue({ query: mockQuery });
+
+    const role = await determineUserRole(2);
+    expect(role).toBe("learner");
+  });
+
+  test("UTCID03 - accountId là parent -> trả về 'parent'", async () => {
+    const mockQuery = jest
+      .fn()
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[{ ParentID: 3 }]]);
+
+    connectDB.mockResolvedValue({ query: mockQuery });
+
+    const role = await determineUserRole(3);
+    expect(role).toBe("parent");
+  });
+
+  test("UTCID04 - không phải instructor, learner, parent -> trả về 'unknown'", async () => {
+    const mockQuery = jest
+      .fn()
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[]]);
+
+    connectDB.mockResolvedValue({ query: mockQuery });
+
+    const role = await determineUserRole(4);
+    expect(role).toBe("unknown");
+  });
+
+  test("UTCID05 - learner và parent cùng tồn tại (không có instructor) -> ưu tiên 'learner'", async () => {
+    const mockQuery = jest
+      .fn()
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[{ LearnerID: 5 }]])
+      .mockResolvedValueOnce([[{ ParentID: 5 }]]);
+
+    connectDB.mockResolvedValue({ query: mockQuery });
+
+    const role = await determineUserRole(5);
+    expect(role).toBe("learner");
+  });
+
+  test("UTCID06 - instructor và learner cùng tồn tại -> ưu tiên 'instructor'", async () => {
+    const mockQuery = jest
+      .fn()
+      .mockResolvedValueOnce([[{ InstructorID: 6 }]])
+      .mockResolvedValueOnce([[{ LearnerID: 6 }]])
+      .mockResolvedValueOnce([[]]);
+
+    connectDB.mockResolvedValue({ query: mockQuery });
+
+    const role = await determineUserRole(6);
+    expect(role).toBe("instructor");
+  });
+});
