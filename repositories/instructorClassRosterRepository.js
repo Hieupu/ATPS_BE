@@ -458,7 +458,7 @@ class InstructorClassRosterRepository {
     sessionId,
     instructorId,
     newDate,
-    newTimeslotId,
+    newStartTime,
     reason
   ) {
     const db = await connectDB();
@@ -467,12 +467,38 @@ class InstructorClassRosterRepository {
     try {
       await connection.beginTransaction();
 
+      const days = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+      ];
+      const dateObj = new Date(newDate);
+      const dayName = days[dateObj.getDay()];
+
       const [result] = await connection.query(
         `INSERT INTO session_change_request 
          (SessionID, InstructorID, NewDate, NewTimeslotID, Reason, Status, CreatedDate) 
-         VALUES (?, ?, ?, ?, ?, 'PENDING', NOW())`,
-        [sessionId, instructorId, newDate, newTimeslotId, reason]
+         SELECT 
+            ?, -- sessionId
+            ?, -- instructorId
+            ?, -- newDate
+            (SELECT TimeslotID FROM timeslot WHERE StartTime = ? AND Day = ? LIMIT 1), -- Tự tìm ID
+            ?, -- reason
+            'PENDING', 
+            NOW()`,
+        [sessionId, instructorId, newDate, newStartTime, dayName, reason]
       );
+
+      if (result.affectedRows === 0) {
+        throw new Error(
+          "Không tìm thấy khung giờ cố định phù hợp (Sai giờ hoặc ngày)."
+        );
+      }
+
       const newRequestId = result.insertId;
 
       const [instructorRows] = await connection.query(
