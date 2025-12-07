@@ -40,6 +40,232 @@ class InstructorTimeslotRepository {
     const db = await connectDB();
     await db.query("DELETE FROM timeslot WHERE TimeslotID=?", [timeslotId]);
   }
+
+  // ========== Instructor Leave Methods ==========
+
+  // Tạo lịch nghỉ cho giảng viên
+  async create(data) {
+    try {
+      const { InstructorID, TimeslotID, Date, Status, Note } = data;
+      const db = await connectDB();
+      const [result] = await db.execute(
+        `INSERT INTO instructortimeslot (InstructorID, TimeslotID, Date, Status, Note)
+         VALUES (?, ?, ?, ?, ?)`,
+        [InstructorID, TimeslotID, Date, Status || "HOLIDAY", Note || null]
+      );
+      return {
+        InstructorTimeslotID: result.insertId,
+        InstructorID,
+        TimeslotID,
+        Date,
+        Status: Status || "HOLIDAY",
+        Note: Note || null,
+      };
+    } catch (error) {
+      console.error(
+        "Database error in create (InstructorTimeslotRepository):",
+        error
+      );
+      throw error;
+    }
+  }
+// Kiểm tra xung đột với session đã có
+async checkSessionConflict(instructorId, timeslotId, date) {
+  try {
+    const db = await connectDB();
+    const [rows] = await db.execute(
+      `SELECT s.SessionID, s.Title, c.Name as ClassName
+       FROM session s
+       JOIN \`class\` c ON s.ClassID = c.ClassID
+       WHERE s.InstructorID = ? AND s.TimeslotID = ? AND s.Date = ?`,
+      [instructorId, timeslotId, date]
+    );
+    return rows[0] || null;
+  } catch (error) {
+    console.error(
+      "Database error in checkSessionConflict (InstructorTimeslotRepository):",
+      error
+    );
+    throw error;
+  }
+}
+  // Kiểm tra xung đột với lịch nghỉ đã có
+  async checkConflict(instructorId, timeslotId, date) {
+    try {
+      const db = await connectDB();
+      const [rows] = await db.execute(
+        `SELECT * FROM instructortimeslot 
+         WHERE InstructorID = ? AND TimeslotID = ? AND Date = ?`,
+        [instructorId, timeslotId, date]
+      );
+      return rows[0] || null;
+    } catch (error) {
+      console.error(
+        "Database error in checkConflict (InstructorTimeslotRepository):",
+        error
+      );
+      throw error;
+    }
+  }
+
+  // Tìm lịch nghỉ với filter và pagination - trả về unique ngày nghỉ
+  async findLeaves(options = {}) {
+    try {
+      const {
+        instructorId = null,
+        status = null,
+        startDate = null,
+        endDate = null,
+        limit = 20,
+        offset = 0,
+      } = options;
+
+      const db = await connectDB();
+      let query = `
+        SELECT 
+          it.Date,
+          it.Status,
+          it.Note,
+          COUNT(DISTINCT it.InstructorID) as InstructorCount,
+          GROUP_CONCAT(DISTINCT i.FullName ORDER BY i.FullName SEPARATOR ', ') as InstructorNames
+        FROM instructortimeslot it
+        LEFT JOIN instructor i ON it.InstructorID = i.InstructorID
+        WHERE 1=1
+      `;
+      const params = [];
+
+      if (instructorId) {
+        query += ` AND it.InstructorID = ?`;
+        params.push(instructorId);
+      }
+
+      if (status) {
+        query += ` AND it.Status = ?`;
+        params.push(status);
+      }
+
+      if (startDate) {
+        query += ` AND it.Date >= ?`;
+        params.push(startDate);
+      }
+
+      if (endDate) {
+        query += ` AND it.Date <= ?`;
+        params.push(endDate);
+      }
+
+      query += ` GROUP BY it.Date, it.Status, it.Note`;
+      query += ` ORDER BY it.Date DESC`;
+
+      const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 100));
+      const safeOffset = Math.max(0, Number(offset) || 0);
+      query += ` LIMIT ${safeLimit} OFFSET ${safeOffset}`;
+
+      const [rows] = await db.execute(query, params);
+      return rows;
+    } catch (error) {
+      console.error(
+        "Database error in findLeaves (InstructorTimeslotRepository):",
+        error
+      );
+      throw error;
+    }
+  }
+
+  // Đếm số lịch nghỉ với filter
+  async countLeaves(options = {}) {
+    try {
+      const {
+        instructorId = null,
+        status = null,
+        startDate = null,
+        endDate = null,
+      } = options;
+
+      const db = await connectDB();
+      let query = `
+        SELECT COUNT(DISTINCT it.Date) as total
+        FROM instructortimeslot it
+        WHERE 1=1
+      `;
+      const params = [];
+
+      if (instructorId) {
+        query += ` AND it.InstructorID = ?`;
+        params.push(instructorId);
+      }
+
+      if (status) {
+        query += ` AND it.Status = ?`;
+        params.push(status);
+      }
+
+      if (startDate) {
+        query += ` AND it.Date >= ?`;
+        params.push(startDate);
+      }
+
+      if (endDate) {
+        query += ` AND it.Date <= ?`;
+        params.push(endDate);
+      }
+
+      const [rows] = await db.execute(query, params);
+      return rows[0]?.total || 0;
+    } catch (error) {
+      console.error(
+        "Database error in countLeaves (InstructorTimeslotRepository):",
+        error
+      );
+      throw error;
+    }
+  }
+
+  // Xóa lịch nghỉ theo ID
+  async deleteLeave(instructorTimeslotId) {
+    try {
+      const db = await connectDB();
+      const [result] = await db.execute(
+        `DELETE FROM instructortimeslot WHERE InstructorTimeslotID = ?`,
+        [instructorTimeslotId]
+      );
+      return {
+        affectedRows: result.affectedRows,
+      };
+    } catch (error) {
+      console.error(
+        "Database error in deleteLeave (InstructorTimeslotRepository):",
+        error
+      );
+      throw error;
+    }
+  }
+
+  // Xóa tất cả lịch nghỉ của một ngày
+  async deleteByDate(date, status = null) {
+    try {
+      const db = await connectDB();
+      let query = `DELETE FROM instructortimeslot WHERE Date = ?`;
+      const params = [date];
+
+      if (status) {
+        query += ` AND Status = ?`;
+        params.push(status);
+      }
+
+      const [result] = await db.execute(query, params);
+      return {
+        affectedRows: result.affectedRows,
+        deleted: result.affectedRows,
+      };
+    } catch (error) {
+      console.error(
+        "Database error in deleteByDate (InstructorTimeslotRepository):",
+        error
+      );
+      throw error;
+    }
+  }
 }
 
 module.exports = new InstructorTimeslotRepository();

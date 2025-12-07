@@ -50,43 +50,6 @@ const logout = async (req, res) => {
   res.json({ message: "Logout successful (client should remove token)" });
 };
 
-const register = async (req, res) => {
-  try {
-    const username = (req.body.username || "").trim();
-    const email = (req.body.email || "").trim().toLowerCase();
-    const phone = (req.body.phone || "").trim();
-    const password = req.body.password || "";
-    const { id } = await registerService({
-      username,
-      email,
-      phone,
-      password,
-      provider: "local",
-    });
-
-    return res.status(201).json({
-      message: "Account created successfully!",
-      AccID: id,
-    });
-  } catch (error) {
-    console.error("Register error:", error);
-
-    if (
-      error.code === "ER_DUP_ENTRY" ||
-      /duplicate/i.test(error.message || "")
-    ) {
-      return res.status(400).json({ message: "Email has been registered!" });
-    }
-
-    const status = Number(error.status) || 500;
-    const message =
-      status === 500
-        ? "System error, please try again later!"
-        : error.message || "Bad request";
-    return res.status(status).json({ message });
-  }
-};
-
 passport.use(
   new GoogleStrategy(
     {
@@ -466,6 +429,42 @@ const buildOAuthRedirect = (provider, token, userObj) => {
 const buildOAuthErrorRedirect = (provider, message) => {
   const msg = encodeURIComponent(message || "Authentication failed");
   return `${FRONTEND_URL}/oauth/callback?provider=${provider}&error=${msg}`;
+};
+const register = async (req, res) => {
+  try {
+    const username = (req.body.username || "").trim();
+    const email = (req.body.email || "").trim().toLowerCase();
+    const phone = (req.body.phone || "").trim();
+    const password = req.body.password || "";
+    const { id } = await registerService({
+      username,
+      email,
+      phone,
+      password,
+      provider: "local",
+    });
+
+    return res.status(201).json({
+      message: "Account created successfully!",
+      AccID: id,
+    });
+  } catch (error) {
+    console.error("Register error:", error);
+
+    if (
+      error.code === "ER_DUP_ENTRY" ||
+      /duplicate/i.test(error.message || "")
+    ) {
+      return res.status(400).json({ message: "Email has been registered!" });
+    }
+
+    const status = Number(error.status) || 500;
+    const message =
+      status === 500
+        ? "System error, please try again later!"
+        : error.message || "Bad request";
+    return res.status(status).json({ message });
+  }
 };
 
 module.exports = {

@@ -1,32 +1,39 @@
 {
-  "name": "atps_be",
+  "name": "atps-backend",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "ATPS Backend API - Admin Training Platform System",
+  "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon server",
-    "seed:test": "node scripts/run_test_data.js"
+    "start": "nodemon server"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "atps",
+    "backend",
+    "api",
+    "nodejs",
+    "express",
+    "mysql",
+    "education",
+    "training"
+  ],
+  "author": "ATPS Development Team",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "@payos/node": "^2.0.3",
-    "axios": "^1.12.2",
-    "bcryptjs": "^3.0.2",
+    "axios": "^1.13.2",
+    "bcryptjs": "^3.0.3",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
-    "crypto": "^1.0.1",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
-    "google-auth-library": "^10.4.1",
-    "jsonwebtoken": "^9.0.2",
+    "express-validator": "^7.3.1",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.19.1",
     "multer": "^2.0.2",
     "mysql2": "^3.15.2",
     "node-cron": "^4.2.1",
-    "nodemailer": "^7.0.9",
+    "nodemailer": "^7.0.11",
     "passport": "^0.7.0",
     "passport-facebook": "^3.0.0",
     "passport-google-oauth20": "^2.0.0",
@@ -36,6 +43,25 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "nodemon": "^3.1.10"
+    "jest": "^30.2.0",
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/scripts/**/*.test.js",
+      "**/test/**/*.test.js"
+    ],
+    "collectCoverageFrom": [
+      "services/**/*.js",
+      "controllers/**/*.js",
+      "utils/**/*.js",
+      "!**/node_modules/**"
+    ],
+    "coverageDirectory": "coverage",
+    "verbose": true
   }
 }

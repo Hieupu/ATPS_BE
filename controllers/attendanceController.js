@@ -11,16 +11,18 @@ class AttendanceController {
         return res.status(400).json({ message: "Learner ID is required" });
       }
 
-      const attendance = await attendanceService.getLearnerAttendance(learnerId);
-      return res.json({ 
+      const attendance = await attendanceService.getLearnerAttendance(
+        learnerId
+      );
+      return res.json({
         success: true,
-        attendance 
+        attendance,
       });
     } catch (error) {
       console.error("Error in getLearnerAttendance:", error);
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        message: "Server error" 
+        message: "Server error",
       });
     }
   }
@@ -34,16 +36,19 @@ class AttendanceController {
         return res.status(400).json({ message: "Learner ID is required" });
       }
 
-      const stats = await attendanceService.getAttendanceStats(learnerId, sessionId);
-      return res.json({ 
+      const stats = await attendanceService.getAttendanceStats(
+        learnerId,
+        sessionId
+      );
+      return res.json({
         success: true,
-        ...stats 
+        ...stats,
       });
     } catch (error) {
       console.error("Error in getAttendanceStats:", error);
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        message: "Server error" 
+        message: "Server error",
       });
     }
   }
@@ -57,15 +62,15 @@ class AttendanceController {
       }
 
       const classList = await attendanceService.getAttendanceByClass(learnerId);
-      return res.json({ 
+      return res.json({
         success: true,
-        classes: classList 
+        classes: classList,
       });
     } catch (error) {
       console.error("Error in getAttendanceByClass:", error);
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        message: "Server error" 
+        message: "Server error",
       });
     }
   }
@@ -83,22 +88,22 @@ class AttendanceController {
       const currentYear = year || new Date().getFullYear();
 
       const calendar = await attendanceService.getAttendanceCalendar(
-        learnerId, 
-        currentMonth, 
+        learnerId,
+        currentMonth,
         currentYear
       );
 
-      return res.json({ 
+      return res.json({
         success: true,
         calendar,
         month: currentMonth,
-        year: currentYear
+        year: currentYear,
       });
     } catch (error) {
       console.error("Error in getAttendanceCalendar:", error);
-      return res.status(500).json({ 
+      return res.status(500).json({
         success: false,
-        message: "Server error" 
+        message: "Server error",
       });
     }
   }
@@ -128,25 +133,27 @@ class AttendanceController {
     }
   }
 
-    async recordAttendance(req, res) {
+  async recordAttendance(req, res) {
     try {
-      const { learnerId, sessionId, status = 'present' } = req.body;
-          const db = await connectDB();
+      const { learnerId, sessionId, status = "present" } = req.body;
+      const db = await connectDB();
 
       if (!learnerId || !sessionId) {
-        return res.status(400).json({ message: 'LearnerID and SessionID are required' });
+        return res
+          .status(400)
+          .json({ message: "LearnerID and SessionID are required" });
       }
 
       // Check if attendance already exists
       const [existing] = await db.query(
-        'SELECT * FROM attendance WHERE LearnerID = ? AND SessionID = ?',
+        "SELECT * FROM attendance WHERE LearnerID = ? AND SessionID = ?",
         [learnerId, sessionId]
       );
 
       if (existing.length > 0) {
-        return res.json({ 
-          message: 'Attendance already recorded', 
-          attendance: existing[0] 
+        return res.json({
+          message: "Attendance already recorded",
+          attendance: existing[0],
         });
       }
 
@@ -158,20 +165,20 @@ class AttendanceController {
       );
 
       res.json({
-        message: 'Attendance recorded successfully',
-        attendanceId: result.insertId
+        message: "Attendance recorded successfully",
+        attendanceId: result.insertId,
       });
     } catch (error) {
-      console.error('Attendance recording error:', error);
-      res.status(500).json({ message: 'Failed to record attendance' });
+      console.error("Attendance recording error:", error);
+      res.status(500).json({ message: "Failed to record attendance" });
     }
   }
 
   async getAttendanceBySession(req, res) {
     try {
       const { sessionId } = req.params;
-          const db = await connectDB();
-      
+      const db = await connectDB();
+
       const [attendance] = await db.query(
         `SELECT a.*, l.FullName as LearnerName 
          FROM attendance a 
@@ -182,13 +189,10 @@ class AttendanceController {
 
       res.json({ attendance });
     } catch (error) {
-      console.error('Get attendance error:', error);
-      res.status(500).json({ message: 'Failed to fetch attendance' });
+      console.error("Get attendance error:", error);
+      res.status(500).json({ message: "Failed to fetch attendance" });
     }
   }
-
-  
-
 }
 
 module.exports = new AttendanceController();

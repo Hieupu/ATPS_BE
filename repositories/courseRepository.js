@@ -199,6 +199,66 @@ class CourseRepository {
     }
   }
 
+  async findAll() {
+    try {
+      const db = await connectDB();
+      const [rows] = await db.query(`
+        SELECT 
+          c.CourseID,
+          c.Title,
+          c.Description,
+          c.Duration,
+          c.Image,
+          c.Level,
+          c.Status,
+          c.Code,
+          i.InstructorID,
+          i.FullName as InstructorName,
+          i.ProfilePicture as InstructorAvatar,
+          i.Major as InstructorMajor
+        FROM course c
+        LEFT JOIN instructor i ON c.InstructorID = i.InstructorID
+        ORDER BY c.CourseID DESC
+      `);
+      return rows;
+    } catch (error) {
+      console.error("Database error in findAll:", error);
+      throw error;
+    }
+  }
+
+  async findByStatus(status) {
+    try {
+      const db = await connectDB();
+      const [rows] = await db.query(
+        `
+        SELECT 
+          c.CourseID,
+          c.Title,
+          c.Description,
+          c.Duration,
+          c.Image,
+          c.Level,
+          c.Status,
+          c.Code,
+          i.InstructorID,
+          i.FullName as InstructorName,
+          i.ProfilePicture as InstructorAvatar,
+          i.Major as InstructorMajor
+        FROM course c
+        LEFT JOIN instructor i ON c.InstructorID = i.InstructorID
+        WHERE c.Status = ?
+        ORDER BY c.CourseID DESC
+      `,
+        [status]
+      );
+      return rows;
+    } catch (error) {
+      console.error("Database error in findByStatus:", error);
+      throw error;
+    }
+  }
+
   async getEnrolledCoursesByLearnerId(learnerId) {
     try {
       const db = await connectDB();
@@ -289,6 +349,22 @@ class CourseRepository {
       throw error;
     }
   }
+  async findById(courseId) {
+    try {
+      const db = await connectDB();
+      const [rows] = await db.query(
+        `SELECT CourseID, Title, Description, Duration, Image, Level, Status, Code, InstructorID
+         FROM course 
+         WHERE CourseID = ?`,
+        [courseId]
+      );
+      return rows[0] || null;
+    } catch (error) {
+      console.error("Database error in findById:", error);
+      throw error;
+    }
+  }
+
   async getCourseWithDetails(courseId) {
     try {
       const db = await connectDB();
@@ -390,7 +466,7 @@ class CourseRepository {
       const db = await connectDB();
 
       const [courseCount] = await db.query(
-        "SELECT COUNT(*) as count FROM course WHERE InstructorID = ? AND Status = 'Open'",
+        "SELECT COUNT(*) as count FROM course WHERE InstructorID = ? AND Status = 'PUBLISHED'",
         [instructorId]
       );
 
@@ -398,7 +474,8 @@ class CourseRepository {
         `SELECT COUNT(DISTINCT e.LearnerID) as count 
          FROM enrollment e
          INNER JOIN class cl ON e.ClassID = cl.ClassID
-         WHERE cl.InstructorID = ? AND e.Status = 'Enrolled'`,
+         INNER JOIN course c ON cl.CourseID = c.CourseID
+         WHERE c.InstructorID = ? AND e.Status = 'Enrolled'`,
         [instructorId]
       );
 
