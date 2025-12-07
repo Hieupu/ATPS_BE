@@ -53,6 +53,8 @@ const loginService = async (
     throw new ServiceError("Email hoặc mật khẩu không chính xác", 401);
   }
 
+  checkAccountStatus(user);
+
   const userProvider = user.Provider.toLowerCase();
   const loginProvider = provider.toLowerCase();
 
@@ -110,7 +112,7 @@ const loginService = async (
       id: user.AccID,
       email: user.Email,
       Username: user.Username,
-      role: role, // Đảm bảo role được thêm vào token
+      role: role,
     },
     process.env.JWT_SECRET,
     { expiresIn }
@@ -129,38 +131,42 @@ const loginService = async (
   };
 };
 
-// Hàm xác định role
 const determineUserRole = async (accountId) => {
   const db = await connectDB();
 
-  // Kiểm tra instructor
   const [instructors] = await db.query(
     "SELECT InstructorID FROM instructor WHERE AccID = ?",
     [accountId]
   );
   if (instructors.length > 0) return "instructor";
 
-  // Kiểm tra learner
   const [learners] = await db.query(
     "SELECT LearnerID FROM learner WHERE AccID = ?",
     [accountId]
   );
   if (learners.length > 0) return "learner";
 
-  // Kiểm tra parent
   const [parents] = await db.query(
     "SELECT ParentID FROM parent WHERE AccID = ?",
     [accountId]
   );
   if (parents.length > 0) return "parent";
 
-  const [admins] = await db.query(
-    "SELECT AdminID FROM admin WHERE AccID = ?",
-    [accountId]
-  );
+  const [admins] = await db.query("SELECT AdminID FROM admin WHERE AccID = ?", [
+    accountId,
+  ]);
   if (admins.length > 0) return "admin";
 
   return "unknown";
+};
+
+const checkAccountStatus = (user) => {
+  if (!user.Status || user.Status.toLowerCase() !== "active") {
+    throw new ServiceError(
+      "Tài khoản của bạn đã bị khóa hoặc chưa kích hoạt",
+      403
+    );
+  }
 };
 
 const registerService = async ({

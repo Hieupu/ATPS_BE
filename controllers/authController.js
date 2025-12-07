@@ -6,6 +6,13 @@ const FacebookStrategy = require("passport-facebook").Strategy;
 const { loginService, registerService } = require("../services/authService");
 const accountRepository = require("../repositories/accountRepository");
 
+class ServiceError extends Error {
+  constructor(message, statusCode = 400) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+
 const {
   sendVerificationEmail,
   generateVerificationCode,
@@ -31,8 +38,6 @@ const login = async (req, res) => {
       user,
     });
   } catch (error) {
-    console.error("Login error:", error);
-
     if (error instanceof ServiceError) {
       res.status(error.statusCode).json({ message: error.message });
     } else {
@@ -302,55 +307,54 @@ const facebookAuthCallback = (req, res, next) => {
 const verificationCodes = new Map();
 const forgotPassword = async (req, res) => {
   try {
-    console.log('=== FORGOT PASSWORD STARTED ===');
-    console.log('Request body:', req.body);
-    
+    console.log("=== FORGOT PASSWORD STARTED ===");
+    console.log("Request body:", req.body);
+
     const { email } = req.body;
-    console.log('Email received:', email);
+    console.log("Email received:", email);
 
     if (!email) {
-      console.log('Email is missing');
+      console.log("Email is missing");
       return res.status(400).json({ message: "Vui lòng nhập email!" });
     }
 
-    console.log('Searching for user with email:', email);
+    console.log("Searching for user with email:", email);
     const user = await accountRepository.findAccountByEmail(email);
-    console.log('User found:', user ? `Yes, Account ID: ${user.AccID}` : 'No');
+    console.log("User found:", user ? `Yes, Account ID: ${user.AccID}` : "No");
 
     if (!user) {
-      console.log('User not found for email:', email);
+      console.log("User not found for email:", email);
       return res
         .status(404)
         .json({ message: "Email không tồn tại trong hệ thống!" });
     }
 
-    console.log('Generating verification code...');
+    console.log("Generating verification code...");
     const verificationCode = generateVerificationCode();
-    console.log('Verification code generated:', verificationCode);
+    console.log("Verification code generated:", verificationCode);
 
-    console.log('Storing verification code in memory...');
+    console.log("Storing verification code in memory...");
     verificationCodes.set(email, {
       code: verificationCode,
       expiresAt: Date.now() + 15 * 60 * 1000,
       userId: user.AccID,
     });
-    
-    console.log('Setting cleanup timeout for verification code');
+
+    console.log("Setting cleanup timeout for verification code");
     setTimeout(() => {
-      console.log('Cleaning up verification code for email:', email);
+      console.log("Cleaning up verification code for email:", email);
       verificationCodes.delete(email);
     }, 15 * 60 * 1000);
 
-    console.log('Sending verification email...');
+    console.log("Sending verification email...");
     sendVerificationEmail(email, verificationCode);
-    console.log('Verification email sent successfully');
+    console.log("Verification email sent successfully");
 
     res.json({
       message: "Mã xác thực đã được gửi đến email của bạn!",
       email: email,
     });
-    console.log('=== FORGOT PASSWORD COMPLETED SUCCESSFULLY ===');
-
+    console.log("=== FORGOT PASSWORD COMPLETED SUCCESSFULLY ===");
   } catch (error) {
     console.error("=== FORGOT PASSWORD ERROR ===");
     console.error("Error details:", error);
