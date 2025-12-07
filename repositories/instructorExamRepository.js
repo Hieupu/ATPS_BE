@@ -659,6 +659,57 @@ class InstructorExamRepository {
 
     return rows;
   }
+  async getCoursesByInstructor(instructorId) {
+    const db = await connectDB();
+    const sql = `
+      SELECT CourseID, Title
+      FROM course 
+      WHERE InstructorID = ?
+      ORDER BY Title
+  `;
+    const [rows] = await db.query(sql, [instructorId]);
+    return rows;
+  }
+  async getUnitByCourse(courseId) {
+    const db = await connectDB(); // ✔ thay pool bằng connectDB()
+
+    const sql = `
+      SELECT 
+        UnitID,
+        Title AS UnitName,
+        Description,
+        Duration,
+        CourseID,
+        Status
+      FROM unit
+      WHERE CourseID = ?
+        AND Status = 'VISIBLE'
+      ORDER BY UnitID ASC
+  `;
+
+    const [rows] = await db.query(sql, [courseId]);
+    return rows;
+  }
+  async getClassesByCourse(courseId) {
+    const db = await connectDB();
+
+    const sql = `
+      SELECT 
+        ClassID,
+        Name AS ClassName,
+        Status,
+        CourseID
+      FROM class
+      WHERE CourseID = ?
+        AND Status IN ('ACTIVE', 'ONGOING')
+      ORDER BY Name ASC
+  `;
+
+    const [rows] = await db.query(sql, [courseId]);
+    return rows;
+  }
+
+
 
   // ==================== EXAM RESULTS & GRADING ====================
 

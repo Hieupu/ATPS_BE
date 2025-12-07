@@ -15,9 +15,10 @@ const {
   updateExamInstance,
   deleteExamInstance,
   getExamInstances,
-  getAvailableClasses,
-  getAvailableUnits,
+  getClassesByCourse,
+  getUnitByCourse,
   checkAndUpdateInstanceStatus,
+  getInstructorCourses,
 
   // Section Management
   createExamSection,
@@ -73,9 +74,11 @@ router.get("/exams/:examId/instances", getExamInstances);
 router.post("/exams/:examId/instances", createExamInstance);
 router.put("/exams/:examId/instances/:instanceId", updateExamInstance);
 router.delete("/exams/:examId/instances/:instanceId", deleteExamInstance);
-router.get("/available-classes", getAvailableClasses);
-router.get("/available-units", getAvailableUnits);
+router.get("/course/:courseId/classes", getClassesByCourse);
+router.get("/course/:courseId/units", getUnitByCourse);
 router.post("/instances/check-status", checkAndUpdateInstanceStatus);
+router.get("/courses", getInstructorCourses);
+
 
 // ==================== SECTION MANAGEMENT ROUTES ====================
 router.get("/exams/:examId/sections", getSections);

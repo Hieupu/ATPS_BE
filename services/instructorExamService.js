@@ -385,8 +385,8 @@ const createExamInstanceService = async (instructorAccId, examId, data) => {
   const exam = await instructorExamRepository.getExamById(examId);
   if (!exam) throw new Error("Không tìm thấy bài thi");
 
-  if (exam.Status !== "Published") {
-    throw new Error("Chỉ có thể tạo instance cho bài thi đã Published");
+  if (exam.Status === "Archived") {
+    throw new Error("Không thể tạo instance cho bài thi đã Archived");
   }
 
   // Chuẩn hóa classId & unitId
@@ -1242,5 +1242,5 @@ module.exports = {
   getLearnerSubmissionService,
   autoGradeExamService,
   manualGradeExamService,
-  
+
 };
