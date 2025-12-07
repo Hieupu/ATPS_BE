@@ -1,14 +1,22 @@
 const {
+  // Exam CRUD
   createExamService,
   updateExamService,
   getExamsService,
   getExamDetailService,
   deleteExamService,
   archiveExamService,
+  unarchiveExamService,
   getArchivedExamsService,
 
-  // Classes
-  getClassesByCourseService,
+  // Exam Instances
+  createExamInstanceService,
+  updateExamInstanceService,
+  deleteExamInstanceService,
+  getExamInstancesService,
+  getAvailableClassesService,
+  getAvailableUnitsService,
+  checkAndUpdateInstanceStatusService,
 
   // Section Management
   createExamSectionService,
@@ -35,15 +43,15 @@ const {
   autoGradeExamService,
   manualGradeExamService,
 
-  // Status Check
-  checkAndUpdateExamStatusService,
-  unarchiveExamService 
+  importQuestionsFromExcel,
+
 } = require("../services/instructorExamService");
 
 // ==================== EXAM CONTROLLERS ====================
 
 /**
- * Tạo exam mới
+ * Tạo exam mới (template)
+ * POST /api/instructor/exams
  */
 const createExam = async (req, res) => {
   try {
@@ -65,7 +73,8 @@ const createExam = async (req, res) => {
 };
 
 /**
- * Cập nhật exam
+ * Cập nhật exam template
+ * PUT /api/instructor/exams/:examId
  */
 const updateExam = async (req, res) => {
   try {
@@ -88,14 +97,15 @@ const updateExam = async (req, res) => {
 };
 
 /**
- * Lấy danh sách exams
+ * Lấy danh sách exams của instructor
+ * GET /api/instructor/exams?status=Draft&type=Exam
  */
 const getExams = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const filters = {
       status: req.query.status,
-      courseId: req.query.courseId
+      type: req.query.type
     };
 
     const exams = await getExamsService(instructorAccId, filters);
@@ -114,7 +124,8 @@ const getExams = async (req, res) => {
 };
 
 /**
- * Lấy chi tiết exam (bao gồm cấu trúc phân cấp sections + questions)
+ * Lấy chi tiết exam với cấu trúc phân cấp
+ * GET /api/instructor/exams/:examId
  */
 const getExamDetail = async (req, res) => {
   try {
@@ -136,7 +147,8 @@ const getExamDetail = async (req, res) => {
 };
 
 /**
- * Xóa exam
+ * Xóa exam (chuyển sang Archived)
+ * DELETE /api/instructor/exams/:examId
  */
 const deleteExam = async (req, res) => {
   try {
@@ -159,14 +171,15 @@ const deleteExam = async (req, res) => {
 
 /**
  * Lưu trữ exam
+ * POST /api/instructor/exams/:examId/archive
  */
 const archiveExam = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId } = req.params;
-    
+
     const result = await archiveExamService(instructorAccId, examId);
-    
+
     res.status(200).json({
       success: true,
       ...result
@@ -180,14 +193,38 @@ const archiveExam = async (req, res) => {
 };
 
 /**
+ * Khôi phục exam từ lưu trữ
+ * POST /api/instructor/exams/:examId/unarchive
+ */
+const unarchiveExam = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    const { examId } = req.params;
+
+    const result = await unarchiveExamService(instructorAccId, examId);
+
+    res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({
+      success: false,
+      message: err.message || "Lỗi khi khôi phục bài thi"
+    });
+  }
+};
+
+/**
  * Lấy danh sách exam đã lưu trữ
+ * GET /api/instructor/exams/archived
  */
 const getArchivedExams = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
-    
+
     const exams = await getArchivedExamsService(instructorAccId);
-    
+
     res.status(200).json({
       success: true,
       data: exams,
@@ -201,11 +238,172 @@ const getArchivedExams = async (req, res) => {
   }
 };
 
-// ==================== SECTION MANAGEMENT CONTROLLERS====================
+// ==================== EXAM INSTANCE CONTROLLERS ====================
 
 /**
- * Tạo section cho exam (có thể là parent hoặc child section)
- * Body: { type, orderIndex, parentSectionId? }
+ * Tạo exam instance (phiên thi cụ thể)
+ * POST /api/instructor/exams/:examId/instances
+ */
+const createExamInstance = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    const { examId } = req.params;
+    const instanceData = req.body;
+
+    const result = await createExamInstanceService(instructorAccId, examId, instanceData);
+
+    res.status(201).json({
+      success: true,
+      ...result
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({
+      success: false,
+      message: err.message || "Lỗi khi tạo phiên thi"
+    });
+  }
+};
+
+/**
+ * Cập nhật exam instance
+ * PUT /api/instructor/exams/:examId/instances/:instanceId
+ */
+const updateExamInstance = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    const { examId, instanceId } = req.params;
+    const instanceData = req.body;
+
+    const result = await updateExamInstanceService(instructorAccId, examId, instanceId, instanceData);
+
+    res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({
+      success: false,
+      message: err.message || "Lỗi khi cập nhật phiên thi"
+    });
+  }
+};
+
+/**
+ * Xóa exam instance
+ * DELETE /api/instructor/exams/:examId/instances/:instanceId
+ */
+const deleteExamInstance = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    const { examId, instanceId } = req.params;
+
+    const result = await deleteExamInstanceService(instructorAccId, examId, instanceId);
+
+    res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({
+      success: false,
+      message: err.message || "Lỗi khi xóa phiên thi"
+    });
+  }
+};
+
+/**
+ * Lấy danh sách instances của exam
+ * GET /api/instructor/exams/:examId/instances
+ */
+const getExamInstances = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    const { examId } = req.params;
+
+    const instances = await getExamInstancesService(instructorAccId, examId);
+
+    res.status(200).json({
+      success: true,
+      data: instances,
+      total: instances.length
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message || "Lỗi khi lấy danh sách phiên thi"
+    });
+  }
+};
+
+/**
+ * Lấy danh sách classes có thể gán
+ * GET /api/instructor/available-classes
+ */
+const getAvailableClasses = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+
+    const classes = await getAvailableClassesService(instructorAccId);
+
+    res.status(200).json({
+      success: true,
+      data: classes,
+      total: classes.length
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message || "Lỗi khi lấy danh sách lớp học"
+    });
+  }
+};
+
+/**
+ * Lấy danh sách units có thể gán
+ * GET /api/instructor/available-units
+ */
+const getAvailableUnits = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+
+    const units = await getAvailableUnitsService(instructorAccId);
+
+    res.status(200).json({
+      success: true,
+      data: units,
+      total: units.length
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message || "Lỗi khi lấy danh sách units"
+    });
+  }
+};
+
+/**
+ * Auto update exam instance status (Scheduled -> Open -> Closed)
+ * POST /api/instructor/instances/check-status
+ */
+const checkAndUpdateInstanceStatus = async (req, res) => {
+  try {
+    const result = await checkAndUpdateInstanceStatusService();
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("❌ Controller: Check instance status error:", error);
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || "Failed to check instance status"
+    });
+  }
+};
+
+// ==================== SECTION MANAGEMENT CONTROLLERS ====================
+
+/**
+ * Tạo section mới
+ * POST /api/instructor/exams/:examId/sections
  */
 const createExamSection = async (req, res) => {
   try {
@@ -229,7 +427,7 @@ const createExamSection = async (req, res) => {
 
 /**
  * Cập nhật section
- * Body: { type, orderIndex, parentSectionId? }
+ * PUT /api/instructor/exams/:examId/sections/:sectionId
  */
 const updateExamSection = async (req, res) => {
   try {
@@ -252,7 +450,8 @@ const updateExamSection = async (req, res) => {
 };
 
 /**
- * Xóa section (sẽ xóa cả child sections và questions)
+ * Xóa section
+ * DELETE /api/instructor/exams/:examId/sections/:sectionId
  */
 const deleteExamSection = async (req, res) => {
   try {
@@ -274,14 +473,15 @@ const deleteExamSection = async (req, res) => {
 };
 
 /**
- * Lấy danh sách sections của exam
- * Query: ?hierarchical=true (default) hoặc false
+ * Lấy danh sách sections
+ * GET /api/instructor/exams/:examId/sections?hierarchical=true
  */
 const getSections = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
     const { examId } = req.params;
-    const hierarchical = req.query.hierarchical !== 'false'; // default true
+    const hierarchical = req.query.hierarchical !== 'false';
+
     const sections = await getSectionsService(instructorAccId, examId, hierarchical);
 
     res.status(200).json({
@@ -298,7 +498,8 @@ const getSections = async (req, res) => {
 };
 
 /**
- * Lấy chi tiết một section (bao gồm child sections và questions)
+ * Lấy chi tiết section
+ * GET /api/instructor/exams/:examId/sections/:sectionId
  */
 const getSectionDetail = async (req, res) => {
   try {
@@ -323,6 +524,7 @@ const getSectionDetail = async (req, res) => {
 
 /**
  * Tạo câu hỏi mới
+ * POST /api/instructor/questions
  */
 const createQuestion = async (req, res) => {
   try {
@@ -345,6 +547,7 @@ const createQuestion = async (req, res) => {
 
 /**
  * Lấy danh sách câu hỏi
+ * GET /api/instructor/questions?topic=Grammar&level=Easy&type=multiple_choice
  */
 const getQuestions = async (req, res) => {
   try {
@@ -372,6 +575,7 @@ const getQuestions = async (req, res) => {
 
 /**
  * Lấy chi tiết câu hỏi
+ * GET /api/instructor/questions/:questionId
  */
 const getQuestionDetail = async (req, res) => {
   try {
@@ -394,6 +598,7 @@ const getQuestionDetail = async (req, res) => {
 
 /**
  * Cập nhật câu hỏi
+ * PUT /api/instructor/questions/:questionId
  */
 const updateQuestion = async (req, res) => {
   try {
@@ -417,6 +622,7 @@ const updateQuestion = async (req, res) => {
 
 /**
  * Xóa câu hỏi
+ * DELETE /api/instructor/questions/:questionId
  */
 const deleteQuestion = async (req, res) => {
   try {
@@ -441,6 +647,7 @@ const deleteQuestion = async (req, res) => {
 
 /**
  * Thêm câu hỏi vào section
+ * POST /api/instructor/exams/:examId/sections/:sectionId/questions
  * Body: { questionIds: [1, 2, 3] }
  */
 const addQuestionsToSection = async (req, res) => {
@@ -465,6 +672,7 @@ const addQuestionsToSection = async (req, res) => {
 
 /**
  * Xóa câu hỏi khỏi section
+ * DELETE /api/instructor/exams/:examId/sections/:sectionId/questions/:questionId
  */
 const removeQuestionFromSection = async (req, res) => {
   try {
@@ -487,6 +695,7 @@ const removeQuestionFromSection = async (req, res) => {
 
 /**
  * Cập nhật thứ tự câu hỏi trong section
+ * PUT /api/instructor/exams/:examId/sections/:sectionId/questions/:questionId/order
  * Body: { orderIndex: 5 }
  */
 const updateQuestionOrder = async (req, res) => {
@@ -496,10 +705,10 @@ const updateQuestionOrder = async (req, res) => {
     const { orderIndex } = req.body;
 
     const result = await updateQuestionOrderService(
-      instructorAccId, 
-      examId, 
-      sectionId, 
-      questionId, 
+      instructorAccId,
+      examId,
+      sectionId,
+      questionId,
       orderIndex
     );
 
@@ -518,18 +727,20 @@ const updateQuestionOrder = async (req, res) => {
 // ==================== GRADING CONTROLLERS ====================
 
 /**
- * Lấy danh sách kết quả thi
+ * Lấy danh sách kết quả thi theo instance
+ * GET /api/instructor/instances/:instanceId/results
  */
 const getExamResults = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
-    const { examId, classId } = req.params;
+    const { instanceId } = req.params;
 
-    const data = await getExamResultsService(instructorAccId, examId, classId);
+    const results = await getExamResultsService(instructorAccId, instanceId);
 
     res.status(200).json({
       success: true,
-      ...data
+      data: results,
+      total: results.length
     });
   } catch (err) {
     res.status(err.status || 500).json({
@@ -541,6 +752,7 @@ const getExamResults = async (req, res) => {
 
 /**
  * Lấy bài thi của learner để chấm
+ * GET /api/instructor/exams/:examId/learners/:learnerId/submission
  */
 const getLearnerSubmission = async (req, res) => {
   try {
@@ -563,6 +775,7 @@ const getLearnerSubmission = async (req, res) => {
 
 /**
  * Chấm bài tự động
+ * POST /api/instructor/exams/:examId/learners/:learnerId/auto-grade
  */
 const autoGradeExam = async (req, res) => {
   try {
@@ -585,6 +798,7 @@ const autoGradeExam = async (req, res) => {
 
 /**
  * Chấm bài thủ công
+ * POST /api/instructor/exams/:examId/learners/:learnerId/manual-grade
  * Body: { score, feedback }
  */
 const manualGradeExam = async (req, res) => {
@@ -606,69 +820,66 @@ const manualGradeExam = async (req, res) => {
     });
   }
 };
-
-// ==================== CLASSES CONTROLLER ====================
-
-/**
- * Lấy danh sách lớp học theo khóa học
- */
-const getClassesByCourse = async (req, res) => {
+const importQuestionsExcelController = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
-    const { courseId } = req.params;
+    const { examId, sectionId } = req.params;
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng upload file Excel",
+      });
+    }
+    const result = await importQuestionsFromExcel(
+      instructorAccId,
+      examId,
+      sectionId,
+      req.file.buffer
+    );
 
-    const classes = await getClassesByCourseService(instructorAccId, courseId);
-
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      data: classes,
-      total: classes.length
+      message: "Import câu hỏi thành công",
+      ...result,
     });
-  } catch (err) {
-    res.status(err.status || 500).json({
-      success: false,
-      message: err.message || "Lỗi khi lấy danh sách lớp học"
-    });
-  }
-};
-/**
- * Check and update exam status - Controller layer
- */
-const checkAndUpdateExamStatus = async (req, res) => {
-  try {
-    const result = await checkAndUpdateExamStatusService();
-    
-    res.status(200).json(result);
-    
+
   } catch (error) {
-    console.error("❌ Controller: Check exam status error:", error);
-    res.status(error.status || 500).json({
+    console.error("Import Excel Error:", error);
+
+    return res.status(500).json({
       success: false,
-      message: error.message || "Failed to check exam status"
+      message: error.message || "Lỗi import Excel",
     });
   }
 };
-/**
- * Khôi phục bài thi từ lưu trữ
- */
-const unarchiveExam = async (req, res) => {
+
+
+
+const createQuestionAndAssignToSection = async (req, res) => {
   try {
-    const instructorAccId = req.user.id;
-    const { examId } = req.params;
-    
-    const result = await unarchiveExamService(instructorAccId, examId);
-    
-    res.status(200).json({
+    const instructorAccId = req.user.accountId;
+    const { sectionId } = req.params;
+    const questionData = req.body;
+    const { questionId } = await instructorExamService.createQuestionService(
+      instructorAccId,
+      questionData
+    );
+    await instructorExamRepository.addQuestionToSection(sectionId, questionId, 0);
+
+    return res.json({
       success: true,
-      ...result
+      message: "Tạo câu hỏi & gán vào section thành công",
+      questionId,
+      sectionId
     });
+
   } catch (err) {
-    res.status(err.status || 400).json({
-      success: false,
-      message: err.message || "Lỗi khi khôi phục bài thi"
-    });
+    return res.status(400).json({ success: false, message: err.message });
   }
 };
+
+
+// ==================== EXPORTS ====================
 
 module.exports = {
   // Exam CRUD
@@ -678,7 +889,17 @@ module.exports = {
   getExamDetail,
   deleteExam,
   archiveExam,
+  unarchiveExam,
   getArchivedExams,
+
+  // Exam Instances
+  createExamInstance,
+  updateExamInstance,
+  deleteExamInstance,
+  getExamInstances,
+  getAvailableClasses,
+  getAvailableUnits,
+  checkAndUpdateInstanceStatus,
 
   // Section Management
   createExamSection,
@@ -699,16 +920,12 @@ module.exports = {
   removeQuestionFromSection,
   updateQuestionOrder,
 
-  // Classes
-  getClassesByCourse,
-
   // Grading
   getExamResults,
   getLearnerSubmission,
   autoGradeExam,
   manualGradeExam,
-  
-  // Status Check
-  checkAndUpdateExamStatus,
-  unarchiveExam
+
+  importQuestionsExcelController,
+  createQuestionAndAssignToSection
 };

@@ -21,10 +21,7 @@ const cors = require("cors");
 const instructorCourseRoutes = require("./routes/instructorCourseRouter");
 const instructorClassRoutes = require("./routes/instructorClassRoutes");
 const instructorExamRoutes = require("./routes/instructorExamRoutes");
-const instructorExamRepository = require("./repositories/instructorExamRepository");
-process.env.TZ = "Asia/Ho_Chi_Minh";
 const slotReservationRoutes = require("./routes/slotReservationRoutes");
-
 dotenv.config();
 const app = express();
 
@@ -76,10 +73,10 @@ app.use("/api/instructor", instructorExamRoutes);
 app.use("/api/zoom", zoomRoutes);
 app.use("/api/learnerassignments", learnerassignmentRoutes);
 app.use("/api/slot-reservation", slotReservationRoutes);
+ 
 
 const PORT = process.env.PORT || 9999;
 connectDB().then(() => {
-  instructorExamRepository.autoUpdateExamStatus();
   app.listen(PORT, () => {
     console.log(`@ Server running on port ${PORT}`);
   });
