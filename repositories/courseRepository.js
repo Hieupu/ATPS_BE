@@ -895,7 +895,7 @@ async getPopularCourses() {
        WHERE cl.CourseID = ? 
          AND e.LearnerID = ? 
          AND e.Status = 'enrolled'
-          AND cl.Status IN ('active', 'ongoing')
+          AND cl.Status IN ('active', 'ongoing','close')
        GROUP BY 
          cl.ClassID, cl.Name, cl.ZoomID,
         cl.Zoompass, cl.Status, cl.Fee, 

@@ -108,6 +108,123 @@ const getClassesByCourse = async (req, res) => {
     });
   }
 };
+const transferClass = async (req, res) => {
+  try {
+    const { id: courseId } = req.params;
+    const { fromClassId, toClassId } = req.body;
+    const accountId = req.user.id;
+     const db = await connectDB();
+    // Validate
+    if (!fromClassId || !toClassId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Missing class IDs" 
+      });
+    }
+
+    // Kiểm tra learner
+    const learner = await courseRepository.getLearnerByAccountId(accountId);
+    if (!learner) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Learner profile not found" 
+      });
+    }
+
+    // Kiểm tra người học có trong lớp cũ không
+    const [existingEnrollment] = await db.query(
+      `SELECT * FROM enrollment 
+       WHERE ClassID = ? AND LearnerID = ? AND Status = 'enrolled'`,
+      [fromClassId, learner.LearnerID]
+    );
+
+    if (existingEnrollment.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "You are not enrolled in the source class" 
+      });
+    }
+
+    // Kiểm tra lớp đích có tồn tại và còn chỗ không
+    const [targetClass] = await db.query(
+      `SELECT c.*, 
+              (SELECT COUNT(*) FROM enrollment e2 WHERE e2.ClassID = c.ClassID AND e2.Status = 'enrolled') as StudentCount
+       FROM class c
+       WHERE c.ClassID = ? AND c.CourseID = ? AND c.Status = 'ACTIVE'`,
+      [toClassId, courseId]
+    );
+
+    if (targetClass.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Target class not found or not active" 
+      });
+    }
+
+    const targetClassInfo = targetClass[0];
+    if (targetClassInfo.StudentCount >= targetClassInfo.Maxstudent) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Target class is full" 
+      });
+    }
+
+    // Kiểm tra đã đăng ký lớp đích chưa
+    const [existingTargetEnrollment] = await db.query(
+      `SELECT * FROM enrollment 
+       WHERE ClassID = ? AND LearnerID = ?`,
+      [toClassId, learner.LearnerID]
+    );
+
+    if (existingTargetEnrollment.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "You are already enrolled in the target class" 
+      });
+    }
+
+    // Bắt đầu transaction
+    await db.query('START TRANSACTION');
+
+    try {
+      // Cập nhật enrollment cũ thành transferred
+      await db.query(
+        `UPDATE enrollment 
+         SET Status = 'transferred', EnrollmentDate = NOW()
+         WHERE EnrollmentID = ?`,
+        [existingEnrollment[0].EnrollmentID]
+      );
+
+      // Tạo enrollment mới
+      await db.query(
+        `INSERT INTO enrollment (EnrollmentDate, Status, LearnerID, ClassID, OrderCode)
+         VALUES (NOW(), 'enrolled', ?, ?, ?)`,
+        [learner.LearnerID, toClassId, existingEnrollment[0].OrderCode]
+      );
+
+      // Commit transaction
+      await db.query('COMMIT');
+
+      res.json({
+        success: true,
+        message: "Class transfer successful. Please wait for admin confirmation.",
+        enrollmentId: existingEnrollment[0].EnrollmentID
+      });
+
+    } catch (error) {
+      // Rollback nếu có lỗi
+      await db.query('ROLLBACK');
+      throw error;
+    }
+
+  } catch (error) {
+    console.error("Transfer class error:", error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message || "Failed to transfer class" 
+    });
+  }
+};
 
 const getScheduleClasses = async (req, res) => {
   try {
@@ -390,5 +507,6 @@ module.exports = {
   getCourseAssignments,
   getPopularClasses,
   checkEnrollmentStatus,
-  getScheduleClasses
+  getScheduleClasses,
+  transferClass
 };
