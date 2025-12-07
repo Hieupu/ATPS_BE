@@ -113,12 +113,20 @@ const transferClass = async (req, res) => {
     const { id: courseId } = req.params;
     const { fromClassId, toClassId } = req.body;
     const accountId = req.user.id;
-     const db = await connectDB();
+    const db = await connectDB();
+
     // Validate
     if (!fromClassId || !toClassId) {
       return res.status(400).json({ 
         success: false, 
         message: "Missing class IDs" 
+      });
+    }
+
+    if (fromClassId === toClassId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Cannot transfer to the same class" 
       });
     }
 
@@ -172,7 +180,7 @@ const transferClass = async (req, res) => {
     // Kiểm tra đã đăng ký lớp đích chưa
     const [existingTargetEnrollment] = await db.query(
       `SELECT * FROM enrollment 
-       WHERE ClassID = ? AND LearnerID = ?`,
+       WHERE ClassID = ? AND LearnerID = ? AND Status = 'enrolled'`,
       [toClassId, learner.LearnerID]
     );
 
@@ -183,23 +191,91 @@ const transferClass = async (req, res) => {
       });
     }
 
+    // Kiểm tra trùng lịch học với các lớp khác của learner
+    const [scheduleConflict] = await db.query(
+      `SELECT c.ClassID, c.Name as ClassName, 
+              ts.Day, ts.StartTime, ts.EndTime
+       FROM enrollment e
+       JOIN class c ON e.ClassID = c.ClassID
+       JOIN session s ON c.ClassID = s.ClassID
+       JOIN timeslot ts ON s.TimeslotID = ts.TimeslotID
+       WHERE e.LearnerID = ? 
+         AND e.Status = 'enrolled'
+         AND e.ClassID != ?
+         AND c.ClassID != ?
+         AND c.Status = 'ACTIVE'`,
+      [learner.LearnerID, fromClassId, toClassId]
+    );
+
+    // Lấy lịch học của lớp đích
+    const [targetClassSchedule] = await db.query(
+      `SELECT DISTINCT ts.Day, ts.StartTime, ts.EndTime
+       FROM session s
+       JOIN timeslot ts ON s.TimeslotID = ts.TimeslotID
+       WHERE s.ClassID = ?`,
+      [toClassId]
+    );
+
+    // Kiểm tra trùng lịch
+    const conflicts = [];
+    if (targetClassSchedule.length > 0 && scheduleConflict.length > 0) {
+      for (const targetSlot of targetClassSchedule) {
+        for (const existingSlot of scheduleConflict) {
+          // Kiểm tra cùng ngày và thời gian giao nhau
+          if (targetSlot.Day === existingSlot.Day) {
+            const targetStart = targetSlot.StartTime;
+            const targetEnd = targetSlot.EndTime;
+            const existingStart = existingSlot.StartTime;
+            const existingEnd = existingSlot.EndTime;
+            
+            // Kiểm tra nếu thời gian giao nhau
+            if (
+              (targetStart >= existingStart && targetStart < existingEnd) ||
+              (targetEnd > existingStart && targetEnd <= existingEnd) ||
+              (targetStart <= existingStart && targetEnd >= existingEnd)
+            ) {
+              conflicts.push({
+                targetClass: targetClassInfo.Name,
+                existingClass: existingSlot.ClassName,
+                day: targetSlot.Day,
+                targetTime: `${targetStart}-${targetEnd}`,
+                existingTime: `${existingStart}-${existingEnd}`
+              });
+            }
+          }
+        }
+      }
+    }
+
+    if (conflicts.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Schedule conflict detected",
+        conflicts: conflicts
+      });
+    }
+
     // Bắt đầu transaction
     await db.query('START TRANSACTION');
 
     try {
-      // Cập nhật enrollment cũ thành transferred
+      // Cập nhật enrollment hiện tại với ClassID mới
       await db.query(
         `UPDATE enrollment 
-         SET Status = 'transferred', EnrollmentDate = NOW()
+         SET ClassID = ?, EnrollmentDate = NOW()
          WHERE EnrollmentID = ?`,
-        [existingEnrollment[0].EnrollmentID]
+        [toClassId, existingEnrollment[0].EnrollmentID]
       );
 
-      // Tạo enrollment mới
+      // Thêm log
       await db.query(
-        `INSERT INTO enrollment (EnrollmentDate, Status, LearnerID, ClassID, OrderCode)
-         VALUES (NOW(), 'enrolled', ?, ?, ?)`,
-        [learner.LearnerID, toClassId, existingEnrollment[0].OrderCode]
+        `INSERT INTO log (Action, Timestamp, AccID, Detail) 
+         VALUES (?, NOW(), ?, ?)`,
+        [
+          'CLASS_TRANSFER',
+          accountId,
+          `Learner ${learner.LearnerID} transferred from class ${fromClassId} to class ${toClassId}`
+        ]
       );
 
       // Commit transaction
@@ -207,7 +283,7 @@ const transferClass = async (req, res) => {
 
       res.json({
         success: true,
-        message: "Class transfer successful. Please wait for admin confirmation.",
+        message: "Class transfer successful",
         enrollmentId: existingEnrollment[0].EnrollmentID
       });
 
