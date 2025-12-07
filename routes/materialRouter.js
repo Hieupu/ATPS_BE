@@ -20,12 +20,13 @@ router.get(
   "/:id",
   verifyToken,
   authorizeFeature("admin"),
+
   materialController.getMaterialById
 );
 router.get(
   "/course/:courseId",
   verifyToken,
-  authorizeFeature("admin"),
+
   materialController.getMaterialsByCourse
 );
 router.put(

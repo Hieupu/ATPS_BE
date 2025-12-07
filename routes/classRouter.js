@@ -146,11 +146,22 @@ router.get(
   classScheduleController.getHolidayDates
 );
 
-// Instructor APIs
 router.get(
   "/instructor/:instructorId",
   verifyToken,
-  authorizeFeature("instructor"),
+  (req, res, next) => {
+    const userFeatures = req.user?.features || [];
+    if (
+      !userFeatures.includes("instructor") &&
+      !userFeatures.includes("admin")
+    ) {
+      return res.status(403).json({
+        message:
+          "Access denied: missing feature permission 'instructor' or 'admin'",
+      });
+    }
+    next();
+  },
   classController.getClassesByInstructorId
 );
 

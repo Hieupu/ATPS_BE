@@ -138,7 +138,7 @@ app.use("/api/classes", classRouter);
 // Instructor routes
 app.use("/api/instructors", instructorRoutes);
 app.use("/api/instructor", instructorCourseRoutes);
-// app.use("/api/instructors", instructorRouter);
+app.use("/api/instructors", instructorRouter);
 // app.use("/api/instructor/courses", instructorCourseRoutes);
 app.use("/api/instructor", instructorClassRoutes);
 app.use("/api/instructor", assignmentRoutes);

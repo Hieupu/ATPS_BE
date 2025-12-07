@@ -1,4 +1,5 @@
 const Material = require("../models/material");
+const materialService = require("../services/materialService");
 
 const materialController = {
   // Tạo tài liệu cho khóa học
@@ -87,12 +88,13 @@ const materialController = {
   getMaterialsByCourse: async (req, res) => {
     try {
       const courseId = req.params.courseId;
-      const materials = await Material.findByCourseId(courseId);
+      const materials = await materialService.getCourseMaterials(courseId);
 
       res.status(200).json({
         success: true,
         message: "Lấy tài liệu theo khóa học thành công",
-        data: materials,
+        materials: materials, // Frontend expects 'materials' key
+        data: materials, // Keep for backward compatibility
       });
     } catch (error) {
       console.error("Error getting materials by course:", error);
