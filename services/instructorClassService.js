@@ -424,11 +424,11 @@ const addInstructorAvailabilityService = async (instructorId, slots) => {
 };
 
 const requestSessionChangeService = async (instructorId, payload) => {
-  const { sessionId, newDate, newTimeslotId, reason } = payload;
+  const { sessionId, newDate, newStartTime, reason } = payload;
 
-  if (!sessionId || !newDate || !newTimeslotId || !reason) {
+  if (!sessionId || !newDate || !newStartTime || !reason) {
     throw new ServiceError(
-      "Vui lòng nhập đầy đủ thông tin: Ngày mới, Ca học và Lý do.",
+      "Vui lòng nhập đầy đủ thông tin: Ngày mới, Giờ bắt đầu và Lý do.",
       400
     );
   }
@@ -454,7 +454,7 @@ const requestSessionChangeService = async (instructorId, payload) => {
     sessionId,
     instructorId,
     newDate,
-    newTimeslotId,
+    newStartTime,
     reason
   );
 

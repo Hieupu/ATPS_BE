@@ -18,6 +18,9 @@ const connectDB = async () => {
         queueLimit: 0,
         timezone: "Z",
         dateStrings: true,
+        enableKeepAlive: true,
+        keepAliveInitialDelay: 0,
+        // timezone: "+07:00",
         ssl: {
           ca: fs.readFileSync("./config/ca.pem"),
         },

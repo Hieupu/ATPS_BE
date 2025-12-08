@@ -341,37 +341,44 @@ class InstructorClassRosterRepository {
 
       if (toInsert.length > 0) {
         for (const slot of toInsert) {
-          let startTime;
+          let startTime, endTime;
           switch (slot.timeslotId) {
             case 1:
               startTime = "08:00:00";
+              endTime = "10:00:00";
               break;
             case 2:
               startTime = "10:20:00";
+              endTime = "12:20:00";
               break;
             case 3:
               startTime = "13:00:00";
+              endTime = "15:00:00";
               break;
             case 4:
               startTime = "15:20:00";
+              endTime = "17:20:00";
               break;
             case 5:
               startTime = "18:00:00";
+              endTime = "20:00:00";
               break;
             case 6:
               startTime = "20:00:00";
+              endTime = "22:00:00";
               break;
           }
 
-          if (startTime) {
+          if (startTime && endTime) {
             await connection.query(
               `INSERT INTO instructortimeslot (TimeslotID, InstructorID, Date, Status, Note)
                SELECT TimeslotID, ?, ?, 'AVAILABLE', 'Đăng ký rảnh'
                FROM timeslot
                WHERE StartTime = ? 
-                 AND Day = DAYNAME(?) 
+                 AND EndTime = ?
+                 AND (Day = DAYNAME(?) OR Day IS NULL)
                LIMIT 1`,
-              [instructorId, slot.date, startTime, slot.date]
+              [instructorId, slot.date, startTime, endTime, slot.date]
             );
           }
         }
@@ -458,7 +465,7 @@ class InstructorClassRosterRepository {
     sessionId,
     instructorId,
     newDate,
-    newTimeslotId,
+    newStartTime,
     reason
   ) {
     const db = await connectDB();
@@ -467,12 +474,38 @@ class InstructorClassRosterRepository {
     try {
       await connection.beginTransaction();
 
+      const days = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+      ];
+      const dateObj = new Date(newDate);
+      const dayName = days[dateObj.getDay()];
+
       const [result] = await connection.query(
         `INSERT INTO session_change_request 
          (SessionID, InstructorID, NewDate, NewTimeslotID, Reason, Status, CreatedDate) 
-         VALUES (?, ?, ?, ?, ?, 'PENDING', NOW())`,
-        [sessionId, instructorId, newDate, newTimeslotId, reason]
+         SELECT 
+            ?, -- sessionId
+            ?, -- instructorId
+            ?, -- newDate
+            (SELECT TimeslotID FROM timeslot WHERE StartTime = ? AND Day = ? LIMIT 1), -- Tự tìm ID
+            ?, -- reason
+            'PENDING', 
+            NOW()`,
+        [sessionId, instructorId, newDate, newStartTime, dayName, reason]
       );
+
+      if (result.affectedRows === 0) {
+        throw new Error(
+          "Không tìm thấy khung giờ cố định phù hợp (Sai giờ hoặc ngày)."
+        );
+      }
+
       const newRequestId = result.insertId;
 
       const [instructorRows] = await connection.query(
