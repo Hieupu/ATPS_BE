@@ -552,6 +552,56 @@ const instructorController = {
       });
     }
   },
+
+  // Check timeslot availability
+  checkTimeslotAvailability: async (req, res) => {
+    try {
+      const {
+        InstructorID,
+        dayOfWeek,
+        timeslotId,
+        startDate,
+        endDatePlan,
+        instructorType,
+      } = req.body;
+
+      if (
+        !InstructorID ||
+        dayOfWeek === undefined ||
+        !timeslotId ||
+        !startDate ||
+        !endDatePlan ||
+        !instructorType
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Thiếu tham số bắt buộc",
+        });
+      }
+
+      const result = await instructorService.checkTimeslotAvailability({
+        InstructorID,
+        dayOfWeek: parseInt(dayOfWeek),
+        timeslotId: parseInt(timeslotId),
+        startDate,
+        endDatePlan,
+        instructorType,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Kiểm tra timeslot availability thành công",
+        data: result,
+      });
+    } catch (error) {
+      console.error("Error checking timeslot availability:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi kiểm tra timeslot availability",
+        error: error.message,
+      });
+    }
+  },
 };
 
 module.exports = instructorController;

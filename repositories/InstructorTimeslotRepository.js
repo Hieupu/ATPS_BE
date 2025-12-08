@@ -69,26 +69,26 @@ class InstructorTimeslotRepository {
       throw error;
     }
   }
-// Kiểm tra xung đột với session đã có
-async checkSessionConflict(instructorId, timeslotId, date) {
-  try {
-    const db = await connectDB();
-    const [rows] = await db.execute(
-      `SELECT s.SessionID, s.Title, c.Name as ClassName
+  // Kiểm tra xung đột với session đã có
+  async checkSessionConflict(instructorId, timeslotId, date) {
+    try {
+      const db = await connectDB();
+      const [rows] = await db.execute(
+        `SELECT s.SessionID, s.Title, c.Name as ClassName
        FROM session s
        JOIN \`class\` c ON s.ClassID = c.ClassID
        WHERE s.InstructorID = ? AND s.TimeslotID = ? AND s.Date = ?`,
-      [instructorId, timeslotId, date]
-    );
-    return rows[0] || null;
-  } catch (error) {
-    console.error(
-      "Database error in checkSessionConflict (InstructorTimeslotRepository):",
-      error
-    );
-    throw error;
+        [instructorId, timeslotId, date]
+      );
+      return rows[0] || null;
+    } catch (error) {
+      console.error(
+        "Database error in checkSessionConflict (InstructorTimeslotRepository):",
+        error
+      );
+      throw error;
+    }
   }
-}
   // Kiểm tra xung đột với lịch nghỉ đã có
   async checkConflict(instructorId, timeslotId, date) {
     try {
@@ -261,6 +261,82 @@ async checkSessionConflict(instructorId, timeslotId, date) {
     } catch (error) {
       console.error(
         "Database error in deleteByDate (InstructorTimeslotRepository):",
+        error
+      );
+      throw error;
+    }
+  }
+
+  // Lấy lịch nghỉ/bận trong khoảng thời gian
+  async findByDateRange(startDate, endDate, instructorId = null) {
+    try {
+      const db = await connectDB();
+      let query = `
+        SELECT 
+          it.*,
+          t.StartTime,
+          t.EndTime,
+          t.Day
+        FROM instructortimeslot it
+        LEFT JOIN timeslot t ON it.TimeslotID = t.TimeslotID
+        WHERE it.Date >= ? AND it.Date <= ?
+      `;
+      const params = [startDate, endDate];
+
+      if (instructorId) {
+        query += ` AND it.InstructorID = ?`;
+        params.push(instructorId);
+      }
+
+      query += ` ORDER BY it.Date ASC, t.StartTime ASC`;
+
+      const [rows] = await db.execute(query, params);
+      return rows;
+    } catch (error) {
+      console.error(
+        "Database error in findByDateRange (InstructorTimeslotRepository):",
+        error
+      );
+      throw error;
+    }
+  }
+
+  // Xóa lịch nghỉ/bận trong khoảng thời gian (trừ các status được exclude)
+  async deleteByDateRange(
+    instructorId,
+    startDate,
+    endDate,
+    excludeStatuses = []
+  ) {
+    try {
+      const db = await connectDB();
+      let query = `
+        DELETE FROM instructortimeslot 
+        WHERE InstructorID = ? 
+          AND Date >= ? 
+          AND Date <= ?
+      `;
+      const params = [instructorId, startDate, endDate];
+
+      // Nếu có excludeStatuses, không xóa các status đó
+      if (
+        excludeStatuses &&
+        Array.isArray(excludeStatuses) &&
+        excludeStatuses.length > 0
+      ) {
+        const placeholders = excludeStatuses.map(() => "?").join(",");
+        query += ` AND Status NOT IN (${placeholders})`;
+        params.push(...excludeStatuses);
+      }
+
+      const [result] = await db.execute(query, params);
+      return {
+        affectedRows: result.affectedRows,
+        deleted: result.affectedRows,
+      };
+    } catch (error) {
+      console.error(
+        "Database error in deleteByDateRange (InstructorTimeslotRepository):",
         error
       );
       throw error;

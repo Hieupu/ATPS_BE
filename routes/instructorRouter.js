@@ -148,6 +148,14 @@ router.get(
   instructorController.getInstructorStatistics
 );
 
+// Check timeslot availability
+router.post(
+  "/check-timeslot-availability",
+  verifyToken,
+  authorizeFeature("admin"),
+  instructorController.checkTimeslotAvailability
+);
+
 // Admin API for getting instructor by ID (có Status và Gender)
 router.get(
   "/admin/:id",
