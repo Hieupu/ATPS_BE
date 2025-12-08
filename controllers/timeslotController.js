@@ -640,6 +640,25 @@ const timeslotController = {
       });
     }
   },
+
+  // Lấy danh sách distinct StartTime và EndTime
+  getDistinctTimeRanges: async (req, res) => {
+    try {
+      const timeRanges = await timeslotService.getDistinctTimeRanges();
+      res.status(200).json({
+        success: true,
+        message: "Lấy danh sách time ranges thành công",
+        data: timeRanges,
+      });
+    } catch (error) {
+      console.error("Error getting distinct time ranges:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách time ranges",
+        error: error.message,
+      });
+    }
+  },
 };
 
 module.exports = timeslotController;

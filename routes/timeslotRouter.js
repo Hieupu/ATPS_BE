@@ -18,6 +18,13 @@ router.post(
   timeslotController.createTimeslot
 );
 
+// ✅ Distinct time ranges API - Phải đặt TRƯỚC route /:timeslotId để tránh bị match nhầm
+router.get(
+  "/distinct-time-ranges",
+  verifyToken,
+  timeslotController.getDistinctTimeRanges
+);
+
 router.get(
   "/:timeslotId",
   verifyToken,
@@ -121,7 +128,5 @@ router.get(
 
 // Public APIs
 router.get("/available", timeslotController.getAllTimeslots);
-
-router.get("/:timeslotId", timeslotController.getTimeslotById);
 
 module.exports = router;

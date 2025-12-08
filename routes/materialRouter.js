@@ -20,12 +20,14 @@ router.get(
   "/:id",
   verifyToken,
   authorizeFeature("admin"),
+
   materialController.getMaterialById
 );
+// Get materials by course - Allow all authenticated users (learner, instructor, admin)
 router.get(
   "/course/:courseId",
   verifyToken,
-  authorizeFeature("admin"),
+
   materialController.getMaterialsByCourse
 );
 router.put(

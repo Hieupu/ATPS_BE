@@ -785,20 +785,28 @@ const classScheduleController = {
   // Lấy lý do chi tiết tại sao một timeslot bị khóa
   getTimeslotLockReasons: async (req, res) => {
     try {
-      const { InstructorID, dayOfWeek, timeslotId, startDate, endDate } =
-        req.query;
+      // Nhận từ body (POST) hoặc query (GET)
+      const {
+        InstructorID,
+        dayOfWeek,
+        timeslotId,
+        startDate,
+        endDatePlan,
+        numofsession,
+      } = req.body || req.query;
 
       if (
         !InstructorID ||
-        !dayOfWeek ||
+        dayOfWeek === undefined ||
         !timeslotId ||
         !startDate ||
-        !endDate
+        !endDatePlan ||
+        !numofsession
       ) {
         return res.status(400).json({
           success: false,
           message:
-            "Thiếu tham số bắt buộc: InstructorID, dayOfWeek, timeslotId, startDate, endDate",
+            "Thiếu tham số bắt buộc: InstructorID, dayOfWeek, timeslotId, startDate, endDatePlan, numofsession",
         });
       }
 
@@ -808,7 +816,8 @@ const classScheduleController = {
         dayOfWeek: parseInt(dayOfWeek),
         timeslotId: parseInt(timeslotId),
         startDate,
-        endDate,
+        endDatePlan,
+        numofsession: parseInt(numofsession),
       });
 
       res.json({

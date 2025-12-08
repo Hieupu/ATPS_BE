@@ -1,47 +1,61 @@
 const connectDB = require("../config/db");
 class PaymentRepository {
-  async getPaymentHistory(learnerId) {
-    try {
-      const db = await connectDB();
-      const [rows] = await db.query(
-        `SELECT 
-          p.PaymentID,
-          p.Amount,
-          p.PaymentMethod,
-          p.PaymentDate,
-          p.Status as PaymentStatus,
-          e.EnrollmentID,
-          e.EnrollmentDate,
-          e.Status as EnrollmentStatus,
-          e.OrderCode,
-          c.ClassID,
-          c.Name as ClassName,
-          c.Fee,
-          c.OpendatePlan,
-          c.Opendate,
-          c.EnddatePlan,
-          c.Enddate,
-          cr.CourseID,
-          cr.Title as CourseTitle,
-          rr.RefundID,
-          rr.RequestDate as RefundRequestDate,
-          rr.Reason as RefundReason,
-          rr.Status as RefundStatus
-         FROM payment p
-         INNER JOIN enrollment e ON p.EnrollmentID = e.EnrollmentID
-         INNER JOIN class c ON e.ClassID = c.ClassID
-         INNER JOIN course cr ON c.CourseID = cr.CourseID
-         LEFT JOIN refundrequest rr ON e.EnrollmentID = rr.EnrollmentID
-         WHERE e.LearnerID = ?
-         ORDER BY p.PaymentDate DESC`,
-        [learnerId]
-      );
-      return rows;
-    } catch (error) {
-      console.error("Database error in getPaymentHistory:", error);
-      throw error;
-    }
+async getPaymentHistory(learnerId) {
+  try {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      `SELECT 
+        p.PaymentID,
+        p.Amount,
+        p.PaymentMethod,
+        p.PaymentDate,
+        p.Status as PaymentStatus,
+        e.EnrollmentID,
+        e.EnrollmentDate,
+        e.Status as EnrollmentStatus,
+        e.OrderCode,
+        c.ClassID,
+        c.Name as ClassName,
+        c.Fee,
+        c.OpendatePlan,
+        c.Opendate,
+        c.EnddatePlan,
+        c.Enddate,
+        cr.CourseID,
+        cr.Title as CourseTitle,
+        latest_rr.RefundID,
+        latest_rr.RequestDate as RefundRequestDate,
+        latest_rr.Reason as RefundReason,
+        latest_rr.Status as RefundStatus
+       FROM payment p
+       INNER JOIN enrollment e ON p.EnrollmentID = e.EnrollmentID
+       INNER JOIN class c ON e.ClassID = c.ClassID
+       INNER JOIN course cr ON c.CourseID = cr.CourseID
+       LEFT JOIN (
+         SELECT 
+           rr1.EnrollmentID,
+           rr1.RefundID,
+           rr1.RequestDate,
+           rr1.Reason,
+           rr1.Status
+         FROM refundrequest rr1
+         INNER JOIN (
+           SELECT EnrollmentID, MAX(RefundID) as MaxRefundID
+           FROM refundrequest
+           GROUP BY EnrollmentID
+         ) rr2 ON rr1.EnrollmentID = rr2.EnrollmentID 
+              AND rr1.RefundID = rr2.MaxRefundID
+       ) latest_rr ON e.EnrollmentID = latest_rr.EnrollmentID
+       WHERE e.LearnerID = ?
+       ORDER BY p.PaymentDate DESC`,
+      [learnerId]
+    );
+    return rows;
+  } catch (error) {
+    console.error("Database error in getPaymentHistory:", error);
+    throw error;
   }
+}
 
   async getEnrollmentDetails(enrollmentId) {
     try {
@@ -80,20 +94,20 @@ class PaymentRepository {
     }
   }
 
-  async getExistingRefund(enrollmentId) {
-    try {
-      const db = await connectDB();
-      const [rows] = await db.query(
-        `SELECT * FROM refundrequest 
-         WHERE EnrollmentID = ? AND Status IN ('pending', 'approved')`,
-        [enrollmentId]
-      );
-      return rows[0];
-    } catch (error) {
-      console.error("Database error in getExistingRefund:", error);
-      throw error;
-    }
+async getExistingRefund(enrollmentId) {
+  try {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      `SELECT * FROM refundrequest 
+       WHERE EnrollmentID = ? AND Status IN ('pending', 'approved')`,
+      [enrollmentId]
+    );
+    return rows[0];
+  } catch (error) {
+    console.error("Database error in getExistingRefund:", error);
+    throw error;
   }
+}
 
   async getPaymentByEnrollment(enrollmentId) {
     try {
