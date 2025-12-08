@@ -8,14 +8,13 @@ const {
   archiveExamService,
   unarchiveExamService,
   getArchivedExamsService,
+  createFullExamService ,
 
   // Exam Instances
   createExamInstanceService,
   updateExamInstanceService,
   deleteExamInstanceService,
   getExamInstancesService,
-  getAvailableClassesService,
-  getAvailableUnitsService,
   checkAndUpdateInstanceStatusService,
 
   // Section Management
@@ -46,7 +45,7 @@ const {
   importQuestionsFromExcel,
 
 } = require("../services/instructorExamService");
-
+const instructorExamRepository = require("../repositories/instructorExamRepository");
 // ==================== EXAM CONTROLLERS ====================
 
 /**
@@ -335,51 +334,63 @@ const getExamInstances = async (req, res) => {
   }
 };
 
-/**
- * Lấy danh sách classes có thể gán
- * GET /api/instructor/available-classes
- */
-const getAvailableClasses = async (req, res) => {
+
+const getClassesByCourse = async (req, res) => {
   try {
-    const instructorAccId = req.user.id;
+    const { courseId } = req.params;
 
-    const classes = await getAvailableClassesService(instructorAccId);
+    if (!courseId) {
+      return res.status(400).json({
+        success: false,
+        message: "courseId is required",
+      });
+    }
 
-    res.status(200).json({
+    const classes = await instructorExamRepository.getClassesByCourse(courseId);
+
+    return res.status(200).json({
       success: true,
-      data: classes,
-      total: classes.length
+      data: classes
     });
-  } catch (err) {
-    res.status(err.status || 500).json({
+
+  } catch (error) {
+    console.error("getClassesByCourse ERROR:", error);
+    return res.status(500).json({
       success: false,
-      message: err.message || "Lỗi khi lấy danh sách lớp học"
+      message: error.message || "Server error",
     });
   }
 };
 
-/**
- * Lấy danh sách units có thể gán
- * GET /api/instructor/available-units
- */
-const getAvailableUnits = async (req, res) => {
+
+
+const getUnitByCourse = async (req, res) => {
   try {
-    const instructorAccId = req.user.id;
+    const { courseId } = req.params;
 
-    const units = await getAvailableUnitsService(instructorAccId);
+    if (!courseId) {
+      return res.status(400).json({
+        success: false,
+        message: "courseId is required",
+      });
+    }
 
-    res.status(200).json({
+    const units = await instructorExamRepository.getUnitByCourse(courseId);
+
+    return res.json({
       success: true,
-      data: units,
-      total: units.length
+      units,
     });
-  } catch (err) {
-    res.status(err.status || 500).json({
+
+  } catch (error) {
+    console.error("getUnitsByCourse ERROR:", error);
+    return res.status(500).json({
       success: false,
-      message: err.message || "Lỗi khi lấy danh sách units"
+      message: error.message,
     });
   }
 };
+
 
 /**
  * Auto update exam instance status (Scheduled -> Open -> Closed)
@@ -878,6 +889,55 @@ const createQuestionAndAssignToSection = async (req, res) => {
   }
 };
 
+const getInstructorCourses = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+
+    const instructorId =
+      await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+
+    if (!instructorId) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy thông tin giảng viên"
+      });
+    }
+
+    const courses = await instructorExamRepository.getCoursesByInstructor(instructorId);
+
+    res.status(200).json({
+      success: true,
+      data: courses
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Không thể lấy danh sách khóa học"
+    });
+  }
+};
+
+const createFullExamController = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    const payload = req.body;
+    const result = await createFullExamService(instructorAccId, payload);
+    return res.status(201).json({
+      success: true,
+      message: "Tạo bài thi,sections,instance thành công",
+      data: result
+    });
+
+  } catch (err) {
+    console.error("Create Full Exam Error:", err);
+    return res.status(400).json({ 
+      success: false, 
+      message: err.message 
+    });
+  }
+};
+
 
 // ==================== EXPORTS ====================
 
@@ -891,15 +951,18 @@ module.exports = {
   archiveExam,
   unarchiveExam,
   getArchivedExams,
+  createFullExamController,
 
   // Exam Instances
   createExamInstance,
   updateExamInstance,
   deleteExamInstance,
   getExamInstances,
-  getAvailableClasses,
-  getAvailableUnits,
+  getClassesByCourse,
+  getUnitByCourse,
   checkAndUpdateInstanceStatus,
+  getInstructorCourses,
+  getUnitByCourse,
 
   // Section Management
   createExamSection,

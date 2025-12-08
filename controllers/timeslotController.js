@@ -1,4 +1,4 @@
-const timeslotService = require("../services/timeslotService");
+const timeslotService = require("../services/TimeslotService");
 
 const COLORS = {
   red: "\x1b[31m",

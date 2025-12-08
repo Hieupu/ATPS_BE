@@ -98,15 +98,24 @@ class InstructorUnitRepository {
 
   async getAssignmentsByUnitId(unitId) {
     const db = await connectDB();
+
     const [rows] = await db.query(
       `
       SELECT 
-        AssignmentID, InstructorID, UnitID, Title, Description, Deadline,
-        FileURL, Status, Type, ShowAnswersAfter, MaxDuration, MediaURL
-      FROM assignment
-      WHERE UnitID = ?
-        AND Status != 'deleted'
-      ORDER BY AssignmentID ASC
+        e.ExamID AS AssignmentID, 
+        e.InstructorID, 
+        ei.UnitId AS UnitID, 
+        e.Title, 
+        e.Description, 
+        ei.EndTime AS Deadline, 
+        e.Status, 
+        e.Type
+      FROM exam e
+      JOIN exam_instances ei ON e.ExamID = ei.ExamId
+      WHERE ei.UnitId = ?
+        AND e.Type = 'Assignment'
+        AND e.Status != 'Archived' 
+      ORDER BY e.ExamID ASC
       `,
       [unitId]
     );

@@ -7,7 +7,7 @@
  * - Các validation liên quan
  */
 
-const classService = require("../services/classService");
+const classService = require("../services/ClassService");
 const newsService = require("../services/newsService");
 const sessionService = require("../services/sessionService");
 const classScheduleService = require("../services/classScheduleService");
@@ -245,10 +245,10 @@ describe("Class, News, and Session Tests", () => {
 
     test("Lấy danh sách lớp học thành công", async () => {
       const classes = await classService.getAllClasses();
-      
+
       expect(Array.isArray(classes)).toBe(true);
       expect(classes.length).toBeGreaterThanOrEqual(0);
-      
+
       // Kiểm tra structure của class object
       if (classes.length > 0) {
         const firstClass = classes[0];
@@ -269,7 +269,7 @@ describe("Class, News, and Session Tests", () => {
       }
 
       const classData = await classService.getClassById(testClassId);
-      
+
       expect(classData).toBeDefined();
       expect(classData.ClassID).toBe(testClassId);
       expect(classData.Name).toBeDefined();
@@ -277,7 +277,7 @@ describe("Class, News, and Session Tests", () => {
 
     test("Lấy lớp học theo ID thất bại khi ID không tồn tại", async () => {
       const classData = await classService.getClassById(99999);
-      
+
       expect(classData).toBeNull();
     });
 
@@ -297,9 +297,9 @@ describe("Class, News, and Session Tests", () => {
       };
 
       const result = await classService.updateClass(updateClassId, updateData);
-      
+
       expect(result).toBeDefined();
-      
+
       // Verify update by getting the class again
       const updatedClass = await classService.getClassById(updateClassId);
       expect(updatedClass).toBeDefined();
@@ -332,10 +332,13 @@ describe("Class, News, and Session Tests", () => {
         Status: CLASS_STATUS.APPROVED,
       };
 
-      const result = await classService.updateClass(statusUpdateClassId, updateData);
-      
+      const result = await classService.updateClass(
+        statusUpdateClassId,
+        updateData
+      );
+
       expect(result).toBeDefined();
-      
+
       // Verify status update
       const updatedClass = await classService.getClassById(statusUpdateClassId);
       expect(updatedClass).toBeDefined();

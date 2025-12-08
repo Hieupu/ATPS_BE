@@ -1,5 +1,5 @@
-const classService = require("../services/classService");
-const courseService = require("../services/courseService");
+const classService = require("../services/ClassService");
+const courseService = require("../services/CourseService");
 const instructorService = require("../services/instructorService");
 const enrollmentService = require("../services/enrollmentService");
 const logService = require("../services/logService");
@@ -575,7 +575,10 @@ const classController = {
       });
 
       if (missingFields.length > 0) {
-        console.error("[classController] ERROR: Missing required fields:", missingFields);
+        console.error(
+          "[classController] ERROR: Missing required fields:",
+          missingFields
+        );
         console.error("[classController] Field values:", {
           Name: className,
           InstructorID,
@@ -650,20 +653,23 @@ const classController = {
       }
 
       // Tạo lớp với status DRAFT (dbver5: không có ZoomURL)
-      console.log("[classController] Calling classService.createClass with data:", {
-        Name: className,
-        CourseID: CourseID || null,
-        InstructorID,
-        Fee: Fee || null,
-        OpendatePlan: opendatePlan,
-        EnddatePlan: EnddatePlan || null,
-        Numofsession: numofsessionValue,
-        Maxstudent: maxstudentValue,
-        ZoomID: ZoomID || null,
-        Zoompass: Zoompass || null,
-        Status: "DRAFT",
-      });
-      
+      console.log(
+        "[classController] Calling classService.createClass with data:",
+        {
+          Name: className,
+          CourseID: CourseID || null,
+          InstructorID,
+          Fee: Fee || null,
+          OpendatePlan: opendatePlan,
+          EnddatePlan: EnddatePlan || null,
+          Numofsession: numofsessionValue,
+          Maxstudent: maxstudentValue,
+          ZoomID: ZoomID || null,
+          Zoompass: Zoompass || null,
+          Status: "DRAFT",
+        }
+      );
+
       const classData = await classService.createClass({
         Name: className,
         CourseID: CourseID || null,
@@ -678,19 +684,25 @@ const classController = {
         Status: "DRAFT",
       });
 
-      console.log("[classController] classService.createClass result:", JSON.stringify(classData, null, 2));
+      console.log(
+        "[classController] classService.createClass result:",
+        JSON.stringify(classData, null, 2)
+      );
 
       const classId = classData?.ClassID;
       const classDisplayName = className || `Class ${classId}`;
-      
+
       console.log("[classController] Created class with ID:", classId);
 
       // Tạo sessions nếu có trong request body
       console.log("[classController] Checking for sessions in request body...");
       console.log("[classController] req.body.sessions:", req.body.sessions);
-      console.log("[classController] Is array?", Array.isArray(req.body.sessions));
+      console.log(
+        "[classController] Is array?",
+        Array.isArray(req.body.sessions)
+      );
       console.log("[classController] Length:", req.body.sessions?.length || 0);
-      
+
       let createdSessions = [];
       if (
         req.body.sessions &&
@@ -800,15 +812,25 @@ const classController = {
         sessionsCreated: createdSessions.length,
         sessions: createdSessions.length > 0 ? createdSessions : undefined,
       };
-      
-      console.log("[classController] ========== createClass SUCCESS ==========");
-      console.log("[classController] Response data:", JSON.stringify(responseData, null, 2));
+
+      console.log(
+        "[classController] ========== createClass SUCCESS =========="
+      );
+      console.log(
+        "[classController] Response data:",
+        JSON.stringify(responseData, null, 2)
+      );
       console.log("[classController] ClassID:", classId);
-      console.log("[classController] Sessions created:", createdSessions.length);
-      
+      console.log(
+        "[classController] Sessions created:",
+        createdSessions.length
+      );
+
       res.status(201).json(responseData);
     } catch (error) {
-      console.error("[classController] ========== createClass ERROR ==========");
+      console.error(
+        "[classController] ========== createClass ERROR =========="
+      );
       console.error("[classController] Error creating class:", error);
       console.error("[classController] Error name:", error?.name);
       console.error("[classController] Error message:", error?.message);
