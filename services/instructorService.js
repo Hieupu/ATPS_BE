@@ -275,7 +275,7 @@ class InstructorService {
     }
 
     const sessionRepository = require("../repositories/sessionRepository");
-    const instructorTimeslotRepository = require("../repositories/instructorTimeslotRepository");
+    const instructorTimeslotRepository = require("../repositories/InstructorTimeslotRepository");
 
     // Lấy sessions trong khoảng thời gian
     const sessions = await sessionRepository.findByInstructorAndDateRange(

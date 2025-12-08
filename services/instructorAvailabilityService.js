@@ -1,4 +1,4 @@
-const instructorTimeslotRepository = require("../repositories/instructorTimeslotRepository");
+const instructorTimeslotRepository = require("../repositories/InstructorTimeslotRepository");
 const instructorRepository = require("../repositories/instructorRepository");
 const sessionRepository = require("../repositories/sessionRepository");
 const notificationRepository = require("../repositories/notificationRepository");

@@ -3,7 +3,7 @@ const classService = require("./ClassService");
 const classRepository = require("../repositories/classRepository");
 const sessionRepository = require("../repositories/sessionRepository");
 const timeslotRepository = require("../repositories/timeslotRepository");
-const instructorTimeslotRepository = require("../repositories/instructorTimeslotRepository");
+const instructorTimeslotRepository = require("../repositories/InstructorTimeslotRepository");
 const enrollmentRepository = require("../repositories/enrollmentRepository");
 const {
   validateDateDayConsistency,
