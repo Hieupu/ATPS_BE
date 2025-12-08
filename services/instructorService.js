@@ -252,6 +252,150 @@ class InstructorService {
       throw error;
     }
   }
+
+  // Check timeslot availability theo logic trong Logicforavailableslot.md
+  async checkTimeslotAvailability(params) {
+    const {
+      InstructorID,
+      dayOfWeek,
+      timeslotId,
+      startDate,
+      endDatePlan,
+      instructorType,
+    } = params;
+
+    if (
+      !InstructorID ||
+      dayOfWeek === undefined ||
+      !timeslotId ||
+      !startDate ||
+      !endDatePlan
+    ) {
+      throw new Error("Thiếu tham số bắt buộc");
+    }
+
+    const sessionRepository = require("../repositories/sessionRepository");
+    const instructorTimeslotRepository = require("../repositories/instructorTimeslotRepository");
+
+    // Lấy sessions trong khoảng thời gian
+    const sessions = await sessionRepository.findByInstructorAndDateRange(
+      InstructorID,
+      startDate,
+      endDatePlan
+    );
+
+    // Lấy blocks (InstructorTimeslot) trong khoảng thời gian
+    const blocks = await instructorTimeslotRepository.findByDateRange(
+      startDate,
+      endDatePlan,
+      InstructorID
+    );
+
+    const reasons = [];
+    let isLocked = false;
+
+    // Helper function để format date
+    const formatDate = (date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
+    let current = new Date(startDate);
+    const end = new Date(endDatePlan);
+
+    while (current <= end) {
+      const dateStr = formatDate(current);
+      const dow = current.getDay();
+
+      // Chỉ check các ngày có dayOfWeek khớp
+      if (dow !== dayOfWeek) {
+        current.setDate(current.getDate() + 1);
+        continue;
+      }
+
+      const block = blocks.find(
+        (x) => x.Date === dateStr && x.TimeslotID === timeslotId
+      );
+
+      // HOLIDAY → khóa cứng (áp dụng cho cả fulltime và parttime)
+      if (block && block.Status === "Holiday") {
+        isLocked = true;
+        reasons.push({
+          type: "holiday",
+          message: `Ngày ${dateStr} là ngày nghỉ (HOLIDAY) - không thể dạy.`,
+        });
+        break;
+      }
+
+      // Kiểm tra session trùng timeslot
+      const hasSession = sessions.some(
+        (s) => s.Date === dateStr && s.TimeslotID === timeslotId
+      );
+
+      // FULLTIME logic
+      if (instructorType === "fulltime") {
+        // FULLTIME logic đặc biệt cho chủ nhật
+        if (dow === 0) {
+          // Chủ nhật: phải AVAILABLE
+          if (block?.Status !== "Available") {
+            isLocked = true;
+            reasons.push({
+              type: "invalid_sunday",
+              message: `Chủ nhật ${dateStr} không có trạng thái AVAILABLE.`,
+            });
+            break;
+          }
+
+          if (hasSession) {
+            isLocked = true;
+            reasons.push({
+              type: "session_conflict",
+              message: `Chủ nhật ${dateStr} giảng viên đã có lớp dạy.`,
+            });
+            break;
+          }
+        } else {
+          // Ngày thường: chỉ cần không trùng session
+          if (hasSession) {
+            isLocked = true;
+            reasons.push({
+              type: "session_conflict",
+              message: `Ngày ${dateStr} giảng viên đã có lớp ở ca này.`,
+            });
+            break;
+          }
+        }
+      }
+      // PARTTIME logic
+      else if (instructorType === "parttime") {
+        // AVAILABLE là bắt buộc cho PARTTIME
+        if (!block || block.Status !== "Available") {
+          isLocked = true;
+          reasons.push({
+            type: "not_available",
+            message: `Ngày ${dateStr} không có trạng thái AVAILABLE.`,
+          });
+          break;
+        }
+
+        // Trùng session
+        if (hasSession) {
+          isLocked = true;
+          reasons.push({
+            type: "session_conflict",
+            message: `Ngày ${dateStr} giảng viên đã có lớp học.`,
+          });
+          break;
+        }
+      }
+
+      current.setDate(current.getDate() + 1);
+    }
+
+    return { isLocked, reasons, available: !isLocked };
+  }
 }
 
 module.exports = new InstructorService();

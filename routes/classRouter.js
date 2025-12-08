@@ -60,7 +60,7 @@ router.post(
 );
 
 // Lấy lý do chi tiết tại sao một timeslot bị khóa
-router.get(
+router.post(
   "/timeslot-lock-reasons",
   verifyToken,
   authorizeFeature("admin"),
@@ -146,11 +146,23 @@ router.get(
   classScheduleController.getHolidayDates
 );
 
-// Instructor APIs
+// Instructor APIs - Allow both admin and instructor to access
 router.get(
   "/instructor/:instructorId",
   verifyToken,
-  authorizeFeature("instructor"),
+  (req, res, next) => {
+    const userFeatures = req.user?.features || [];
+    if (
+      !userFeatures.includes("instructor") &&
+      !userFeatures.includes("admin")
+    ) {
+      return res.status(403).json({
+        message:
+          "Access denied: missing feature permission 'instructor' or 'admin'",
+      });
+    }
+    next();
+  },
   classController.getClassesByInstructorId
 );
 
