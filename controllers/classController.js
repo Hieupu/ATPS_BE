@@ -1,4 +1,4 @@
-const classService = require("../services/classService");
+const classService = require("../services/ClassService");
 const courseService = require("../services/CourseService");
 const instructorService = require("../services/instructorService");
 const enrollmentService = require("../services/enrollmentService");

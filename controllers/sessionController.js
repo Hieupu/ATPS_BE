@@ -1,5 +1,5 @@
 const sessionService = require("../services/sessionService");
-const classService = require("../services/classService");
+const classService = require("../services/ClassService");
 const instructorService = require("../services/instructorService");
 
 const sessionController = {

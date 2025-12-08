@@ -1,7 +1,7 @@
 const classScheduleService = require("../services/classScheduleService");
 const classCreationWizardService = require("../services/classCreationWizardService");
 const instructorLeaveService = require("../services/instructorLeaveService");
-const classService = require("../services/classService");
+const classService = require("../services/ClassService");
 
 const classScheduleController = {
   // Tạo lịch hàng loạt
