@@ -351,14 +351,6 @@ const classScheduleController = {
         TimeslotsByDay,
       } = req.body;
 
-      console.log("[analyzeBlockedDays] START", {
-        InstructorID,
-        OpendatePlan,
-        Numofsession,
-        daysOfWeekCount: Array.isArray(DaysOfWeek) ? DaysOfWeek.length : 0,
-        hasTimeslotsByDay: !!TimeslotsByDay,
-      });
-
       if (!InstructorID || !OpendatePlan || !Numofsession) {
         return res.status(400).json({
           success: false,
@@ -377,16 +369,6 @@ const classScheduleController = {
 
       const durationMs = Date.now() - startTime;
       const blockedDaysKeys = Object.keys(result?.blockedDays || {});
-      console.log("[analyzeBlockedDays] DONE", {
-        InstructorID,
-        OpendatePlan,
-        Numofsession,
-        daysOfWeek: DaysOfWeek,
-        blockedDaysCount: blockedDaysKeys.length,
-        totalManualConflicts: result?.summary?.totalManualConflicts ?? 0,
-        totalSessionConflicts: result?.summary?.totalSessionConflicts ?? 0,
-        durationMs,
-      });
 
       res.json({
         success: true,

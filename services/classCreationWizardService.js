@@ -1356,26 +1356,8 @@ async function getTimeslotLockReasons(params, depth = 0) {
     throw new Error("Không thể tìm đủ số buổi trong thời gian hợp lý");
   }
 
-  if (
-    !InstructorID ||
-    dayOfWeek === undefined ||
-    !timeslotId ||
-    !startDate ||
-    !endDatePlan ||
-    !numofsession
-  ) {
-    throw new Error(
-      "Thiếu tham số bắt buộc: InstructorID, dayOfWeek, timeslotId, startDate, endDatePlan, numofsession"
-    );
-  }
-
-  const reasons = [];
-  let isLocked = false;
-
   try {
-    // ======================
-    // 1️⃣ LẤY BLOCK & HOLIDAY
-    // ======================
+
     const blocks = await instructorTimeslotRepository.findByDateRange(
       startDate,
       endDatePlan,
@@ -1383,45 +1365,22 @@ async function getTimeslotLockReasons(params, depth = 0) {
     );
 
     const holidayMap = new Map();
-    const invalidDates = new Map();
+    const blockMap = new Map(); 
 
-    blocks
-      .filter((b) => b.TimeslotID === timeslotId)
-      .forEach((b) => {
-        console.log("b", b);
-        const dateStr = b.Date;
-        if (b.Status === "Holiday") {
-          holidayMap.set(dateStr, true);
-        } else if (b.Status !== "Available") {
-          // ➤ BUỔI KHÔNG HỢP LỆ
-          invalidDates.set(dateStr, b.Status);
-        } else if (b.size() === 0) {
-          invalidDates.set("SUNDAY", "Default");
-        }
-      });
+    const slotBlocks = blocks.filter((b) => b.TimeslotID === timeslotId);
 
-    // Nếu có ngày invalid → dừng ngay, không duyệt tiếp
-    if (invalidDates.size > 0) {
-      return {
-        isLocked: true,
-        reasons: [
-          {
-            type: "invalid_timeslot",
-            message: `Có ${invalidDates.size} buổi không hợp lệ`,
-            invalidDates: [...invalidDates.entries()],
-          },
-        ],
-        summary: {
-          totalValidSessions: 0,
-          holidaysSkipped: holidayMap.size,
-          invalidCount: invalidDates.size,
-        },
-      };
-    }
+    console.log(slotBlocks);
 
-    // ======================
-    // 2️⃣ CHECK SESSION CONFLICT
-    // ======================
+    slotBlocks.forEach((b) => {
+      const dateStr = new Date(b.Date).toISOString().slice(0, 10);
+
+      blockMap.set(dateStr, b.Status);
+
+      if (b.Status === "Holiday") {
+        holidayMap.set(dateStr, true);
+      }
+    });
+
     const sessions = await sessionRepository.findByInstructorAndDateRange(
       InstructorID,
       startDate,
@@ -1433,7 +1392,6 @@ async function getTimeslotLockReasons(params, depth = 0) {
     );
 
     if (conflictSessions.length > 0) {
-      // ➤ GẶP SESSION TRÙNG → LOCK NGAY
       return {
         isLocked: true,
         reasons: [
@@ -1443,49 +1401,85 @@ async function getTimeslotLockReasons(params, depth = 0) {
             sessions: conflictSessions.slice(0, 5),
           },
         ],
-        summary: {
-          totalValidSessions: 0,
-          holidaysSkipped: holidayMap.size,
-          conflictCount: conflictSessions.length,
-        },
       };
     }
 
-    // ======================
-    // 3️⃣ ĐẾM BUỔI HỢP LỆ
-    // ======================
     let validCount = 0;
     let holidaysSkipped = 0;
-    const start = new Date(startDate);
+
+    let current = new Date(startDate);
     const end = new Date(endDatePlan);
 
-    let current = new Date(start);
     while (current <= end) {
       if (current.getDay() === dayOfWeek) {
         const dateStr = current.toISOString().slice(0, 10);
-        if (holidayMap.has(dateStr)) {
-          holidaysSkipped++; // holiday bỏ qua
-        } else {
-          validCount++;
-          if (validCount >= numofsession) {
+        const weekday = current.getDay(); // 0 = Sunday
+
+        const status = blockMap.get(dateStr);
+        const isHoliday = holidayMap.has(dateStr);
+
+        if (isHoliday) {
+          holidaysSkipped++;
+        }
+
+        else if (weekday === 0) {
+          if (!status) {
             return {
-              isLocked: false,
-              reasons: [],
-              summary: {
-                totalValidSessions: validCount,
-                holidaysSkipped,
-                enoughSessions: true,
-              },
+              isLocked: true,
+              reasons: [
+                {
+                  type: "sunday_missing_block",
+                  message: `Chủ nhật ${dateStr} không có block → bị chặn`,
+                },
+              ],
+            };
+          }
+
+          if (status !== "Available" && status !== "AVAILABLE") {
+            return {
+              isLocked: true,
+              reasons: [
+                {
+                  type: "sunday_blocked",
+                  message: `Chủ nhật ${dateStr} bị block với trạng thái ${status}`,
+                },
+              ],
+            };
+          }
+
+          validCount++;
+        }
+
+        else {
+          if (!status || status === "Available" || status === "AVAILABLE") {
+            validCount++;
+          } else {
+            return {
+              isLocked: true,
+              reasons: [
+                {
+                  type: "weekday_blocked",
+                  message: `Ngày ${dateStr} bị block (${status})`,
+                },
+              ],
             };
           }
         }
+
+        if (validCount >= numofsession) {
+          return {
+            isLocked: false,
+            summary: {
+              totalValidSessions: validCount,
+              holidaysSkipped,
+            },
+          };
+        }
       }
+
       current.setDate(current.getDate() + 1);
     }
 
-    // ======================
-    // 4️⃣ CHƯA ĐỦ BUỔI → MỞ RỘNG 1 TUẦN RỒI LÀM TIẾP
-    // ======================
     const newEndDatePlan = new Date(endDatePlan);
     newEndDatePlan.setDate(newEndDatePlan.getDate() + 7);
 
@@ -1500,6 +1494,7 @@ async function getTimeslotLockReasons(params, depth = 0) {
     throw new Error(`Lỗi khi lấy lý do chi tiết: ${error.message}`);
   }
 }
+
 
 /**
  * Logic mới: Validate timeslot pattern cho lớp DRAFT

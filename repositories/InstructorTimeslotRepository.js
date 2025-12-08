@@ -279,7 +279,7 @@ class InstructorTimeslotRepository {
           t.Day
         FROM instructortimeslot it
         LEFT JOIN timeslot t ON it.TimeslotID = t.TimeslotID
-        WHERE it.Date >= ? AND it.Date <= ?
+        WHERE it.Date >= ? AND it.Date <= ? 
       `;
       const params = [startDate, endDate];
 
