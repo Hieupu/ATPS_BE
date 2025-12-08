@@ -7,108 +7,127 @@ class InstructorClassRosterRepository {
   async getStudents(classId) {
     const db = await connectDB();
 
-    // BƯỚC 1: Lấy thông tin Lớp & Thống kê Session
-    // Logic: Query bảng Class để lấy InstructorID chuẩn, sau đó dùng subquery để đếm session.
     const [classStats] = await db.query(
-      `SELECT
+      `SELECT 
             c.InstructorID,
-            c.Numofsession, -- Số buổi dự kiến (theo giáo trình)
-            
-            -- Đếm session thực tế (Phải khớp cả ClassID lẫn InstructorID)
-            (SELECT COUNT(DISTINCT SessionID) 
-             FROM session s 
-             WHERE s.ClassID = c.ClassID AND s.InstructorID = c.InstructorID) as RealSessionCount,
-
-            -- Đếm session đã diễn ra (Date <= Hôm nay)
-            (SELECT COUNT(DISTINCT SessionID) 
-             FROM session s 
-             WHERE s.ClassID = c.ClassID AND s.InstructorID = c.InstructorID AND s.Date <= CURDATE()) as TotalOccurred
+            c.Numofsession, 
+            (SELECT COUNT(DISTINCT SessionID) FROM session s WHERE s.ClassID = c.ClassID AND s.InstructorID = c.InstructorID) as RealSessionCount
          FROM class c
          WHERE c.ClassID = ?`,
       [classId]
     );
 
-    // Kiểm tra nếu lớp không tồn tại
     if (classStats.length === 0) return [];
 
     const info = classStats[0];
+    const instructorId = info.InstructorID;
     const realSessions = info.RealSessionCount || 0;
     const plannedSessions = info.Numofsession || 0;
-    const totalOccurred = info.TotalOccurred || 0;
-    const instructorId = info.InstructorID; // <--- Lấy ID giảng viên để dùng cho query dưới
-
-    // Logic Fallback: Ưu tiên đếm thực tế, nếu chưa có thì lấy dự kiến
-    // (Giúp hiển thị đúng "0/20" khi lớp mới tạo chưa xếp lịch)
     const totalCurriculum = realSessions > 0 ? realSessions : plannedSessions;
 
-    // BƯỚC 2: Lấy danh sách sinh viên
-    // FIX: Thêm điều kiện s.InstructorID = ? vào subquery đếm vắng
-    const [rows] = await db.query(
-      `SELECT
-        l.LearnerID,
-        l.FullName,
-        l.ProfilePicture,
-        a.Email,
-        a.Phone,
-        (
-            SELECT COUNT(DISTINCT atd.SessionID)
-            FROM attendance atd
-            JOIN session s ON atd.SessionID = s.SessionID
-            WHERE atd.LearnerID = l.LearnerID
-            AND s.ClassID = e.ClassID
-            AND s.InstructorID = ?  -- <--- QUAN TRỌNG: Chỉ đếm vắng các buổi của GV này
-            AND atd.Status = 'absent'
-            AND s.Date <= CURDATE()
-        ) AS AbsentCount
-       FROM enrollment e
-       JOIN learner l ON e.LearnerID = l.LearnerID
-       JOIN account a ON l.AccID = a.AccID
-       WHERE e.ClassID = ? AND e.Status = 'Enrolled'
-       ORDER BY l.FullName ASC`,
-      [instructorId, classId] // Lưu ý thứ tự tham số: InstructorID trước (cho subquery), ClassID sau (cho WHERE chính)
+    const [allSessions] = await db.query(
+      `SELECT SessionID, Date, DAYNAME(Date) as DayOfWeek
+         FROM session 
+         WHERE ClassID = ? AND InstructorID = ?
+         ORDER BY Date ASC`,
+      [classId, instructorId]
     );
 
-    // BƯỚC 3: Map dữ liệu
-    return rows.map((row) => {
-      const absentCount = row.AbsentCount || 0;
+    const [attendanceRecords] = await db.query(
+      `SELECT atd.LearnerID, atd.SessionID, atd.Status
+         FROM attendance atd
+         JOIN session s ON atd.SessionID = s.SessionID
+         WHERE s.ClassID = ? AND s.InstructorID = ?`,
+      [classId, instructorId]
+    );
 
-      // Present = Tổng đã diễn ra - Số vắng
-      // Math.max(0) để đảm bảo an toàn tuyệt đối
-      const presentCount = Math.max(0, totalOccurred - absentCount);
+    const attendanceMap = new Map();
+    attendanceRecords.forEach((rec) => {
+      const normalizedStatus = rec.Status ? rec.Status.toLowerCase() : "";
+      attendanceMap.set(`${rec.LearnerID}-${rec.SessionID}`, normalizedStatus);
+    });
 
-      // Tính % Tiến độ (So với tổng khóa)
-      const courseProgress =
+    const [students] = await db.query(
+      `SELECT 
+          l.LearnerID, l.FullName, l.ProfilePicture, a.Email, a.Phone
+        FROM enrollment e
+        JOIN learner l ON e.LearnerID = l.LearnerID
+        JOIN account a ON l.AccID = a.AccID
+        WHERE e.ClassID = ? AND e.Status = 'Enrolled'
+        ORDER BY l.FullName ASC`,
+      [classId]
+    );
+
+    return students.map((std) => {
+      let presentCount = 0;
+      let timelineOccurred = 0;
+
+      const sessionDetails = allSessions.map((session) => {
+        const sessionKey = `${std.LearnerID}-${session.SessionID}`;
+        const status = attendanceMap.get(sessionKey);
+
+        const sessionDate = new Date(session.Date);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        sessionDate.setHours(0, 0, 0, 0);
+
+        const isPast = sessionDate <= now;
+
+        if (isPast) {
+          timelineOccurred++;
+        }
+
+        let displayStatus = null;
+
+        if (status === "present") {
+          displayStatus = true;
+          if (isPast) {
+            presentCount++;
+          }
+        } else if (status === "absent") {
+          displayStatus = false;
+        }
+
+        return {
+          SessionID: session.SessionID,
+          Date: session.Date,
+          DayOfWeek: session.DayOfWeek,
+          IsPresent: displayStatus,
+        };
+      });
+
+      const attendanceRate =
+        timelineOccurred > 0
+          ? Math.round((presentCount / timelineOccurred) * 100)
+          : 0;
+
+      const studentProgress =
         totalCurriculum > 0
           ? Math.round((presentCount / totalCurriculum) * 100)
           : 0;
 
-      // Tính % Chuyên cần (So với số buổi đã qua)
-      const attendanceRate =
-        totalOccurred > 0
-          ? Math.round((presentCount / totalOccurred) * 100)
-          : 100;
-
       return {
-        LearnerID: row.LearnerID,
-        FullName: row.FullName,
-        ProfilePicture: row.ProfilePicture,
+        LearnerID: std.LearnerID,
+        FullName: std.FullName,
+        ProfilePicture: std.ProfilePicture,
         Contact: {
-          Email: row.Email || "",
-          Phone: row.Phone || "",
+          Email: std.Email || "",
+          Phone: std.Phone || "",
         },
         Attendance: {
-          Absent: absentCount,
           Present: presentCount,
-          TotalOccurred: totalOccurred,
+          TotalOccurred: timelineOccurred,
           TotalCurriculum: totalCurriculum,
           Rate: attendanceRate,
-          Progress: courseProgress,
+          Progress: studentProgress,
+          History: sessionDetails,
         },
       };
     });
   }
 
   //Lịch buổi học theo classid va instructorid
+
   async getSessions(classId, instructorId) {
     const db = await connectDB();
     const [rows] = await db.query(
@@ -119,12 +138,19 @@ class InstructorClassRosterRepository {
         s.ZoomUUID,
         t.StartTime,
         t.EndTime,
-        t.Day
-     FROM session s
-     JOIN timeslot t ON s.TimeslotID = t.TimeslotID
-     WHERE s.ClassID = ?
-     AND s.InstructorID = ?
-     ORDER BY s.Date ASC, t.StartTime ASC`,
+        t.Day,
+        scr.Status AS ChangeReqStatus 
+      FROM session s
+      JOIN timeslot t ON s.TimeslotID = t.TimeslotID
+      
+      
+      LEFT JOIN session_change_request scr 
+        ON s.SessionID = scr.SessionID 
+        AND scr.Status = 'PENDING'
+        
+      WHERE s.ClassID = ?
+      AND s.InstructorID = ?
+      ORDER BY s.Date ASC, t.StartTime ASC`,
       [classId, instructorId]
     );
 
@@ -136,8 +162,11 @@ class InstructorClassRosterRepository {
       startTime: row.StartTime,
       endTime: row.EndTime,
       dayOfWeek: row.Day,
+
+      changeReqStatus: row.ChangeReqStatus || null,
     }));
   }
+
   //lấy buổi học theo instructor
   async getSessionsByInstructor(instructorId) {
     const db = await connectDB();
@@ -153,10 +182,17 @@ class InstructorClassRosterRepository {
         c.Name,
         c.CourseID,
         c.ZoomID, 
-        c.Zoompass   
+        c.Zoompass,
+        scr.Status AS ChangeReqStatus  
       FROM session s
       JOIN timeslot t ON s.TimeslotID = t.TimeslotID
       JOIN class c ON s.ClassID = c.ClassID
+      
+   
+      LEFT JOIN session_change_request scr 
+        ON s.SessionID = scr.SessionID 
+        AND scr.Status = 'PENDING'
+      
       WHERE s.InstructorID = ?
       ORDER BY s.Date ASC, t.StartTime ASC`,
       [instructorId]
@@ -172,11 +208,13 @@ class InstructorClassRosterRepository {
       classId: row.ClassID,
       className: row.Name,
       courseId: row.CourseID,
-
       ZoomID: row.ZoomID,
       ZoomPass: row.Zoompass,
+
+      changeReqStatus: row.ChangeReqStatus || null,
     }));
   }
+
   async getTotalEnrolledStudents(classId) {
     const db = await connectDB();
     const [[row]] = await db.query(
@@ -193,30 +231,30 @@ class InstructorClassRosterRepository {
     const [[row]] = await db.query(
       `SELECT COUNT(*) AS count 
        FROM attendance 
-       WHERE SessionID = ? AND Status = 'PRESENT'`,
+       WHERE SessionID = ?`,
       [sessionId]
     );
     return Number(row.count) || 0;
   }
 
-  // 1. Lấy danh sách rảnh
   async getInstructorAvailability(instructorId, startDate, endDate) {
     const db = await connectDB();
     const [rows] = await db.query(
       `SELECT 
           DATE_FORMAT(i.Date, '%Y-%m-%d') as date,
-       
+          inst.Type as instructorType,
           CASE 
             WHEN t.StartTime = '08:00:00' THEN 1
             WHEN t.StartTime = '10:20:00' THEN 2
             WHEN t.StartTime = '13:00:00' THEN 3
             WHEN t.StartTime = '15:20:00' THEN 4
-            WHEN t.StartTime = '17:40:00' THEN 5
+            WHEN t.StartTime = '18:00:00' THEN 5
             WHEN t.StartTime = '20:00:00' THEN 6
             ELSE 0 
           END as timeslotId
        FROM instructortimeslot i
        JOIN timeslot t ON i.TimeslotID = t.TimeslotID
+       JOIN instructor inst ON i.InstructorID = inst.InstructorID
        WHERE i.InstructorID = ? 
          AND i.Date BETWEEN ? AND ? 
          AND i.Status = 'AVAILABLE'`,
@@ -225,7 +263,6 @@ class InstructorClassRosterRepository {
     return rows;
   }
 
-  // 2. Lấy danh sách ĐANG DẠY
   async getInstructorOccupiedSlots(instructorId, startDate, endDate) {
     const db = await connectDB();
     const [rows] = await db.query(
@@ -236,7 +273,7 @@ class InstructorClassRosterRepository {
             WHEN t.StartTime = '10:20:00' THEN 2
             WHEN t.StartTime = '13:00:00' THEN 3
             WHEN t.StartTime = '15:20:00' THEN 4
-            WHEN t.StartTime = '17:40:00' THEN 5
+            WHEN t.StartTime = '18:00:00' THEN 5
             WHEN t.StartTime = '20:00:00' THEN 6
             ELSE 0 
           END as timeslotId
@@ -249,7 +286,6 @@ class InstructorClassRosterRepository {
     return rows;
   }
 
-  // 3. Cập nhật lịch rảnh
   async saveInstructorAvailability(instructorId, startDate, endDate, newSlots) {
     const db = await connectDB();
     const connection = await db.getConnection();
@@ -266,7 +302,7 @@ class InstructorClassRosterRepository {
               WHEN t.StartTime = '10:20:00' THEN 2
               WHEN t.StartTime = '13:00:00' THEN 3
               WHEN t.StartTime = '15:20:00' THEN 4
-              WHEN t.StartTime = '17:40:00' THEN 5
+              WHEN t.StartTime = '18:00:00' THEN 5
               WHEN t.StartTime = '20:00:00' THEN 6
               ELSE 0 
             END as MappedID
@@ -305,40 +341,330 @@ class InstructorClassRosterRepository {
 
       if (toInsert.length > 0) {
         for (const slot of toInsert) {
-          let startTime;
+          let startTime, endTime;
           switch (slot.timeslotId) {
             case 1:
               startTime = "08:00:00";
+              endTime = "10:00:00";
               break;
             case 2:
               startTime = "10:20:00";
+              endTime = "12:20:00";
               break;
             case 3:
               startTime = "13:00:00";
+              endTime = "15:00:00";
               break;
             case 4:
               startTime = "15:20:00";
+              endTime = "17:20:00";
               break;
             case 5:
-              startTime = "17:40:00";
+              startTime = "18:00:00";
+              endTime = "20:00:00";
               break;
             case 6:
               startTime = "20:00:00";
+              endTime = "22:00:00";
               break;
           }
 
-          if (startTime) {
+          if (startTime && endTime) {
             await connection.query(
               `INSERT INTO instructortimeslot (TimeslotID, InstructorID, Date, Status, Note)
                SELECT TimeslotID, ?, ?, 'AVAILABLE', 'Đăng ký rảnh'
                FROM timeslot
                WHERE StartTime = ? 
-                 AND Day = DAYNAME(?) 
+                 AND EndTime = ?
+                 AND (Day = DAYNAME(?) OR Day IS NULL)
                LIMIT 1`,
-              [instructorId, slot.date, startTime, slot.date]
+              [instructorId, slot.date, startTime, endTime, slot.date]
             );
           }
         }
+      }
+
+      await connection.commit();
+      return true;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async addInstructorAvailability(instructorId, newSlots) {
+    const db = await connectDB();
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      for (const slot of newSlots) {
+        let startTime;
+        switch (slot.timeslotId) {
+          case 1:
+            startTime = "08:00:00";
+            break;
+          case 2:
+            startTime = "10:20:00";
+            break;
+          case 3:
+            startTime = "13:00:00";
+            break;
+          case 4:
+            startTime = "15:20:00";
+            break;
+          case 5:
+            startTime = "18:00:00";
+            break;
+          case 6:
+            startTime = "20:00:00";
+            break;
+        }
+
+        if (startTime) {
+          await connection.query(
+            `INSERT INTO instructortimeslot (TimeslotID, InstructorID, Date, Status, Note)
+             SELECT TimeslotID, ?, ?, 'AVAILABLE', 'Đăng ký rảnh'
+             FROM timeslot
+             WHERE StartTime = ? 
+               AND Day = DAYNAME(?) 
+               AND NOT EXISTS (
+                   SELECT 1 FROM instructortimeslot 
+                   WHERE InstructorID = ? 
+                   AND Date = ? 
+                   AND TimeslotID = timeslot.TimeslotID 
+               )
+             LIMIT 1`,
+            [
+              instructorId,
+              slot.date,
+              startTime,
+              slot.date,
+              instructorId,
+              slot.date,
+            ]
+          );
+        }
+      }
+
+      await connection.commit();
+      return true;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  // Tạo yêu cầu đổi lịch mới
+  async createChangeRequest(
+    sessionId,
+    instructorId,
+    newDate,
+    newStartTime,
+    reason
+  ) {
+    const db = await connectDB();
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const days = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+      ];
+      const dateObj = new Date(newDate);
+      const dayName = days[dateObj.getDay()];
+
+      const [result] = await connection.query(
+        `INSERT INTO session_change_request 
+         (SessionID, InstructorID, NewDate, NewTimeslotID, Reason, Status, CreatedDate) 
+         SELECT 
+            ?, -- sessionId
+            ?, -- instructorId
+            ?, -- newDate
+            (SELECT TimeslotID FROM timeslot WHERE StartTime = ? AND Day = ? LIMIT 1), -- Tự tìm ID
+            ?, -- reason
+            'PENDING', 
+            NOW()`,
+        [sessionId, instructorId, newDate, newStartTime, dayName, reason]
+      );
+
+      if (result.affectedRows === 0) {
+        throw new Error(
+          "Không tìm thấy khung giờ cố định phù hợp (Sai giờ hoặc ngày)."
+        );
+      }
+
+      const newRequestId = result.insertId;
+
+      const [instructorRows] = await connection.query(
+        `SELECT FullName FROM instructor WHERE InstructorID = ?`,
+        [instructorId]
+      );
+      const instructorName = instructorRows[0]
+        ? instructorRows[0].FullName
+        : "Giảng viên";
+
+      const [admins] = await connection.query(`SELECT AccID FROM admin`);
+
+      if (admins.length > 0) {
+        const notiContent = `${instructorName} đã gửi một yêu cầu đổi lịch mới.`;
+        const notiType = "CHANGE_REQUEST";
+        const notiStatus = "unread";
+
+        const notificationValues = admins.map((admin) => [
+          notiContent,
+          notiType,
+          notiStatus,
+          admin.AccID,
+        ]);
+
+        await connection.query(
+          `INSERT INTO notification (Content, Type, Status, AccID) VALUES ?`,
+          [notificationValues]
+        );
+      }
+
+      await connection.commit();
+
+      return newRequestId;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async getSessionById(sessionId) {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      `SELECT SessionID, InstructorID FROM session WHERE SessionID = ?`,
+      [sessionId]
+    );
+    return rows[0];
+  }
+
+  //admin duyệt yêu cầu đổi lịch
+  // 1. Admin DUYỆT yêu cầu đổi lịch (Đã sửa lỗi Timestamp)
+  async approveChangeRequest(requestId, adminId) {
+    const db = await connectDB();
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      // B1: Lấy thông tin request
+      const [reqRows] = await connection.query(
+        `SELECT * FROM session_change_request WHERE RequestID = ? FOR UPDATE`,
+        [requestId]
+      );
+
+      if (reqRows.length === 0) throw new Error("Yêu cầu không tồn tại.");
+      const request = reqRows[0];
+
+      if (request.Status !== "PENDING") {
+        throw new Error("Yêu cầu này đã được xử lý trước đó.");
+      }
+
+      // B2: Cập nhật lịch chính thức
+      await connection.query(
+        `UPDATE session 
+         SET Date = ?, TimeslotID = ? 
+         WHERE SessionID = ?`,
+        [request.NewDate, request.NewTimeslotID, request.SessionID]
+      );
+
+      // B3: Cập nhật trạng thái Request
+      await connection.query(
+        `UPDATE session_change_request 
+         SET Status = 'APPROVED', ApprovedBy = ? 
+         WHERE RequestID = ?`,
+        [adminId, requestId]
+      );
+
+      // B4: Gửi thông báo (ĐÃ SỬA: Bỏ cột Timestamp)
+      const [instRows] = await connection.query(
+        `SELECT AccID FROM instructor WHERE InstructorID = ?`,
+        [request.InstructorID]
+      );
+
+      if (instRows.length > 0) {
+        const instructorAccId = instRows[0].AccID;
+        const message = `Yêu cầu đổi lịch của bạn đã được Admin chấp nhận.`;
+
+        await connection.query(
+          `INSERT INTO notification (Content, Type, Status, AccID) 
+           VALUES (?, 'REQUEST_APPROVED', 'unread', ?)`,
+          [message, instructorAccId]
+        );
+      }
+
+      await connection.commit();
+      return true;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  // 2. Admin TỪ CHỐI yêu cầu (Đã sửa lỗi Timestamp)
+  async rejectChangeRequest(requestId, adminId, rejectReason) {
+    const db = await connectDB();
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const [reqRows] = await connection.query(
+        `SELECT * FROM session_change_request WHERE RequestID = ? FOR UPDATE`,
+        [requestId]
+      );
+
+      if (reqRows.length === 0) throw new Error("Yêu cầu không tồn tại.");
+      if (reqRows[0].Status !== "PENDING")
+        throw new Error("Yêu cầu này đã được xử lý.");
+
+      const request = reqRows[0];
+
+      // B2: Cập nhật trạng thái REJECTED
+      await connection.query(
+        `UPDATE session_change_request 
+         SET Status = 'REJECTED', ApprovedBy = ? 
+         WHERE RequestID = ?`,
+        [adminId, requestId]
+      );
+
+      // B3: Gửi thông báo (ĐÃ SỬA: Bỏ cột Timestamp)
+      const [instRows] = await connection.query(
+        `SELECT AccID FROM instructor WHERE InstructorID = ?`,
+        [request.InstructorID]
+      );
+
+      if (instRows.length > 0) {
+        const instructorAccId = instRows[0].AccID;
+        const message = `Yêu cầu đổi lịch đã bị từ chối. Lý do: ${
+          rejectReason || "Không có"
+        }`;
+
+        await connection.query(
+          `INSERT INTO notification (Content, Type, Status, AccID) 
+           VALUES (?, 'REQUEST_REJECTED', 'unread', ?)`,
+          [message, instructorAccId]
+        );
       }
 
       await connection.commit();

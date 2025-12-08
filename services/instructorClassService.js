@@ -366,6 +366,149 @@ const saveInstructorAvailabilityService = async (
   };
 };
 
+// 10. Đăng ký lịch rảnh (Chế độ bổ sung - Có check trùng)
+const addInstructorAvailabilityService = async (instructorId, slots) => {
+  if (!instructorId) {
+    throw new ServiceError("Thiếu thông tin giảng viên", 400);
+  }
+
+  if (!Array.isArray(slots) || slots.length === 0) {
+    throw new ServiceError("Danh sách lịch đăng ký không được để trống", 400);
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  const hasPastDate = slots.some((slot) => slot.date < today);
+
+  if (hasPastDate) {
+    throw new ServiceError(
+      "Không thể đăng ký lịch cho ngày trong quá khứ",
+      400
+    );
+  }
+
+  const dates = slots.map((s) => s.date).sort();
+  const startDate = dates[0];
+  const endDate = dates[dates.length - 1];
+
+  const existingSlots =
+    await instructorClassRosterRepository.getInstructorAvailability(
+      instructorId,
+      startDate,
+      endDate
+    );
+
+  const existingSet = new Set(
+    existingSlots.map((item) => `${item.date}_${item.timeslotId}`)
+  );
+
+  const slotsToInsert = slots.filter((slot) => {
+    const key = `${slot.date}_${slot.timeslotId}`;
+    return !existingSet.has(key);
+  });
+
+  if (slotsToInsert.length > 0) {
+    await instructorClassRosterRepository.addInstructorAvailability(
+      instructorId,
+      slotsToInsert
+    );
+  }
+
+  const skippedCount = slots.length - slotsToInsert.length;
+
+  return {
+    success: true,
+    message: `Đã đăng ký thêm ${slotsToInsert.length} buổi. (Bỏ qua ${skippedCount} buổi đã tồn tại)`,
+    inserted: slotsToInsert.length,
+    skipped: skippedCount,
+  };
+};
+
+const requestSessionChangeService = async (instructorId, payload) => {
+  const { sessionId, newDate, newStartTime, reason } = payload;
+
+  if (!sessionId || !newDate || !newStartTime || !reason) {
+    throw new ServiceError(
+      "Vui lòng nhập đầy đủ thông tin: Ngày mới, Giờ bắt đầu và Lý do.",
+      400
+    );
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  if (newDate < today) {
+    throw new ServiceError("Không thể đổi lịch sang ngày trong quá khứ.", 400);
+  }
+
+  const session = await instructorClassRosterRepository.getSessionById(
+    sessionId
+  );
+
+  if (!session) {
+    throw new ServiceError("Buổi học không tồn tại.", 404);
+  }
+
+  if (session.InstructorID !== instructorId) {
+    throw new ServiceError("Bạn không có quyền thay đổi buổi học này.", 403);
+  }
+
+  const requestId = await instructorClassRosterRepository.createChangeRequest(
+    sessionId,
+    instructorId,
+    newDate,
+    newStartTime,
+    reason
+  );
+
+  return {
+    success: true,
+    message: "Gửi yêu cầu đổi lịch thành công.",
+    requestId: requestId,
+  };
+};
+
+//admin duyệt
+// 1. Service: Duyệt yêu cầu đổi lịch
+const approveRequestService = async (adminId, requestId) => {
+  // Validate đầu vào
+  if (!requestId) {
+    throw new ServiceError("Thiếu thông tin Request ID.", 400);
+  }
+
+  // Gọi Repository thực hiện Transaction
+  // Hàm approveChangeRequest này là hàm bạn vừa thêm ở bước trước trong Repo
+  await instructorClassRosterRepository.approveChangeRequest(
+    requestId,
+    adminId
+  );
+
+  return {
+    success: true,
+    message:
+      "Đã duyệt yêu cầu đổi lịch thành công. Hệ thống đã cập nhật lịch học và thông báo cho giảng viên.",
+  };
+};
+
+// 2. Service: Từ chối yêu cầu đổi lịch
+const rejectRequestService = async (adminId, payload) => {
+  const { requestId, reason } = payload;
+
+  // Validate đầu vào
+  if (!requestId) {
+    throw new ServiceError("Thiếu thông tin Request ID.", 400);
+  }
+
+  // Gọi Repository
+  await instructorClassRosterRepository.rejectChangeRequest(
+    requestId,
+    adminId,
+    reason
+  );
+
+  return {
+    success: true,
+    message: "Đã từ chối yêu cầu đổi lịch.",
+  };
+};
+
 module.exports = {
   listInstructorClassesService,
   getInstructorClassDetailService,
@@ -376,4 +519,8 @@ module.exports = {
   getInstructorScheduleService,
   getInstructorAvailabilityService,
   saveInstructorAvailabilityService,
+  addInstructorAvailabilityService,
+  requestSessionChangeService,
+  approveRequestService,
+  rejectRequestService,
 };
