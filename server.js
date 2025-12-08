@@ -22,6 +22,7 @@ const instructorCourseRoutes = require("./routes/instructorCourseRouter");
 const instructorClassRoutes = require("./routes/instructorClassRoutes");
 const instructorExamRoutes = require("./routes/instructorExamRoutes");
 const slotReservationRoutes = require("./routes/slotReservationRoutes");
+const learnerExamRoutes = require("./routes/learnerExamRoutes");
 dotenv.config();
 const app = express();
 
@@ -73,7 +74,7 @@ app.use("/api/instructor", instructorExamRoutes);
 app.use("/api/zoom", zoomRoutes);
 app.use("/api/learnerassignments", learnerassignmentRoutes);
 app.use("/api/slot-reservation", slotReservationRoutes);
- 
+app.use("/api/exams", learnerExamRoutes);
 
 const PORT = process.env.PORT || 9999;
 connectDB().then(() => {
