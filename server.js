@@ -252,7 +252,7 @@ app.use((err, req, res, next) => {
 });
 
 
-const classService = require("./services/classService");
+const classService = require("./services/ClassService");
 const instructorExamRepository = require("./repositories/instructorExamRepository");
 
 
