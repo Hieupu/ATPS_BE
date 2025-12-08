@@ -75,6 +75,7 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const zoomRoutes = require("./routes/zoomRoutes");
 const commonRouter = require("./routes/commonRouter");
 const slotReservationRoutes = require("./routes/slotReservationRoutes");
+const learnerExamRoutes = require("./routes/learnerExamRoutes");
 dotenv.config();
 const app = express();
 
@@ -184,7 +185,7 @@ app.use("/api/payment", paymentRoutes);
 app.use("/api/zoom", zoomRoutes);
 app.use("/api/learnerassignments", learnerassignmentRoutes);
 app.use("/api/slot-reservation", slotReservationRoutes);
-
+app.use("/api/exams", learnerExamRoutes);
 app.use("/api/common", commonRouter);
 
 // Legacy API routes (for compatibility)
@@ -250,11 +251,11 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ========== SCHEDULED TASKS (Cron Jobs) ==========
+
 const classService = require("./services/classService");
 const instructorExamRepository = require("./repositories/instructorExamRepository");
 
-// Tự động cập nhật status lớp học hàng ngày lúc 00:00
+
 cron.schedule(
   "0 0 * * *",
   async () => {
@@ -281,7 +282,7 @@ cron.schedule(
   }
 );
 
-// Tự động cập nhật status lớp học mỗi giờ
+
 cron.schedule(
   "0 * * * *",
   async () => {
@@ -306,7 +307,9 @@ console.log(
   "[Cron Jobs] - Tự động cập nhật status lớp học: Mỗi ngày lúc 00:00 và mỗi giờ"
 );
 
-// ========== START SERVER ==========
+
+
+
 const PORT = process.env.PORT || 9999;
 connectDB().then(() => {
   app.listen(PORT, () => {

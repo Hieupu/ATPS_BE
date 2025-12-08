@@ -104,6 +104,199 @@ const getClassesByCourse = async (req, res) => {
       });
     }
 };
+const transferClass = async (req, res) => {
+  try {
+    const { id: courseId } = req.params;
+    const { fromClassId, toClassId } = req.body;
+    const accountId = req.user.id;
+    const db = await connectDB();
+
+    // Validate
+    if (!fromClassId || !toClassId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Missing class IDs" 
+      });
+    }
+
+    if (fromClassId === toClassId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Cannot transfer to the same class" 
+      });
+    }
+
+    // Kiểm tra learner
+    const learner = await courseRepository.getLearnerByAccountId(accountId);
+    if (!learner) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Learner profile not found" 
+      });
+    }
+
+    // Kiểm tra người học có trong lớp cũ không
+    const [existingEnrollment] = await db.query(
+      `SELECT * FROM enrollment 
+       WHERE ClassID = ? AND LearnerID = ? AND Status = 'enrolled'`,
+      [fromClassId, learner.LearnerID]
+    );
+
+    if (existingEnrollment.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "You are not enrolled in the source class" 
+      });
+    }
+
+    // Kiểm tra lớp đích có tồn tại và còn chỗ không
+    const [targetClass] = await db.query(
+      `SELECT c.*, 
+              (SELECT COUNT(*) FROM enrollment e2 WHERE e2.ClassID = c.ClassID AND e2.Status = 'enrolled') as StudentCount
+       FROM class c
+       WHERE c.ClassID = ? AND c.CourseID = ? AND c.Status = 'ACTIVE'`,
+      [toClassId, courseId]
+    );
+
+    if (targetClass.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Target class not found or not active" 
+      });
+    }
+
+    const targetClassInfo = targetClass[0];
+    if (targetClassInfo.StudentCount >= targetClassInfo.Maxstudent) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Target class is full" 
+      });
+    }
+
+    // Kiểm tra đã đăng ký lớp đích chưa
+    const [existingTargetEnrollment] = await db.query(
+      `SELECT * FROM enrollment 
+       WHERE ClassID = ? AND LearnerID = ? AND Status = 'enrolled'`,
+      [toClassId, learner.LearnerID]
+    );
+
+    if (existingTargetEnrollment.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "You are already enrolled in the target class" 
+      });
+    }
+
+    // Kiểm tra trùng lịch học với các lớp khác của learner
+    const [scheduleConflict] = await db.query(
+      `SELECT c.ClassID, c.Name as ClassName, 
+              ts.Day, ts.StartTime, ts.EndTime
+       FROM enrollment e
+       JOIN class c ON e.ClassID = c.ClassID
+       JOIN session s ON c.ClassID = s.ClassID
+       JOIN timeslot ts ON s.TimeslotID = ts.TimeslotID
+       WHERE e.LearnerID = ? 
+         AND e.Status = 'enrolled'
+         AND e.ClassID != ?
+         AND c.ClassID != ?
+         AND c.Status = 'ACTIVE'`,
+      [learner.LearnerID, fromClassId, toClassId]
+    );
+
+    // Lấy lịch học của lớp đích
+    const [targetClassSchedule] = await db.query(
+      `SELECT DISTINCT ts.Day, ts.StartTime, ts.EndTime
+       FROM session s
+       JOIN timeslot ts ON s.TimeslotID = ts.TimeslotID
+       WHERE s.ClassID = ?`,
+      [toClassId]
+    );
+
+    // Kiểm tra trùng lịch
+    const conflicts = [];
+    if (targetClassSchedule.length > 0 && scheduleConflict.length > 0) {
+      for (const targetSlot of targetClassSchedule) {
+        for (const existingSlot of scheduleConflict) {
+          // Kiểm tra cùng ngày và thời gian giao nhau
+          if (targetSlot.Day === existingSlot.Day) {
+            const targetStart = targetSlot.StartTime;
+            const targetEnd = targetSlot.EndTime;
+            const existingStart = existingSlot.StartTime;
+            const existingEnd = existingSlot.EndTime;
+            
+            // Kiểm tra nếu thời gian giao nhau
+            if (
+              (targetStart >= existingStart && targetStart < existingEnd) ||
+              (targetEnd > existingStart && targetEnd <= existingEnd) ||
+              (targetStart <= existingStart && targetEnd >= existingEnd)
+            ) {
+              conflicts.push({
+                targetClass: targetClassInfo.Name,
+                existingClass: existingSlot.ClassName,
+                day: targetSlot.Day,
+                targetTime: `${targetStart}-${targetEnd}`,
+                existingTime: `${existingStart}-${existingEnd}`
+              });
+            }
+          }
+        }
+      }
+    }
+
+    if (conflicts.length > 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Schedule conflict detected",
+        conflicts: conflicts
+      });
+    }
+
+    // Bắt đầu transaction
+    await db.query('START TRANSACTION');
+
+    try {
+      // Cập nhật enrollment hiện tại với ClassID mới
+      await db.query(
+        `UPDATE enrollment 
+         SET ClassID = ?, EnrollmentDate = NOW()
+         WHERE EnrollmentID = ?`,
+        [toClassId, existingEnrollment[0].EnrollmentID]
+      );
+
+      // Thêm log
+      await db.query(
+        `INSERT INTO log (Action, Timestamp, AccID, Detail) 
+         VALUES (?, NOW(), ?, ?)`,
+        [
+          'CLASS_TRANSFER',
+          accountId,
+          `Learner ${learner.LearnerID} transferred from class ${fromClassId} to class ${toClassId}`
+        ]
+      );
+
+      // Commit transaction
+      await db.query('COMMIT');
+
+      res.json({
+        success: true,
+        message: "Class transfer successful",
+        enrollmentId: existingEnrollment[0].EnrollmentID
+      });
+
+    } catch (error) {
+      // Rollback nếu có lỗi
+      await db.query('ROLLBACK');
+      throw error;
+    }
+
+  } catch (error) {
+    console.error("Transfer class error:", error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message || "Failed to transfer class" 
+    });
+  }
+};
 
 const getScheduleClasses = async (req, res) => {
   try {
@@ -397,5 +590,6 @@ module.exports = {
   getCourseAssignments,
   getPopularClasses,
   checkEnrollmentStatus,
-  getScheduleClasses
+  getScheduleClasses,
+  transferClass
 };

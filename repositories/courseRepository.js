@@ -365,6 +365,32 @@ class CourseRepository {
     }
   }
 
+  async update(courseId, updateData) {
+    try {
+      const db = await connectDB();
+      const fields = Object.keys(updateData);
+      const values = Object.values(updateData);
+      
+      if (fields.length === 0) {
+        throw new Error("No fields to update");
+      }
+      
+      const setClause = fields.map((field) => `${field} = ?`).join(", ");
+      const query = `UPDATE course SET ${setClause} WHERE CourseID = ?`;
+      
+      const [result] = await db.query(query, [...values, courseId]);
+      
+      if (result.affectedRows === 0) {
+        return null;
+      }
+      
+      return await this.findById(courseId);
+    } catch (error) {
+      console.error("Database error in update:", error);
+      throw error;
+    }
+  }
+
   async getCourseWithDetails(courseId) {
     try {
       const db = await connectDB();
@@ -980,7 +1006,7 @@ class CourseRepository {
        WHERE cl.CourseID = ? 
          AND e.LearnerID = ? 
          AND e.Status = 'enrolled'
-          AND cl.Status IN ('active', 'ongoing')
+          AND cl.Status IN ('active', 'ongoing','close')
        GROUP BY 
          cl.ClassID, cl.Name, cl.ZoomID,
         cl.Zoompass, cl.Status, cl.Fee, 

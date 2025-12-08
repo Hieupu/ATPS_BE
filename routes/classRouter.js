@@ -60,7 +60,7 @@ router.post(
 );
 
 // Lấy lý do chi tiết tại sao một timeslot bị khóa
-router.get(
+router.post(
   "/timeslot-lock-reasons",
   verifyToken,
   authorizeFeature("admin"),
@@ -149,6 +149,19 @@ router.get(
 router.get(
   "/instructor/:instructorId",
   verifyToken,
+  (req, res, next) => {
+    const userFeatures = req.user?.features || [];
+    if (
+      !userFeatures.includes("instructor") &&
+      !userFeatures.includes("admin")
+    ) {
+      return res.status(403).json({
+        message:
+          "Access denied: missing feature permission 'instructor' or 'admin'",
+      });
+    }
+    next();
+  },
   (req, res, next) => {
     const userFeatures = req.user?.features || [];
     if (

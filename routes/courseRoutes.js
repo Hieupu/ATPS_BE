@@ -14,7 +14,8 @@ const {
   getCourseAssignments,
   getPopularClasses,
   checkEnrollmentStatus,
-  getScheduleClasses
+  getScheduleClasses,
+  transferClass
 } = require("../controllers/courseController");
 const { verifyToken } = require("../middlewares/middware");
 
@@ -45,5 +46,6 @@ router.get("/:id/curriculum", getCourseCurriculum);
 router.get("/:id", getCourseById);
 router.get('/classes/:classId/enrollment-status', verifyToken, checkEnrollmentStatus);
 router.get("/schedule/all-classes", getScheduleClasses);
+router.post("/:id/transfer-class", verifyToken, transferClass);
 
 module.exports = router;

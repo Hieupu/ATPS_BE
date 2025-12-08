@@ -343,16 +343,14 @@ async function updateClassSchedule(params) {
     } else if (sessions && sessions.length > 0) {
       // Nếu không có scheduleDetail, validate từ sessions array
       // Logic mới: Các ngày phải có cùng set timeslots (so sánh StartTime-EndTime), ngày cuối được phép có subset
-      
+
       // Lấy tất cả TimeslotID từ sessions để query timeslot info
       const allTimeslotIds = [
         ...new Set(
-          sessions
-            .map((s) => s.TimeslotID)
-            .filter((id) => id != null)
+          sessions.map((s) => s.TimeslotID).filter((id) => id != null)
         ),
       ];
-      
+
       // Lấy thông tin timeslot từ database
       const timeslotMap = new Map();
       for (const timeslotId of allTimeslotIds) {
@@ -367,7 +365,9 @@ async function updateClassSchedule(params) {
       const getTimeslotKey = (session) => {
         // Ưu tiên dùng TimeslotStart/TimeslotEnd từ session
         if (session.TimeslotStart && session.TimeslotEnd) {
-          return `${(session.TimeslotStart || "").trim()}-${(session.TimeslotEnd || "").trim()}`;
+          return `${(session.TimeslotStart || "").trim()}-${(
+            session.TimeslotEnd || ""
+          ).trim()}`;
         }
         // Fallback: lấy từ timeslot
         const timeslot = timeslotMap.get(session.TimeslotID);
@@ -376,13 +376,13 @@ async function updateClassSchedule(params) {
         const endTime = (timeslot.EndTime || "").trim();
         return `${startTime}-${endTime}`;
       };
-      
+
       // Nhóm sessions theo Date, lưu timeslot keys (StartTime-EndTime) thay vì TimeslotID
       const sessionsByDate = {};
       sessions.forEach((session) => {
         const date = session.Date;
         if (!date) return;
-        
+
         if (!sessionsByDate[date]) {
           sessionsByDate[date] = [];
         }
@@ -394,7 +394,7 @@ async function updateClassSchedule(params) {
 
       // Sắp xếp các ngày theo thứ tự
       const sortedDates = Object.keys(sessionsByDate).sort();
-      
+
       if (sortedDates.length === 0) {
         throw new Error(
           "Lớp học có Status = DRAFT nhưng không có sessions hợp lệ"
@@ -404,15 +404,15 @@ async function updateClassSchedule(params) {
       // Lấy set timeslot keys chung từ các ngày (trừ ngày cuối)
       if (sortedDates.length > 1) {
         const datesToCheck = sortedDates.slice(0, -1); // Tất cả ngày trừ ngày cuối
-        
+
         // Lấy set timeslot keys từ ngày đầu tiên làm chuẩn
         const firstDateTimeslots = new Set(sessionsByDate[datesToCheck[0]]);
-        
+
         // Kiểm tra các ngày còn lại (trừ ngày cuối) có cùng set timeslot keys không
         for (let i = 1; i < datesToCheck.length; i++) {
           const date = datesToCheck[i];
           const dateTimeslots = new Set(sessionsByDate[date]);
-          
+
           // So sánh 2 sets có giống nhau không (so sánh StartTime-EndTime)
           if (
             firstDateTimeslots.size !== dateTimeslots.size ||
@@ -420,8 +420,12 @@ async function updateClassSchedule(params) {
           ) {
             throw new Error(
               `Lớp học có Status = DRAFT: Các ca học trong ngày phải giống nhau cho tất cả các ngày. ` +
-              `Ngày ${datesToCheck[0]} có ca học [${[...firstDateTimeslots].join(", ")}] ` +
-              `nhưng ngày ${date} có ca học [${[...dateTimeslots].join(", ")}]`
+                `Ngày ${datesToCheck[0]} có ca học [${[
+                  ...firstDateTimeslots,
+                ].join(", ")}] ` +
+                `nhưng ngày ${date} có ca học [${[...dateTimeslots].join(
+                  ", "
+                )}]`
             );
           }
         }
@@ -429,16 +433,20 @@ async function updateClassSchedule(params) {
         // Kiểm tra ngày cuối: được phép có subset của set chung
         const lastDate = sortedDates[sortedDates.length - 1];
         const lastDateTimeslots = new Set(sessionsByDate[lastDate]);
-        
+
         // Kiểm tra ngày cuối có phải subset của set chung không (so sánh StartTime-EndTime)
         const isSubset = [...lastDateTimeslots].every((key) =>
           firstDateTimeslots.has(key)
         );
-        
+
         if (!isSubset) {
           throw new Error(
-            `Lớp học có Status = DRAFT: Ngày cuối cùng (${lastDate}) có ca học [${[...lastDateTimeslots].join(", ")}] ` +
-            `không khớp với các ca học chung [${[...firstDateTimeslots].join(", ")}]`
+            `Lớp học có Status = DRAFT: Ngày cuối cùng (${lastDate}) có ca học [${[
+              ...lastDateTimeslots,
+            ].join(", ")}] ` +
+              `không khớp với các ca học chung [${[...firstDateTimeslots].join(
+                ", "
+              )}]`
           );
         }
       }
@@ -1329,21 +1337,35 @@ async function searchTimeslots(params) {
  * @param {number} params.dayOfWeek
  * @param {number} params.timeslotId
  * @param {string} params.startDate
- * @param {string} params.endDate
- * @returns {Object} { isLocked, reasons: [...] }
+ * @param {string} params.endDatePlan
+ * @param {number} params.numofsession
+ * @param {number} params.depth - Độ sâu đệ quy (mặc định 0)
+ * @returns {Object} { isLocked, reasons: [...], summary: {...} }
  */
-async function getTimeslotLockReasons(params) {
-  const { InstructorID, dayOfWeek, timeslotId, startDate, endDate } = params;
+async function getTimeslotLockReasons(params, depth = 0) {
+  const {
+    InstructorID,
+    dayOfWeek,
+    timeslotId,
+    startDate,
+    endDatePlan,
+    numofsession,
+  } = params;
+
+  if (depth > 50) {
+    throw new Error("Không thể tìm đủ số buổi trong thời gian hợp lý");
+  }
 
   if (
     !InstructorID ||
     dayOfWeek === undefined ||
     !timeslotId ||
     !startDate ||
-    !endDate
+    !endDatePlan ||
+    !numofsession
   ) {
     throw new Error(
-      "Thiếu tham số bắt buộc: InstructorID, dayOfWeek, timeslotId, startDate, endDate"
+      "Thiếu tham số bắt buộc: InstructorID, dayOfWeek, timeslotId, startDate, endDatePlan, numofsession"
     );
   }
 
@@ -1351,64 +1373,129 @@ async function getTimeslotLockReasons(params) {
   let isLocked = false;
 
   try {
-    // Kiểm tra blocked days
-    const blockedSchedules = await instructorTimeslotRepository.findByDateRange(
+    // ======================
+    // 1️⃣ LẤY BLOCK & HOLIDAY
+    // ======================
+    const blocks = await instructorTimeslotRepository.findByDateRange(
       startDate,
-      endDate,
+      endDatePlan,
       InstructorID
     );
 
-    const relevantBlocks = blockedSchedules.filter(
-      (block) =>
-        (block.Status === "Other" || block.Status === "Holiday") &&
-        block.TimeslotID === timeslotId
+    const holidayMap = new Map();
+    const invalidDates = new Map();
+
+    blocks
+      .filter((b) => b.TimeslotID === timeslotId)
+      .forEach((b) => {
+        console.log("b", b);
+        const dateStr = b.Date;
+        if (b.Status === "Holiday") {
+          holidayMap.set(dateStr, true);
+        } else if (b.Status !== "Available") {
+          // ➤ BUỔI KHÔNG HỢP LỆ
+          invalidDates.set(dateStr, b.Status);
+        } else if (b.size() === 0) {
+          invalidDates.set("SUNDAY", "Default");
+        }
+      });
+
+    // Nếu có ngày invalid → dừng ngay, không duyệt tiếp
+    if (invalidDates.size > 0) {
+      return {
+        isLocked: true,
+        reasons: [
+          {
+            type: "invalid_timeslot",
+            message: `Có ${invalidDates.size} buổi không hợp lệ`,
+            invalidDates: [...invalidDates.entries()],
+          },
+        ],
+        summary: {
+          totalValidSessions: 0,
+          holidaysSkipped: holidayMap.size,
+          invalidCount: invalidDates.size,
+        },
+      };
+    }
+
+    // ======================
+    // 2️⃣ CHECK SESSION CONFLICT
+    // ======================
+    const sessions = await sessionRepository.findByInstructorAndDateRange(
+      InstructorID,
+      startDate,
+      endDatePlan
     );
 
-    // Đếm số lần bận
+    const conflictSessions = sessions.filter(
+      (s) => s.TimeslotID === timeslotId
+    );
+
+    if (conflictSessions.length > 0) {
+      // ➤ GẶP SESSION TRÙNG → LOCK NGAY
+      return {
+        isLocked: true,
+        reasons: [
+          {
+            type: "session_conflict",
+            message: `Ca này đã có ${conflictSessions.length} buổi học`,
+            sessions: conflictSessions.slice(0, 5),
+          },
+        ],
+        summary: {
+          totalValidSessions: 0,
+          holidaysSkipped: holidayMap.size,
+          conflictCount: conflictSessions.length,
+        },
+      };
+    }
+
+    // ======================
+    // 3️⃣ ĐẾM BUỔI HỢP LỆ
+    // ======================
+    let validCount = 0;
+    let holidaysSkipped = 0;
     const start = new Date(startDate);
-    const end = new Date(endDate);
-    let blockedCount = 0;
-    const blockedDates = [];
+    const end = new Date(endDatePlan);
 
-    let currentDate = new Date(start);
-    while (currentDate <= end) {
-      const dateString = formatDate(currentDate);
-      const currentDayOfWeek = currentDate.getDay();
-
-      if (currentDayOfWeek === dayOfWeek) {
-        const hasBlock = relevantBlocks.some(
-          (block) => block.Date === dateString
-        );
-        if (hasBlock) {
-          blockedCount++;
-          blockedDates.push(dateString);
+    let current = new Date(start);
+    while (current <= end) {
+      if (current.getDay() === dayOfWeek) {
+        const dateStr = current.toISOString().slice(0, 10);
+        if (holidayMap.has(dateStr)) {
+          holidaysSkipped++; // holiday bỏ qua
+        } else {
+          validCount++;
+          if (validCount >= numofsession) {
+            return {
+              isLocked: false,
+              reasons: [],
+              summary: {
+                totalValidSessions: validCount,
+                holidaysSkipped,
+                enoughSessions: true,
+              },
+            };
+          }
         }
       }
-
-      currentDate.setDate(currentDate.getDate() + 1);
+      current.setDate(current.getDate() + 1);
     }
 
-    // RULE: Nếu số buổi bận > 3 thì khóa timeslot
-    if (blockedCount > 3) {
-      isLocked = true;
-      reasons.push({
-        type: "blocked_periodic",
-        message: `Giảng viên đã bận hơn 3 buổi ở ca này (${blockedCount} buổi)`,
-        blockedCount,
-        blockedDates: blockedDates.slice(0, 5), // Chỉ lấy 5 ngày đầu
-      });
-    }
+    // ======================
+    // 4️⃣ CHƯA ĐỦ BUỔI → MỞ RỘNG 1 TUẦN RỒI LÀM TIẾP
+    // ======================
+    const newEndDatePlan = new Date(endDatePlan);
+    newEndDatePlan.setDate(newEndDatePlan.getDate() + 7);
 
-    // Kiểm tra lịch dạy hiện có (sessions)
-    // TODO: Có thể thêm logic kiểm tra sessions nếu cần
-
-    return {
-      isLocked,
-      reasons,
-      summary: {
-        blockedCount,
+    return await getTimeslotLockReasons(
+      {
+        ...params,
+        endDatePlan: newEndDatePlan.toISOString().slice(0, 10),
       },
-    };
+      depth + 1
+    );
   } catch (error) {
     throw new Error(`Lỗi khi lấy lý do chi tiết: ${error.message}`);
   }
@@ -1427,7 +1514,8 @@ function validateSingleTimeslotPattern(scheduleDetail) {
 
   const timeslotsByDay = scheduleDetail.TimeslotsByDay;
   const dayOfWeeks = Object.keys(timeslotsByDay).filter(
-    (day) => Array.isArray(timeslotsByDay[day]) && timeslotsByDay[day].length > 0
+    (day) =>
+      Array.isArray(timeslotsByDay[day]) && timeslotsByDay[day].length > 0
   );
 
   if (dayOfWeeks.length === 0) {
@@ -1443,9 +1531,7 @@ function validateSingleTimeslotPattern(scheduleDetail) {
   // Kiểm tra các ngày còn lại có cùng set timeslots không
   for (let i = 1; i < dayOfWeeks.length; i++) {
     const day = dayOfWeeks[i];
-    const dayTimeslots = new Set(
-      timeslotsByDay[day].map((id) => String(id))
-    );
+    const dayTimeslots = new Set(timeslotsByDay[day].map((id) => String(id)));
 
     // So sánh 2 sets có giống nhau không
     if (
@@ -1454,8 +1540,8 @@ function validateSingleTimeslotPattern(scheduleDetail) {
     ) {
       throw new Error(
         `Lớp học có Status = DRAFT: Các ca học trong ngày phải giống nhau cho tất cả các ngày trong tuần. ` +
-        `Thứ ${firstDay} có ca học [${[...firstDayTimeslots].join(", ")}] ` +
-        `nhưng thứ ${day} có ca học [${[...dayTimeslots].join(", ")}]`
+          `Thứ ${firstDay} có ca học [${[...firstDayTimeslots].join(", ")}] ` +
+          `nhưng thứ ${day} có ca học [${[...dayTimeslots].join(", ")}]`
       );
     }
   }
