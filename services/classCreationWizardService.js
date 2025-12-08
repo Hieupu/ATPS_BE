@@ -1,5 +1,5 @@
 const sessionService = require("./sessionService");
-const classService = require("./classService");
+const classService = require("./ClassService");
 const classRepository = require("../repositories/classRepository");
 const sessionRepository = require("../repositories/sessionRepository");
 const timeslotRepository = require("../repositories/timeslotRepository");
