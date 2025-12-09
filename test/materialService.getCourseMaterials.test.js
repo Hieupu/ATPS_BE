@@ -28,19 +28,27 @@ describe("materialService - getCourseMaterials", () => {
 
   test("UTCID02 - repo trả 1 material -> service format thêm fileType và canDownload", async () => {
     materialRepository.getCourseMaterials.mockResolvedValue([
-      { MaterialID: 1, FileURL: "a.pdf" },
+      { CourseID: 21, MaterialID: 12, FileURL: "a.pdf", Status: "VISIBLE", Title: "Bài giảng Speaking IELTS 5.5 – 6.5",  FileURL: "https://res.cloudinary.com/demo/image/upload/v1312461204/sample_pdf.pdf",},
     ]);
 
-    const result = await materialService.getCourseMaterials(1);
-
-    expect(materialRepository.getCourseMaterials).toHaveBeenCalledWith(1);
+    const result = await materialService.getCourseMaterials(21);
+    
+    expect(materialRepository.getCourseMaterials).toHaveBeenCalledWith(21);
     expect(result).toEqual([
       {
-        MaterialID: 1,
-        FileURL: "a.pdf",
-        fileType: "PDF",
-        canDownload: true,
-      },
+      CourseID: 21,
+      FileURL: "https://res.cloudinary.com/demo/image/upload/v1312461204/sample_pdf.pdf",
+      MaterialID: 12,
+      Status: "VISIBLE",
+      Title: "Bài giảng Speaking IELTS 5.5 – 6.5",
+      canDownload: true,
+      fileType: "pdf",
+      FileType: "PDF",
+      Description: 'Tài liệu học tập', 
+      FileSize:  null, 
+      UploadDate:  null, 
+      canDownload: true,
+    }
     ]);
   });
 

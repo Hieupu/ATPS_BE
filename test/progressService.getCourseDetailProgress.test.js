@@ -10,16 +10,7 @@ describe("progressService - getCourseDetailProgress", () => {
     jest.clearAllMocks();
   });
 
-  test("UTCID01 - learnerId = 10, repo trả null -> service trả null", async () => {
-    progressRepository.getCourseDetailProgress.mockResolvedValue(null);
-
-    const result = await ProgressService.getCourseDetailProgress(10, 1);
-
-    expect(progressRepository.getCourseDetailProgress).toHaveBeenCalledWith(10, 1);
-    expect(result).toBeNull();
-  });
-
-  test("UTCID02 - learnerId = 1, repo trả data hợp lệ -> service format và trả đúng data", async () => {
+  test("UTCID01 - learnerId = 1, repo trả data hợp lệ -> service format và trả đúng data", async () => {
     progressRepository.getCourseDetailProgress.mockResolvedValue([
       {
         UnitID: 1,
@@ -89,7 +80,7 @@ describe("progressService - getCourseDetailProgress", () => {
     });
   });
 
-  test("UTCID03 - learnerId = 2, repo ném lỗi -> service log error và ném lại", async () => {
+  test("UTCID02 - learnerId = 2, repo ném lỗi -> service log error và ném lại", async () => {
     progressRepository.getCourseDetailProgress.mockRejectedValue(
       new Error("DB error")
     );

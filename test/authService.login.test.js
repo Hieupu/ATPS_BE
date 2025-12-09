@@ -109,6 +109,7 @@ describe("authService - loginService", () => {
       Username: "John",
       Password: "hashed",
       Provider: "local",
+      Status: "active",
     });
 
     bcrypt.compare.mockResolvedValue(true);
