@@ -1,12 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const refundController = require("../controllers/refundController");
-// const { authenticate, authorize } = require("../middleware/auth"); // Uncomment khi có auth middleware
-
-// Tất cả routes đều yêu cầu authentication và authorization (admin)
-// router.use(authenticate);
-// router.use(authorize(["admin"]));
-
+const { verifyToken, authorizeFeature } = require("../middlewares/middware");
+router.use(verifyToken);
+router.use(authorizeFeature("admin"));
 // Tạo yêu cầu hoàn tiền
 router.post("/", refundController.createRefund);
 

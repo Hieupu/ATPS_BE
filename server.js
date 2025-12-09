@@ -34,6 +34,9 @@ const instructorRouter = require("./routes/instructorRouter");
 const instructorCourseRoutes = require("./routes/instructorCourseRouter");
 const instructorExamRoutes = require("./routes/instructorExamRoutes");
 
+// Certificate routes
+const certificateRouter = require("./routes/certificateRouter");
+
 // Learner routes
 const learnerRouter = require("./routes/learnerRouter");
 const learnerassignmentRoutes = require("./routes/learnerassignmentRoutes");
@@ -70,6 +73,7 @@ const refundRouter = require("./routes/refundRouter");
 const promotionRouter = require("./routes/promotionRouter");
 const dashboardRouter = require("./routes/dashboardRouter");
 const emailTemplateRouter = require("./routes/emailTemplateRouter");
+const emailLogRouter = require("./routes/emailLogRouter");
 const notificationRoutes = require("./routes/notificationRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const zoomRoutes = require("./routes/zoomRoutes");
@@ -145,6 +149,9 @@ app.use("/api/instructor", instructorClassRoutes);
 app.use("/api/instructor", assignmentRoutes);
 app.use("/api/instructor", instructorExamRoutes);
 
+// Certificate routes
+app.use("/api/certificates", certificateRouter);
+
 // Learner routes
 app.use("/api/learners", learnerRouter);
 app.use("/api/learnerassignments", learnerassignmentRoutes);
@@ -180,6 +187,7 @@ app.use("/api/refunds", refundRouter);
 app.use("/api/promotions", promotionRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/email-templates", emailTemplateRouter);
+app.use("/api/email-logs", emailLogRouter);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/payment", paymentRoutes);
 app.use("/api/zoom", zoomRoutes);
@@ -198,39 +206,39 @@ app.use("/api/instructor/courses", courseRouter);
 app.use("/api/learner/classes", classRouter);
 app.use("/api/common/courses", courseRouter);
 
-// ========== ROOT ROUTE ==========
-app.get("/", (req, res) => {
-  res.json({
-    message: "ATPS Backend API",
-    version: "1.0.0",
-    description:
-      "Admin Training Platform System - API for managing courses, instructors, and learners",
-    endpoints: {
-      auth: "/api/auth",
-      profile: "/api/profile",
-      classes: "/api/classes",
-      courses: "/api/courses",
-      attendance: "/api/attendance",
-      enrollments: "/api/enrollments",
-      instructors: "/api/instructors",
-      learners: "/api/learners",
-      accounts: "/api/accounts",
-      news: "/api/news",
-      refunds: "/api/refunds",
-      promotions: "/api/promotions",
-      dashboard: "/api/dashboard",
-      materials: "/api/materials",
-      sessions: "/api/sessions",
-      timeslots: "/api/timeslots",
-      exams: "/api/exams",
-      assignments: "/api/instructor/assignments",
-      notifications: "/api/notifications",
-      payment: "/api/payment",
-      zoom: "/api/zoom",
-    },
-    documentation: "/API_DOCUMENTATION.md",
-  });
-});
+// // ========== ROOT ROUTE ==========
+// app.get("/", (req, res) => {
+//   res.json({
+//     message: "ATPS Backend API",
+//     version: "1.0.0",
+//     description:
+//       "Admin Training Platform System - API for managing courses, instructors, and learners",
+//     endpoints: {
+//       auth: "/api/auth",
+//       profile: "/api/profile",
+//       classes: "/api/classes",
+//       courses: "/api/courses",
+//       attendance: "/api/attendance",
+//       enrollments: "/api/enrollments",
+//       instructors: "/api/instructors",
+//       learners: "/api/learners",
+//       accounts: "/api/accounts",
+//       news: "/api/news",
+//       refunds: "/api/refunds",
+//       promotions: "/api/promotions",
+//       dashboard: "/api/dashboard",
+//       materials: "/api/materials",
+//       sessions: "/api/sessions",
+//       timeslots: "/api/timeslots",
+//       exams: "/api/exams",
+//       assignments: "/api/instructor/assignments",
+//       notifications: "/api/notifications",
+//       payment: "/api/payment",
+//       zoom: "/api/zoom",
+//     },
+//     documentation: "/API_DOCUMENTATION.md",
+//   });
+// });
 
 // ========== ERROR HANDLERS ==========
 // 404 handler
@@ -251,10 +259,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-
 const classService = require("./services/ClassService");
 const instructorExamRepository = require("./repositories/instructorExamRepository");
-
 
 cron.schedule(
   "0 0 * * *",
@@ -282,7 +288,6 @@ cron.schedule(
   }
 );
 
-
 cron.schedule(
   "0 * * * *",
   async () => {
@@ -306,9 +311,6 @@ console.log("[Cron Jobs] Đã khởi tạo scheduled tasks:");
 console.log(
   "[Cron Jobs] - Tự động cập nhật status lớp học: Mỗi ngày lúc 00:00 và mỗi giờ"
 );
-
-
-
 
 const PORT = process.env.PORT || 9999;
 connectDB().then(() => {

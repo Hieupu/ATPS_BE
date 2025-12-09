@@ -1,14 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const dashboardController = require("../controllers/dashboardController");
-// const { authenticate, authorize } = require("../middleware/auth"); // Uncomment khi có auth middleware
+const { verifyToken, authorizeFeature } = require("../middlewares/middware");
+router.use(verifyToken);
+router.use(authorizeFeature("admin"));
 
-// Tất cả routes đều yêu cầu authentication và authorization (admin)
-// router.use(authenticate);
-// router.use(authorize(["admin"]));
-
-// Debug: Log khi router được load
-console.log("Dashboard router loaded");
 
 // Lấy thống kê tổng quan
 router.get("/stats", (req, res, next) => {

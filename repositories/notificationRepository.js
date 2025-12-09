@@ -1,6 +1,14 @@
 const connectDB = require("../config/db");
 
 class NotificationRepository {
+  async create({ Content, Type = "info", Status = "unread", AccID }) {
+    return this.createNotification({
+      content: Content,
+      type: Type,
+      status: Status,
+      accId: AccID,
+    });
+  }
   async getNotificationsByAccount(accId, { limit = 20 } = {}) {
     const db = await connectDB();
     const [rows] = await db.query(
@@ -82,21 +90,21 @@ module.exports = new NotificationRepository();
 
 //   async findByAccountId(accountId, options = {}) {
 //     const { status, limit = 50 } = options;
-    
+
 //     let query = `
 //       SELECT n.*, a.Email, a.Username
 //       FROM notification n
 //       LEFT JOIN account a ON n.AccID = a.AccID
 //       WHERE n.AccID = ?
 //     `;
-    
+
 //     const params = [accountId];
-    
+
 //     if (status) {
 //       query += ` AND n.Status = ?`;
 //       params.push(status);
 //     }
-    
+
 //     query += ` ORDER BY n.NotificationID DESC LIMIT ?`;
 //     params.push(limit);
 
@@ -106,8 +114,8 @@ module.exports = new NotificationRepository();
 
 //   async markAsRead(notificationId, accountId) {
 //     const query = `
-//       UPDATE notification 
-//       SET Status = 'read' 
+//       UPDATE notification
+//       SET Status = 'read'
 //       WHERE NotificationID = ? AND AccID = ?
 //     `;
 
@@ -117,8 +125,8 @@ module.exports = new NotificationRepository();
 
 //   async markAllAsRead(accountId) {
 //     const query = `
-//       UPDATE notification 
-//       SET Status = 'read' 
+//       UPDATE notification
+//       SET Status = 'read'
 //       WHERE AccID = ? AND Status = 'unread'
 //     `;
 
@@ -128,7 +136,7 @@ module.exports = new NotificationRepository();
 
 //   async delete(notificationId, accountId) {
 //     const query = `
-//       DELETE FROM notification 
+//       DELETE FROM notification
 //       WHERE NotificationID = ? AND AccID = ?
 //     `;
 
@@ -139,7 +147,7 @@ module.exports = new NotificationRepository();
 //   async getUnreadCount(accountId) {
 //     const query = `
 //       SELECT COUNT(*) as count
-//       FROM notification 
+//       FROM notification
 //       WHERE AccID = ? AND Status = 'unread'
 //     `;
 
@@ -149,4 +157,3 @@ module.exports = new NotificationRepository();
 // }
 
 // module.exports = new NotificationRepository();
-

@@ -69,7 +69,10 @@ class InstructorRepository {
              WHERE c.InstructorID = i.InstructorID AND e.Status = 'enrolled') AS TotalStudents,
           (SELECT GROUP_CONCAT(cert.Title SEPARATOR '|') 
              FROM certificate cert 
-             WHERE cert.InstructorID = i.InstructorID AND cert.Status = 'active') AS Certificates
+             WHERE cert.InstructorID = i.InstructorID AND cert.Status = 'active') AS Certificates,
+          (SELECT GROUP_CONCAT(cert.Status SEPARATOR '|') 
+             FROM certificate cert 
+             WHERE cert.InstructorID = i.InstructorID) AS CertificateStatuses
         FROM instructor i
         INNER JOIN account a ON i.AccID = a.AccID
         GROUP BY i.InstructorID, i.FullName, i.DateOfBirth, i.ProfilePicture, 
@@ -79,13 +82,25 @@ class InstructorRepository {
       );
       // Chuẩn hóa Certificates thành mảng và fee về số
       // Map AccountStatus và AccountGender thành Status và Gender để frontend dễ sử dụng
-      return rows.map((row) => ({
-        ...row,
-        Status: row.AccountStatus, // Map từ AccountStatus
-        Gender: row.AccountGender, // Map từ AccountGender
-        Certificates: row.Certificates ? row.Certificates.split("|") : [],
-        InstructorFee: Number(row.InstructorFee) || 0,
-      }));
+      return rows.map((row) => {
+        // Parse certificate statuses
+        // "Đã có" khi có ít nhất một chứng chỉ APPROVED
+        // "Chưa có" khi không có chứng chỉ nào, hoặc chỉ có PENDING/REJECTED
+        let hasApprovedCertificate = false;
+        if (row.CertificateStatuses) {
+          const statuses = row.CertificateStatuses.split("|");
+          hasApprovedCertificate = statuses.includes("APPROVED");
+        }
+        
+        return {
+          ...row,
+          Status: row.AccountStatus, // Map từ AccountStatus
+          Gender: row.AccountGender, // Map từ AccountGender
+          Certificates: row.Certificates ? row.Certificates.split("|") : [],
+          HasApprovedCertificate: hasApprovedCertificate, // Có chứng chỉ đã duyệt hay không
+          InstructorFee: Number(row.InstructorFee) || 0,
+        };
+      });
     } catch (error) {
       console.error("Database error in getAllInstructorsAdmin:", error);
       throw error;

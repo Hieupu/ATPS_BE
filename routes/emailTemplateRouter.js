@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const emailTemplateController = require("../controllers/emailTemplateController");
-const { verifyToken, authorizeFeature } = require("../middlewares/auth");
+const { verifyToken, authorizeFeature } = require("../middlewares/middware");
 
 // Lấy danh sách templates
 router.get(
@@ -67,5 +67,12 @@ router.post(
   emailTemplateController.sendEmailWithTemplate
 );
 
-module.exports = router;
+// Lấy danh sách biến có thể sử dụng cho EventType
+router.get(
+  "/variables/:eventType",
+  verifyToken,
+  authorizeFeature("admin"),
+  emailTemplateController.getAvailableVariables
+);
 
+module.exports = router;

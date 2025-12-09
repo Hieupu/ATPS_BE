@@ -237,6 +237,20 @@ async getLearnerAttendance(learnerId) {
     }
   }
 
+  async deleteBySessionId(sessionId) {
+    try {
+      const db = await connectDB();
+      const [result] = await db.query(
+        `DELETE FROM attendance WHERE SessionID = ?`,
+        [sessionId]
+      );
+      return result.affectedRows > 0;
+    } catch (error) {
+      console.error("Database error in deleteBySessionId:", error);
+      throw error;
+    }
+  }
+
 }
 
 module.exports = new AttendanceRepository();

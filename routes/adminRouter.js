@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { verifyToken, authorizeFeature } = require("../middlewares/auth");
+const { verifyToken, authorizeFeature } = require("../middlewares/middware");
 const adminController = require("../controllers/adminController");
 
 // Tạm thời bỏ middleware auth để test

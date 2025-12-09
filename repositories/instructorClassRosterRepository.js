@@ -676,6 +676,30 @@ class InstructorClassRosterRepository {
       connection.release();
     }
   }
+
+  // Lấy danh sách tất cả yêu cầu đổi lịch (cho admin)
+  async getAllSessionChangeRequests() {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      `SELECT 
+        scr.RequestID,
+        scr.SessionID,
+        scr.InstructorID,
+        scr.NewDate,
+        scr.NewTimeslotID,
+        scr.Reason,
+        scr.Status,
+        scr.CreatedDate,
+        s.Date AS OldDate,
+        s.TimeslotID AS OldTimeslotID,
+        i.FullName AS InstructorName
+      FROM session_change_request scr
+      LEFT JOIN session s ON scr.SessionID = s.SessionID
+      LEFT JOIN instructor i ON scr.InstructorID = i.InstructorID
+      ORDER BY scr.CreatedDate DESC`
+    );
+    return rows;
+  }
 }
 
 module.exports = new InstructorClassRosterRepository();

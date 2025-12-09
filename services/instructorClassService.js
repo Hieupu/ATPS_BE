@@ -509,6 +509,16 @@ const rejectRequestService = async (adminId, payload) => {
   };
 };
 
+// Service: Lấy danh sách tất cả yêu cầu đổi lịch (cho admin)
+const getAllSessionChangeRequestsService = async () => {
+  const requests =
+    await instructorClassRosterRepository.getAllSessionChangeRequests();
+  return {
+    success: true,
+    data: requests,
+  };
+};
+
 module.exports = {
   listInstructorClassesService,
   getInstructorClassDetailService,
@@ -523,4 +533,5 @@ module.exports = {
   requestSessionChangeService,
   approveRequestService,
   rejectRequestService,
+  getAllSessionChangeRequestsService,
 };

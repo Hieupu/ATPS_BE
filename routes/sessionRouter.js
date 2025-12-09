@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { verifyToken, authorizeFeature } = require("../middlewares/auth");
+const { verifyToken, authorizeFeature } = require("../middlewares/middware");
 const sessionController = require("../controllers/sessionController");
 const classScheduleController = require("../controllers/classScheduleController");
 const {

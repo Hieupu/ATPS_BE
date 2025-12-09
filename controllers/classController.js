@@ -652,23 +652,6 @@ const classController = {
         });
       }
 
-      // Tạo lớp với status DRAFT (dbver5: không có ZoomURL)
-      console.log(
-        "[classController] Calling classService.createClass with data:",
-        {
-          Name: className,
-          CourseID: CourseID || null,
-          InstructorID,
-          Fee: Fee || null,
-          OpendatePlan: opendatePlan,
-          EnddatePlan: EnddatePlan || null,
-          Numofsession: numofsessionValue,
-          Maxstudent: maxstudentValue,
-          ZoomID: ZoomID || null,
-          Zoompass: Zoompass || null,
-          Status: "DRAFT",
-        }
-      );
 
       const classData = await classService.createClass({
         Name: className,
@@ -738,37 +721,6 @@ const classController = {
             }: Date phải có format YYYY-MM-DD`;
             continue;
           }
-
-          // Validate Date vs Timeslot Day
-          // NOTE: Bỏ qua validation này vì một timeslot có thể được dùng cho nhiều ngày khác nhau
-          // Trường Day trong bảng timeslot chỉ là gợi ý/mặc định, không phải ràng buộc cứng
-          // Nếu cần strict validation, có thể bật lại bằng cách uncomment đoạn code dưới
-          /*
-          try {
-            const timeslot = await timeslotRepository.findById(
-              session.TimeslotID
-            );
-            if (timeslot && timeslot.Day) {
-              const { getDayOfWeek } = require("../utils/sessionValidation");
-              const dateDay = getDayOfWeek(session.Date);
-
-              if (dateDay !== timeslot.Day) {
-                sessionErrors[`session_${index}_Date`] = `Session ${
-                  index + 1
-                }: Date ${
-                  session.Date
-                } (${dateDay}) không khớp với Timeslot Day (${timeslot.Day})`;
-                continue;
-              }
-            }
-          } catch (error) {
-            console.error(`Error validating session ${index + 1}:`, error);
-            sessionErrors[`session_${index}`] = `Session ${
-              index + 1
-            }: Lỗi khi validate - ${error.message}`;
-            continue;
-          }
-          */
 
           sessionsData.push({
             ClassID: classId,
@@ -921,8 +873,6 @@ const classController = {
         });
       }
 
-      // Cập nhật status: DRAFT -> APPROVED (admin duyệt lớp)
-      // Lưu ý: Đã loại bỏ WAITING/PENDING vì admin đã chọn course từ bước 1
       const updatedClass = await classService.updateClass(classId, {
         Status: "APPROVED",
       });
@@ -944,7 +894,6 @@ const classController = {
         });
       }
 
-      // Ghi log
       if (adminAccID) {
         await logService.logAction({
           action: "APPROVE_CLASS",
@@ -995,8 +944,6 @@ const classController = {
         });
       }
 
-      // Kiểm tra status hiện tại: chỉ chấp nhận DRAFT
-      // Lưu ý: Đã loại bỏ WAITING/PENDING vì admin đã chọn course từ bước 1
       if (classData.Status !== "DRAFT") {
         return res.status(400).json({
           success: false,
