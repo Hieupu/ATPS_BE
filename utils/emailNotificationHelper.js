@@ -11,10 +11,16 @@ const paymentRepository = require("../repositories/paymentRepository");
  * @param {Object} variables - Các biến để thay thế trong template
  * @returns {Promise<Object>} - Kết quả gửi email
  */
-async function sendEmailNotification(templateCode, recipientEmail, variables = {}) {
+async function sendEmailNotification(
+  templateCode,
+  recipientEmail,
+  variables = {}
+) {
   try {
     if (!recipientEmail) {
-      console.warn(`[sendEmailNotification] Không có email người nhận cho template ${templateCode}`);
+      console.warn(
+        `[sendEmailNotification] Không có email người nhận cho template ${templateCode}`
+      );
       return { success: false, message: "Không có email người nhận" };
     }
 
@@ -24,10 +30,15 @@ async function sendEmailNotification(templateCode, recipientEmail, variables = {
       variables
     );
 
-    console.log(`[sendEmailNotification] Đã gửi email ${templateCode} đến ${recipientEmail}`);
+    console.log(
+      `[sendEmailNotification] Đã gửi email ${templateCode} đến ${recipientEmail}`
+    );
     return result;
   } catch (error) {
-    console.error(`[sendEmailNotification] Lỗi khi gửi email ${templateCode}:`, error);
+    console.error(
+      `[sendEmailNotification] Lỗi khi gửi email ${templateCode}:`,
+      error
+    );
     // Không throw error để không làm gián đoạn flow chính
     return { success: false, error: error.message };
   }
@@ -53,14 +64,19 @@ async function notifyAccountStatusChange(accountId, oldStatus, newStatus) {
       } else {
         // Không phải learner, thử instructor
         const instructorRepository = require("../repositories/instructorRepository");
-        const instructor = await instructorRepository.findByAccountId(accountId);
+        const instructor = await instructorRepository.findByAccountId(
+          accountId
+        );
         if (instructor && instructor.FullName) {
           userName = instructor.FullName;
         }
       }
     } catch (e) {
       // Không tìm thấy, dùng email
-      console.warn(`[notifyAccountStatusChange] Không tìm thấy learner/instructor cho AccID ${accountId}:`, e.message);
+      console.warn(
+        `[notifyAccountStatusChange] Không tìm thấy learner/instructor cho AccID ${accountId}:`,
+        e.message
+      );
     }
 
     return await sendEmailNotification(
@@ -115,8 +131,14 @@ async function notifyClassCancelled(classId, reason = "Lớp học đã bị h�
 
         results.push({ email: account.Email, result });
       } catch (error) {
-        console.error(`[notifyClassCancelled] Error sending to enrollment ${enrollment.EnrollmentID}:`, error);
-        results.push({ email: "N/A", result: { success: false, error: error.message } });
+        console.error(
+          `[notifyClassCancelled] Error sending to enrollment ${enrollment.EnrollmentID}:`,
+          error
+        );
+        results.push({
+          email: "N/A",
+          result: { success: false, error: error.message },
+        });
       }
     }
 
@@ -160,25 +182,24 @@ async function notifyRefundCreated(refundId) {
     }
 
     const classData = await classRepository.findById(enrollment.ClassID);
-    const className = classData && classData.length > 0 ? classData[0].Name : "N/A";
+    const className =
+      classData && classData.length > 0 ? classData[0].Name : "N/A";
 
-    const payment = await paymentRepository.findByEnrollmentId(refund.EnrollmentID);
+    const payment = await paymentRepository.findByEnrollmentId(
+      refund.EnrollmentID
+    );
     const refundAmount = payment && payment.length > 0 ? payment[0].Amount : 0;
 
-    return await sendEmailNotification(
-      "REFUND_CREATED",
-      account.Email,
-      {
-        userName: learner.FullName || account.Email,
-        className: className,
-        refundCode: `RefundID: ${refundId}`,
-        refundAmount: new Intl.NumberFormat("vi-VN", {
-          style: "currency",
-          currency: "VND",
-        }).format(refundAmount),
-        reason: refund.Reason || "N/A",
-      }
-    );
+    return await sendEmailNotification("REFUND_CREATED", account.Email, {
+      userName: learner.FullName || account.Email,
+      className: className,
+      refundCode: `RefundID: ${refundId}`,
+      refundAmount: new Intl.NumberFormat("vi-VN", {
+        style: "currency",
+        currency: "VND",
+      }).format(refundAmount),
+      reason: refund.Reason || "N/A",
+    });
   } catch (error) {
     console.error("[notifyRefundCreated] Error:", error);
     return { success: false, error: error.message };
@@ -186,7 +207,62 @@ async function notifyRefundCreated(refundId) {
 }
 
 /**
- * Gửi email khi duyệt yêu cầu hoàn tiền
+ * Gửi email yêu cầu thông tin tài khoản để chuyển khoản hoàn tiền
+ */
+async function notifyRefundAccountInfoRequest(refundId) {
+  try {
+    const refundRepository = require("../repositories/refundRepository");
+    const refund = await refundRepository.findById(refundId);
+    if (!refund) {
+      return { success: false, message: "Không tìm thấy yêu cầu hoàn tiền" };
+    }
+
+    const enrollment = await enrollmentRepository.findById(refund.EnrollmentID);
+    if (!enrollment) {
+      return { success: false, message: "Không tìm thấy enrollment" };
+    }
+
+    const learnerRepository = require("../repositories/learnerRepository");
+    const learner = await learnerRepository.findById(enrollment.LearnerID);
+    if (!learner) {
+      return { success: false, message: "Không tìm thấy học viên" };
+    }
+
+    const account = await accountRepository.findById(learner.AccID);
+    if (!account || !account.Email) {
+      return { success: false, message: "Không tìm thấy email của học viên" };
+    }
+
+    const classData = await classRepository.findById(enrollment.ClassID);
+    const className =
+      classData && classData.length > 0 ? classData[0].Name : "N/A";
+
+    const payment = await paymentRepository.findByEnrollmentId(
+      refund.EnrollmentID
+    );
+    const refundAmount = payment && payment.length > 0 ? payment[0].Amount : 0;
+
+    return await sendEmailNotification(
+      "REFUND_ACCOUNT_INFO_REQUEST",
+      account.Email,
+      {
+        userName: learner.FullName || account.Email,
+        refundCode: `RefundID: ${refundId}`,
+        refundAmount: new Intl.NumberFormat("vi-VN", {
+          style: "currency",
+          currency: "VND",
+        }).format(refundAmount),
+        className: className,
+      }
+    );
+  } catch (error) {
+    console.error("[notifyRefundAccountInfoRequest] Error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Gửi email thông báo đã chuyển khoản hoàn tiền thành công
  */
 async function notifyRefundApproved(refundId) {
   try {
@@ -213,26 +289,28 @@ async function notifyRefundApproved(refundId) {
     }
 
     const classData = await classRepository.findById(enrollment.ClassID);
-    const className = classData && classData.length > 0 ? classData[0].Name : "N/A";
+    const className =
+      classData && classData.length > 0 ? classData[0].Name : "N/A";
 
-    const payment = await paymentRepository.findByEnrollmentId(refund.EnrollmentID);
+    const payment = await paymentRepository.findByEnrollmentId(
+      refund.EnrollmentID
+    );
     const refundAmount = payment && payment.length > 0 ? payment[0].Amount : 0;
 
-    return await sendEmailNotification(
-      "REFUND_APPROVED",
-      account.Email,
-      {
-        userName: learner.FullName || account.Email,
-        refundCode: `RefundID: ${refundId}`,
-        refundAmount: new Intl.NumberFormat("vi-VN", {
-          style: "currency",
-          currency: "VND",
-        }).format(refundAmount),
-        className: className,
-      }
-    );
+    const completedDate = new Date().toLocaleDateString("vi-VN");
+
+    return await sendEmailNotification("REFUND_APPROVED", account.Email, {
+      userName: learner.FullName || account.Email,
+      refundCode: `RefundID: ${refundId}`,
+      refundAmount: new Intl.NumberFormat("vi-VN", {
+        style: "currency",
+        currency: "VND",
+      }).format(refundAmount),
+      className: className,
+      completedDate: completedDate,
+    });
   } catch (error) {
-    console.error("[notifyRefundApproved] Error:", error);
+    console.error("[notifyRefundCompleted] Error:", error);
     return { success: false, error: error.message };
   }
 }
@@ -264,72 +342,13 @@ async function notifyRefundRejected(refundId, rejectionReason = "") {
       return { success: false, message: "Không tìm thấy email của học viên" };
     }
 
-    return await sendEmailNotification(
-      "REFUND_REJECTED",
-      account.Email,
-      {
-        userName: learner.FullName || account.Email,
-        refundCode: `RefundID: ${refundId}`,
-        rejectionReason: rejectionReason || "Không được cung cấp",
-      }
-    );
+    return await sendEmailNotification("REFUND_REJECTED", account.Email, {
+      userName: learner.FullName || account.Email,
+      refundCode: `RefundID: ${refundId}`,
+      rejectionReason: rejectionReason || "Không được cung cấp",
+    });
   } catch (error) {
     console.error("[notifyRefundRejected] Error:", error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Gửi email khi hoàn tiền hoàn tất
- */
-async function notifyRefundCompleted(refundId) {
-  try {
-    const refundRepository = require("../repositories/refundRepository");
-    const refund = await refundRepository.findById(refundId);
-    if (!refund) {
-      return { success: false, message: "Không tìm thấy yêu cầu hoàn tiền" };
-    }
-
-    const enrollment = await enrollmentRepository.findById(refund.EnrollmentID);
-    if (!enrollment) {
-      return { success: false, message: "Không tìm thấy enrollment" };
-    }
-
-    const learnerRepository = require("../repositories/learnerRepository");
-    const learner = await learnerRepository.findById(enrollment.LearnerID);
-    if (!learner) {
-      return { success: false, message: "Không tìm thấy học viên" };
-    }
-
-    const account = await accountRepository.findById(learner.AccID);
-    if (!account || !account.Email) {
-      return { success: false, message: "Không tìm thấy email của học viên" };
-    }
-
-    const classData = await classRepository.findById(enrollment.ClassID);
-    const className = classData && classData.length > 0 ? classData[0].Name : "N/A";
-
-    const payment = await paymentRepository.findByEnrollmentId(refund.EnrollmentID);
-    const refundAmount = payment && payment.length > 0 ? payment[0].Amount : 0;
-
-    const completedDate = new Date().toLocaleDateString("vi-VN");
-
-    return await sendEmailNotification(
-      "REFUND_COMPLETED",
-      account.Email,
-      {
-        userName: learner.FullName || account.Email,
-        refundCode: `RefundID: ${refundId}`,
-        refundAmount: new Intl.NumberFormat("vi-VN", {
-          style: "currency",
-          currency: "VND",
-        }).format(refundAmount),
-        className: className,
-        completedDate: completedDate,
-      }
-    );
-  } catch (error) {
-    console.error("[notifyRefundCompleted] Error:", error);
     return { success: false, error: error.message };
   }
 }
@@ -341,6 +360,5 @@ module.exports = {
   notifyRefundCreated,
   notifyRefundApproved,
   notifyRefundRejected,
-  notifyRefundCompleted,
+  notifyRefundAccountInfoRequest,
 };
-

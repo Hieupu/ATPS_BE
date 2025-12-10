@@ -131,65 +131,6 @@ class AccountRepository {
     return this.findAccountById(accountId);
   }
 
-  async createAccountForAdmin({
-    username,
-    email,
-    phone = "",
-    password,
-    status = "active",
-    provider = "local",
-    gender = "other",
-    role = "learner", // learner, instructor, admin, staff
-  }) {
-    const db = await connectDB();
-    const normalizedEmail = email.trim().toLowerCase();
-    const normalizedUsername =
-      username || normalizedEmail.split("@")[0] || "user";
-    try {
-      const [result] = await db.query(
-        "INSERT INTO account (Username, Email, Phone, Password, Status, Provider, Gender) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [
-          normalizedUsername,
-          normalizedEmail,
-          phone || "",
-          password,
-          status,
-          provider,
-          gender || "other",
-        ]
-      );
-      const accId = result.insertId;
-
-      // Tạo entity tương ứng dựa trên role
-      // Lưu ý: instructor không tự động tạo ở đây, để controller tự quản lý với đầy đủ thông tin
-      switch (role.toLowerCase()) {
-        case "learner":
-          await this.createLearner(accId);
-          break;
-        case "instructor":
-          // Không tạo instructor ở đây, để controller tự tạo với đầy đủ thông tin
-          break;
-        case "admin":
-          await this.createAdmin(accId);
-          break;
-        case "staff":
-          await this.createStaff(accId);
-          break;
-        default:
-          // Mặc định tạo learner
-          await this.createLearner(accId);
-      }
-
-      return accId;
-    } catch (e) {
-      if (e.code === "ER_DUP_ENTRY") {
-        const err = new Error("Email has been registered!");
-        err.status = 400;
-        throw err;
-      }
-      throw e;
-    }
-  }
 
   async createAccountWithRole({
     username,

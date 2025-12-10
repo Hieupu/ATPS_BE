@@ -49,17 +49,6 @@ class AdminService {
     }
   }
 
-  async deleteAdmin(adminId) {
-    try {
-      const deleted = await adminRepository.delete(adminId);
-      if (!deleted) {
-        throw new Error("Admin not found");
-      }
-      return deleted;
-    } catch (error) {
-      throw error;
-    }
-  }
 }
 
 module.exports = new AdminService();

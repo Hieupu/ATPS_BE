@@ -54,7 +54,7 @@ router.get(
 router.get(
   "/instructor/:instructorId",
   verifyToken,
-  authorizeFeature("instructor"),
+  authorizeFeature(["instructor", "admin"]),
   sessionController.getSessionsByInstructorId
 );
 

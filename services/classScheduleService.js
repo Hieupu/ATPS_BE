@@ -11,7 +11,7 @@ const {
 const { getDayOfWeek } = require("../utils/sessionValidation");
 const { CLASS_STATUS } = require("../constants/classStatus");
 
-/**
+/**`  
  * Hàm Tạo Lịch Hàng loạt (Bulk Schedule Creation)
  * Nhận đầu vào: OpendatePlan, Numofsession, InstructorID, và danh sách SelectedTimeslotIDs
  * @param {Object} params
@@ -103,9 +103,8 @@ async function createBulkSchedule(params) {
 async function countLearners(classId) {
   try {
     const enrollments = await enrollmentRepository.findByClassId(classId);
-    // Chỉ đếm các enrollment có status = 'active'
     const activeEnrollments = enrollments.filter(
-      (e) => e.Status === "active" || e.Status === "enrolled"
+      (e) => e.Status === "enrolled"
     );
     return activeEnrollments.length;
   } catch (error) {
@@ -125,13 +124,13 @@ async function checkFullClass(classId) {
       throw new Error("Lớp học không tồn tại");
     }
 
-    const maxLearners = classData[0].Maxstudent || 0;
+    const maxLearners = classData[0].maxStudent || 0;
     const currentLearners = await countLearners(classId);
 
     return {
       isFull: currentLearners >= maxLearners,
       currentLearners: currentLearners,
-      maxLearners: maxLearners,
+      maxStudent: maxLearners,
       availableSlots: Math.max(0, maxLearners - currentLearners),
     };
   } catch (error) {
@@ -156,10 +155,7 @@ async function validateStatusForEdit(classId) {
     // Không cho sửa nếu lớp đã đóng hoặc hủy
     if (
       status === CLASS_STATUS.CLOSE ||
-      status === CLASS_STATUS.DONE ||
-      status === CLASS_STATUS.COMPLETED ||
-      status === CLASS_STATUS.CANCEL ||
-      status === CLASS_STATUS.CANCELLED
+      status === CLASS_STATUS.CANCEL 
     ) {
       return {
         canEdit: false,

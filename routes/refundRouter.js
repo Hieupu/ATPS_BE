@@ -19,8 +19,8 @@ router.get("/:id", refundController.getRefundById);
 // Cập nhật yêu cầu hoàn tiền
 router.put("/:id", refundController.updateRefund);
 
-// Xóa yêu cầu hoàn tiền
-router.delete("/:id", refundController.deleteRefund);
+// // Xóa yêu cầu hoàn tiền
+// router.delete("/:id", refundController.deleteRefund);
 
 // Duyệt yêu cầu hoàn tiền
 router.post("/:id/approve", refundController.approveRefund);
@@ -28,7 +28,13 @@ router.post("/:id/approve", refundController.approveRefund);
 // Từ chối yêu cầu hoàn tiền
 router.post("/:id/reject", refundController.rejectRefund);
 
-// Hoàn tiền (approved -> completed)
-router.post("/:id/complete", refundController.completeRefund);
+// Gửi email yêu cầu thông tin tài khoản để hoàn tiền
+router.post("/:id/request-account-info", refundController.requestAccountInfo);
+
+// Lấy danh sách lớp liên quan để chuyển
+router.get("/:id/related-classes", refundController.getRelatedClasses);
+
+// // Hoàn tiền (approved -> completed)
+// router.post("/:id/complete", refundController.completeRefund);
 
 module.exports = router;

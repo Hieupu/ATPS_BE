@@ -93,6 +93,15 @@ class PaymentService {
       throw error;
     }
   }
+
+  async getAdminPaymentHistory(search) {
+    try {
+      return await paymentRepository.getAdminPaymentHistory(search);
+    } catch (error) {
+      console.error("Error in getAdminPaymentHistory service:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new PaymentService();

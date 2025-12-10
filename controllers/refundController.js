@@ -37,13 +37,22 @@ const refundController = {
   // Lấy tất cả yêu cầu hoàn tiền
   getAllRefunds: async (req, res) => {
     try {
-      const { page = 1, limit = 10, status, search } = req.query;
+      const {
+        page = 1,
+        limit = 10,
+        status,
+        search,
+        dateFrom,
+        dateTo,
+      } = req.query;
 
       const options = {
         page: parseInt(page),
         limit: parseInt(limit),
         status: status || null,
         search: search || "",
+        dateFrom: dateFrom || null,
+        dateTo: dateTo || null,
       };
 
       const result = await refundService.getAllRefunds(options);
@@ -168,42 +177,6 @@ const refundController = {
     }
   },
 
-  // Duyệt yêu cầu hoàn tiền
-  approveRefund: async (req, res) => {
-    try {
-      const { id } = req.params;
-      const adminAccID = req.user ? req.user.AccID : null;
-      const updatedRefund = await refundService.approveRefund(id);
-
-      // Ghi log APPROVE_REFUND
-      if (adminAccID && updatedRefund?.RefundID) {
-        await logService.logAction({
-          action: "APPROVE_REFUND",
-          accId: adminAccID,
-          detail: `RefundID: ${updatedRefund.RefundID}, EnrollmentID: ${updatedRefund.EnrollmentID}`,
-        });
-      }
-
-      res.json({
-        success: true,
-        message: "Duyệt yêu cầu hoàn tiền thành công",
-        data: updatedRefund,
-      });
-    } catch (error) {
-      console.error("Error approving refund:", error);
-      const statusCode =
-        error.message.includes("Không tìm thấy") ||
-        error.message.includes("Chỉ có thể")
-          ? 400
-          : 500;
-      res.status(statusCode).json({
-        success: false,
-        message: error.message,
-        error: error.message,
-      });
-    }
-  },
-
   // Từ chối yêu cầu hoàn tiền
   rejectRefund: async (req, res) => {
     try {
@@ -244,13 +217,58 @@ const refundController = {
     }
   },
 
-  // Hoàn tiền (approved -> completed)
-  completeRefund: async (req, res) => {
+  // Gửi email yêu cầu thông tin tài khoản để hoàn tiền
+  requestAccountInfo: async (req, res) => {
+    try {
+      const { id } = req.params;
+      await refundService.requestAccountInfo(id);
+
+      res.json({
+        success: true,
+        message: "Đã gửi email yêu cầu thông tin chuyển khoản",
+      });
+    } catch (error) {
+      console.error("Error request account info:", error);
+      const statusCode = error.message.includes("Chỉ gửi")
+        ? 400
+        : error.message.includes("Không tìm thấy")
+        ? 404
+        : 500;
+      res.status(statusCode).json({
+        success: false,
+        message: error.message || "Không thể gửi email yêu cầu thông tin",
+        error: error.message,
+      });
+    }
+  },
+
+  // Lấy danh sách lớp có thể chuyển (cùng giảng viên & khóa học, ACTIVE)
+  getRelatedClasses: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const classes = await refundService.getRelatedClasses(id);
+      res.json({
+        success: true,
+        message: "Lấy danh sách lớp liên quan thành công",
+        data: classes,
+      });
+    } catch (error) {
+      const statusCode = error.message.includes("Không tìm thấy") ? 404 : 500;
+      res.status(statusCode).json({
+        success: false,
+        message: error.message || "Không thể lấy danh sách lớp",
+        error: error.message,
+      });
+    }
+  },
+
+  // Hoàn tiền (pending -> approved)
+  approveRefund: async (req, res) => {
     try {
       const { id } = req.params;
       const adminAccID = req.user ? req.user.AccID : null;
 
-      const updatedRefund = await refundService.completeRefund(id);
+      const updatedRefund = await refundService.approveRefund(id);
 
       // Ghi log COMPLETE_REFUND
       if (adminAccID && updatedRefund?.RefundID) {

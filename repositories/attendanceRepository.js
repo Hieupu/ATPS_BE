@@ -251,6 +251,49 @@ async getLearnerAttendance(learnerId) {
     }
   }
 
+  async getAttendanceByInstructor(instructorId) {
+    try {
+      const db = await connectDB();
+      const [rows] = await db.query(
+        `SELECT 
+          a.AttendanceID,
+          a.Status,
+          a.Date as AttendanceDate,
+          a.note,
+          l.LearnerID,
+          l.FullName as LearnerName,
+          l.ProfilePicture as LearnerAvatar,
+          s.SessionID,
+          s.Title as SessionTitle,
+          s.Description as SessionDescription,
+          s.Date as SessionDate,
+          ts.StartTime,
+          ts.EndTime,
+          ts.Day as DayOfWeek,
+          c.ClassID,
+          c.Name as ClassName,
+          cr.CourseID,
+          cr.Title as CourseTitle,
+          i.InstructorID,
+          i.FullName as InstructorName
+        FROM attendance a
+        INNER JOIN session s ON a.SessionID = s.SessionID
+        INNER JOIN class c ON s.ClassID = c.ClassID
+        INNER JOIN course cr ON c.CourseID = cr.CourseID
+        INNER JOIN learner l ON a.LearnerID = l.LearnerID
+        INNER JOIN instructor i ON s.InstructorID = i.InstructorID
+        LEFT JOIN timeslot ts ON s.TimeslotID = ts.TimeslotID
+        WHERE i.InstructorID = ?
+        ORDER BY s.Date DESC, ts.StartTime DESC, l.FullName ASC`,
+        [instructorId]
+      );
+      return rows;
+    } catch (error) {
+      console.error("Database error in getAttendanceByInstructor:", error);
+      throw error;
+    }
+  }
+
 }
 
 module.exports = new AttendanceRepository();

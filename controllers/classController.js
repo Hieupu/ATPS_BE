@@ -532,8 +532,6 @@ const classController = {
         Zoompass,
         // Support old field names for backward compatibility
         StartDate,
-        ExpectedSessions,
-        MaxLearners,
       } = req.body;
 
       // Support both Name and ClassName (backward compatibility)
@@ -541,8 +539,8 @@ const classController = {
 
       // Support old field names: StartDate -> OpendatePlan, ExpectedSessions -> Numofsession, MaxLearners -> Maxstudent
       const opendatePlan = OpendatePlan || StartDate;
-      const numofsession = Numofsession || ExpectedSessions;
-      const maxstudent = Maxstudent || MaxLearners;
+      const numofsession = Numofsession;
+      const maxstudent = Maxstudent;
 
       // Validation bắt buộc theo dbver5
       // Kiểm tra kỹ: null, undefined, empty string, hoặc 0 (cho số)
@@ -579,19 +577,7 @@ const classController = {
           "[classController] ERROR: Missing required fields:",
           missingFields
         );
-        console.error("[classController] Field values:", {
-          Name: className,
-          InstructorID,
-          OpendatePlan: opendatePlan,
-          Numofsession: numofsession,
-          Maxstudent: maxstudent,
-          "Raw OpendatePlan": OpendatePlan,
-          "Raw StartDate": StartDate,
-          "Raw Numofsession": Numofsession,
-          "Raw ExpectedSessions": ExpectedSessions,
-          "Raw Maxstudent": Maxstudent,
-          "Raw MaxLearners": MaxLearners,
-        });
+        
 
         // Tạo errors object cho từng field thiếu
         const errors = {};
@@ -1191,11 +1177,8 @@ const classController = {
           },
         });
       } else if (
-        Status === "ACTIVE" ||
-        Status === "OPEN" ||
-        Status === "PUBLISHED"
+        Status === "ACTIVE" 
       ) {
-        // Hỗ trợ alias: OPEN, PUBLISHED -> ACTIVE
         const updatedClass = await classService.updateClass(classId, {
           Status: "ACTIVE",
         });
@@ -1206,12 +1189,8 @@ const classController = {
           data: updatedClass,
         });
       } else if (
-        Status === "CLOSE" ||
-        Status === "CLOSED" ||
-        Status === "DONE" ||
-        Status === "COMPLETED"
+        Status === "CLOSE" 
       ) {
-        // Hỗ trợ alias: CLOSED, DONE, COMPLETED -> CLOSE
         const updatedClass = await classService.updateClass(classId, {
           Status: "CLOSE",
         });
@@ -1221,9 +1200,8 @@ const classController = {
           message: "Cập nhật status thành công",
           data: updatedClass,
         });
-      } else if (Status === "CANCEL" || Status === "CANCELLED") {
-        // Hỗ trợ alias: CANCELLED -> CANCEL
-        // Gọi method cancelClass để xử lý logic hủy lớp
+      } else if (Status === "CANCEL") {
+
         const result = await classService.cancelClass(classId);
 
         return res.json({
@@ -1237,7 +1215,6 @@ const classController = {
         const updatedClass = await classService.updateClass(classId, {
           Status: Status,
         });
-
         return res.json({
           success: true,
           message: "Cập nhật status thành công",

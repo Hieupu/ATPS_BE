@@ -124,11 +124,10 @@ const emailTemplateRepository = {
             return variables;
           }
         } catch (e) {
-          // Nếu không parse được, dùng mặc định
         }
       }
 
-      // Nếu không có template, trả về biến mặc định theo EventType
+      
       const defaultVariables = {
         ACCOUNT_STATUS_CHANGED: ["userName", "oldStatus", "newStatus"],
         CLASS_CANCELLED_TO_LEARNER: [
@@ -154,16 +153,32 @@ const emailTemplateRepository = {
           "userName",
           "refundCode",
           "refundAmount",
-          "className",
+          "className",       
+          "transferDate",
+          "transferRef",
         ],
         REFUND_REJECTED: ["userName", "refundCode", "rejectionReason"],
-        REFUND_COMPLETED: [
+        // REFUND_COMPLETED: [
+        //   "userName",
+        //   "refundCode",
+        //   "refundAmount",
+        //   "className",
+        //   "completedDate",
+        // ],
+        REFUND_ACCOUNT_INFO_REQUEST: [
           "userName",
           "refundCode",
           "refundAmount",
           "className",
-          "completedDate",
         ],
+        // REFUND_ACCOUNT_SUCCESS: [
+        //   "userName",
+        //   "refundCode",
+        //   "refundAmount",
+        //   "className",
+        //   "transferDate",
+        //   "transferRef",
+        // ],
       };
 
       return defaultVariables[eventType] || [];

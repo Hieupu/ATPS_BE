@@ -701,6 +701,17 @@ const getPaymentHistory = async(req, res) => {
   }
 };
 
+const getAdminPaymentHistory = async (req, res) => {
+  try {
+    const { search } = req.query;
+    const payments = await paymentService.getAdminPaymentHistory(search);
+    return res.json({ payments });
+  } catch (error) {
+    console.error("Error in getAdminPaymentHistory:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
 const requestRefund = async(req, res) => {
   try {
     const { enrollmentId, reason } = req.body;
@@ -764,5 +775,6 @@ module.exports = {
   getPaymentLinkByOrderCode,
   requestRefund,
   getPaymentHistory,
+  getAdminPaymentHistory,
   cancelRefundRequest
 };

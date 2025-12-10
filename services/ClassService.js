@@ -741,6 +741,7 @@ class ClassService {
    * 3. Tạo refundrequest cho các học sinh của lớp
    */
   async cancelClass(classId) {
+    const pool = await connectDB();
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
@@ -843,7 +844,7 @@ class ClassService {
           const refundData = {
             RequestDate: currentDate,
             Reason: `Lớp học ${classInfo.Name} (ClassID: ${classId}) đã bị hủy`,
-            Status: "pending",
+            Status: "classpending",
             EnrollmentID: enrollment.EnrollmentID,
           };
 

@@ -22,6 +22,12 @@ router.get(
   authorizeFeature("admin"),
   attendanceController.getAttendanceByLearner
 );
+router.get(
+  "/instructor/:instructorId",
+  verifyToken,
+  authorizeFeature("admin"),
+  attendanceController.getAttendanceByInstructor
+);
 router.put(
   "/:attendanceId",
   verifyToken,

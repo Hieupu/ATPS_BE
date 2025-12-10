@@ -44,7 +44,9 @@ const adminController = {
       res.status(status).json({
         success: false,
         message:
-          status === 404 ? "Không tìm thấy admin" : "Lỗi khi lấy thông tin admin",
+          status === 404
+            ? "Không tìm thấy admin"
+            : "Lỗi khi lấy thông tin admin",
         error: error.message,
       });
     }
@@ -95,7 +97,8 @@ const adminController = {
 
         const hashedPassword = await bcrypt.hash(Password, 10);
         accountId = await accountRepository.createAccountWithRole({
-          username: Username || FullName?.trim().replace(/\s+/g, "").toLowerCase(),
+          username:
+            Username || FullName?.trim().replace(/\s+/g, "").toLowerCase(),
           email: Email,
           phone: Phone || "",
           password: hashedPassword,
@@ -163,28 +166,6 @@ const adminController = {
       });
     }
   },
-
-  deleteAdmin: async (req, res) => {
-    try {
-      const { id } = req.params;
-      await adminService.deleteAdmin(id);
-
-      res.json({
-        success: true,
-        message: "Xóa admin thành công",
-      });
-    } catch (error) {
-      console.error("Error deleting admin:", error);
-      const status = error.message === "Admin not found" ? 404 : 500;
-      res.status(status).json({
-        success: false,
-        message:
-          status === 404 ? "Không tìm thấy admin" : "Lỗi khi xóa admin",
-        error: error.message,
-      });
-    }
-  },
 };
 
 module.exports = adminController;
-

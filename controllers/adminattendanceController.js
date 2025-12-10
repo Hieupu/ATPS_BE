@@ -1,5 +1,7 @@
 const Attendance = require("../models/attendance");
 const SessionTimeslot = require("../models/sessiontimeslot");
+const connectDB = require("../config/db");
+const attendanceService = require("../services/attendanceService");
 
 const attendanceController = {
   // Tạo attendance mới
@@ -89,6 +91,67 @@ const attendanceController = {
       res.status(500).json({
         success: false,
         message: "Lỗi khi lấy điểm danh của học viên",
+        error: error.message,
+      });
+    }
+  },
+
+  // Lấy điểm danh theo giảng viên (admin xem tất cả phiên do GV dạy)
+  getAttendanceByInstructor: async (req, res) => {
+    try {
+      const { instructorId } = req.params;
+
+      if (!instructorId) {
+        return res.status(400).json({
+          success: false,
+          message: "InstructorID là bắt buộc",
+        });
+      }
+
+      const db = await connectDB();
+      const [rows] = await db.query(
+        `SELECT 
+          a.AttendanceID,
+          a.Status,
+          a.Date,
+          a.LearnerID,
+          a.SessionID,
+          s.Title AS SessionTitle,
+          s.Date AS SessionDate,
+          c.ClassID,
+          c.Name AS ClassName,
+          l.FullName AS LearnerName
+        FROM attendance a
+        INNER JOIN session s ON a.SessionID = s.SessionID
+        INNER JOIN class c ON s.ClassID = c.ClassID
+        INNER JOIN learner l ON a.LearnerID = l.LearnerID
+        WHERE c.InstructorID = ?
+        ORDER BY a.Date DESC, a.AttendanceID DESC`,
+        [instructorId]
+      );
+
+      const summary = rows.reduce(
+        (acc, cur) => {
+          const status = (cur.Status || "").toLowerCase();
+          if (status === "present" || status === "attended") acc.present += 1;
+          else if (status === "absent") acc.absent += 1;
+          else acc.other += 1;
+          return acc;
+        },
+        { present: 0, absent: 0, other: 0 }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Lấy điểm danh theo giảng viên thành công",
+        data: rows,
+        summary,
+      });
+    } catch (error) {
+      console.error("Error getting instructor attendance:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy điểm danh theo giảng viên",
         error: error.message,
       });
     }
@@ -238,6 +301,38 @@ const attendanceController = {
       res.status(500).json({
         success: false,
         message: "Lỗi khi tạo điểm danh hàng loạt",
+        error: error.message,
+      });
+    }
+  },
+
+  // Lấy điểm danh theo giảng viên (cho admin)
+  getAttendanceByInstructor: async (req, res) => {
+    try {
+      const { instructorId } = req.params;
+
+      if (!instructorId) {
+        return res.status(400).json({
+          success: false,
+          message: "InstructorID là bắt buộc",
+        });
+      }
+
+      const result = await attendanceService.getAttendanceByInstructor(
+        instructorId
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Lấy điểm danh theo giảng viên thành công",
+        data: result.data,
+        summary: result.summary,
+      });
+    } catch (error) {
+      console.error("Error getting attendance by instructor:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy điểm danh theo giảng viên",
         error: error.message,
       });
     }

@@ -111,12 +111,6 @@ class AdminRepository {
     return await this.findById(adminId);
   }
 
-  async delete(adminId) {
-    const pool = await connectDB();
-    const query = `DELETE FROM admin WHERE AdminID = ?`;
-    const [result] = await pool.execute(query, [adminId]);
-    return result.affectedRows > 0;
-  }
 }
 
 module.exports = new AdminRepository();

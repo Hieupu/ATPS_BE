@@ -80,6 +80,7 @@ const zoomRoutes = require("./routes/zoomRoutes");
 const commonRouter = require("./routes/commonRouter");
 const slotReservationRoutes = require("./routes/slotReservationRoutes");
 const learnerExamRoutes = require("./routes/learnerExamRoutes");
+const payrollRoutes = require("./routes/payrollRoutes");
 dotenv.config();
 const app = express();
 
@@ -162,7 +163,7 @@ app.use("/api/timeslots", timeslotRouter);
 app.use("/api/schedule", scheduleRoutes);
 
 // Attendance & Progress routes
-// app.use("/api/attendances", attendanceRouter);
+app.use("/api/attendance", attendanceRouter);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/progress", progressRoutes);
 
@@ -190,6 +191,7 @@ app.use("/api/email-templates", emailTemplateRouter);
 app.use("/api/email-logs", emailLogRouter);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/payment", paymentRoutes);
+app.use("/api/payroll", payrollRoutes);
 app.use("/api/zoom", zoomRoutes);
 app.use("/api/learnerassignments", learnerassignmentRoutes);
 app.use("/api/slot-reservation", slotReservationRoutes);
@@ -200,45 +202,11 @@ app.use("/api/common", commonRouter);
 app.use("/api/admin/classes", classRouter);
 app.use("/api/admin/courses", courseRouter);
 app.use("/api/admin/timeslots", timeslotRouter);
-app.use("/api/admin/sessions", sessionRouter);
+// app.use("/api/admin/sessions", sessionRouter);
 app.use("/api/instructor/classes", classRouter);
 app.use("/api/instructor/courses", courseRouter);
 app.use("/api/learner/classes", classRouter);
 app.use("/api/common/courses", courseRouter);
-
-// // ========== ROOT ROUTE ==========
-// app.get("/", (req, res) => {
-//   res.json({
-//     message: "ATPS Backend API",
-//     version: "1.0.0",
-//     description:
-//       "Admin Training Platform System - API for managing courses, instructors, and learners",
-//     endpoints: {
-//       auth: "/api/auth",
-//       profile: "/api/profile",
-//       classes: "/api/classes",
-//       courses: "/api/courses",
-//       attendance: "/api/attendance",
-//       enrollments: "/api/enrollments",
-//       instructors: "/api/instructors",
-//       learners: "/api/learners",
-//       accounts: "/api/accounts",
-//       news: "/api/news",
-//       refunds: "/api/refunds",
-//       promotions: "/api/promotions",
-//       dashboard: "/api/dashboard",
-//       materials: "/api/materials",
-//       sessions: "/api/sessions",
-//       timeslots: "/api/timeslots",
-//       exams: "/api/exams",
-//       assignments: "/api/instructor/assignments",
-//       notifications: "/api/notifications",
-//       payment: "/api/payment",
-//       zoom: "/api/zoom",
-//     },
-//     documentation: "/API_DOCUMENTATION.md",
-//   });
-// });
 
 // ========== ERROR HANDLERS ==========
 // 404 handler
@@ -260,24 +228,12 @@ app.use((err, req, res, next) => {
 });
 
 const classService = require("./services/ClassService");
-const instructorExamRepository = require("./repositories/instructorExamRepository");
 
 cron.schedule(
   "0 0 * * *",
   async () => {
     try {
-      console.log("[Cron Job] Bắt đầu tự động cập nhật status lớp học...");
       const result = await classService.autoUpdateClassStatus();
-      console.log("[Cron Job] Kết quả:", result.message);
-      console.log(
-        "[Cron Job] - Kích hoạt từ APPROVED:",
-        result.activatedClasses?.length || 0
-      );
-      console.log(
-        "[Cron Job] - Chuyển sang ONGOING:",
-        result.startedClasses?.length || 0
-      );
-      console.log("[Cron Job] - Đóng lớp:", result.closedClasses?.length || 0);
     } catch (error) {
       console.error("[Cron Job] Lỗi khi tự động cập nhật status:", error);
     }
@@ -288,29 +244,6 @@ cron.schedule(
   }
 );
 
-cron.schedule(
-  "0 * * * *",
-  async () => {
-    try {
-      console.log(
-        "[Cron Job Hourly] Bắt đầu tự động cập nhật status lớp học..."
-      );
-      const result = await classService.autoUpdateClassStatus();
-      console.log("[Cron Job Hourly] Kết quả:", result.message);
-    } catch (error) {
-      console.error("[Cron Job Hourly] Lỗi:", error);
-    }
-  },
-  {
-    scheduled: true,
-    timezone: "Asia/Ho_Chi_Minh",
-  }
-);
-
-console.log("[Cron Jobs] Đã khởi tạo scheduled tasks:");
-console.log(
-  "[Cron Jobs] - Tự động cập nhật status lớp học: Mỗi ngày lúc 00:00 và mỗi giờ"
-);
 
 const PORT = process.env.PORT || 9999;
 connectDB().then(() => {

@@ -261,6 +261,73 @@ class AttendanceService {
       return { error: error.message };
     }
   }
+
+  async getAttendanceByInstructor(instructorId) {
+    try {
+      if (!instructorId) {
+        throw new Error("InstructorID là bắt buộc");
+      }
+
+      const attendanceList = await attendanceRepository.getAttendanceByInstructor(instructorId);
+
+      // Tính tổng hợp thống kê
+      const summary = {
+        total: attendanceList.length,
+        present: attendanceList.filter(a => a.Status === 'Present' || a.Status === 'PRESENT').length,
+        absent: attendanceList.filter(a => a.Status === 'Absent' || a.Status === 'ABSENT').length,
+        late: attendanceList.filter(a => a.Status === 'Late' || a.Status === 'LATE').length,
+        other: attendanceList.filter(a => 
+          !['Present', 'PRESENT', 'Absent', 'ABSENT', 'Late', 'LATE'].includes(a.Status)
+        ).length
+      };
+
+      // Format dữ liệu
+      const formattedAttendance = attendanceList.map(record => ({
+        AttendanceID: record.AttendanceID,
+        Status: record.Status,
+        StatusText: this.getStatusText(record.Status),
+        AttendanceDate: record.AttendanceDate,
+        Note: record.note || '',
+        Learner: {
+          LearnerID: record.LearnerID,
+          FullName: record.LearnerName,
+          ProfilePicture: record.LearnerAvatar
+        },
+        Session: {
+          SessionID: record.SessionID,
+          Title: record.SessionTitle,
+          Description: record.SessionDescription,
+          Date: record.SessionDate,
+          StartTime: record.StartTime,
+          EndTime: record.EndTime,
+          DayOfWeek: record.DayOfWeek,
+          Time: record.StartTime && record.EndTime 
+            ? `${this.formatTime(record.StartTime)} - ${this.formatTime(record.EndTime)}`
+            : ''
+        },
+        Class: {
+          ClassID: record.ClassID,
+          Name: record.ClassName
+        },
+        Course: {
+          CourseID: record.CourseID,
+          Title: record.CourseTitle
+        },
+        Instructor: {
+          InstructorID: record.InstructorID,
+          FullName: record.InstructorName
+        }
+      }));
+
+      return {
+        data: formattedAttendance,
+        summary
+      };
+    } catch (error) {
+      console.error("Error in getAttendanceByInstructor service:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new AttendanceService();

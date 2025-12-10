@@ -29,7 +29,7 @@ const CLASS_STATUS = {
 
   // Đang diễn ra: Lớp đã bắt đầu học
   ONGOING: "ONGOING",
-  ON_GOING: "ONGOING", // Alias for backward compatibility
+  ON_GOING: "ONGOING", 
 
   // Đã kết thúc: Lớp đã hoàn thành
   CLOSE: "CLOSE",
