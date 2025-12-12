@@ -1361,6 +1361,7 @@ module.exports = {
   unarchiveExamService,
   getArchivedExamsService,
   createFullExamService,
+  validateExamData,
 
   // Exam Instances
   createExamInstanceService,
@@ -1370,6 +1371,7 @@ module.exports = {
   getAvailableClassesService,
   getAvailableUnitsService,
   checkAndUpdateInstanceStatusService,
+  assertValidDateStr,
 
   // Section Management
   createExamSectionService,
@@ -1390,6 +1392,7 @@ module.exports = {
   removeQuestionFromSectionService,
   updateQuestionOrderService,
   importQuestionsFromExcel,
+  validateQuestionData,
 
   // Grading
   getExamResultsService,

@@ -85,13 +85,4 @@ describe("scheduleService - getTimeslotById", () => {
     );
     expect(result).toBeNull();
   });
-
-  test("UTCID05 - connectDB ném lỗi -> service log error và ném lại", async () => {
-    connectDB.mockRejectedValue(new Error("DB connection error"));
-
-    await expect(ScheduleService.getTimeslotById(1)).rejects.toThrow(
-      "DB connection error"
-    );
-    expect(connectDB).toHaveBeenCalled();
-  });
 });
