@@ -75,6 +75,7 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const zoomRoutes = require("./routes/zoomRoutes");
 const commonRouter = require("./routes/commonRouter");
 const slotReservationRoutes = require("./routes/slotReservationRoutes");
+const newsRoutes = require("./routes/newsRoutes");
 dotenv.config();
 const app = express();
 
@@ -186,7 +187,7 @@ app.use("/api/learnerassignments", learnerassignmentRoutes);
 app.use("/api/slot-reservation", slotReservationRoutes);
 
 app.use("/api/common", commonRouter);
-
+app.use("/api/new", newsRoutes);
 // Legacy API routes (for compatibility)
 app.use("/api/admin/classes", classRouter);
 app.use("/api/admin/courses", courseRouter);
