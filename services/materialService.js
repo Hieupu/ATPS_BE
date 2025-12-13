@@ -8,11 +8,11 @@ class MaterialService {
       // Format data
       const formattedMaterials = materials.map((material) => ({
         ...material,
-        FileType: this.getFileType(material.FileURL), // Capitalize for consistency
-        fileType: this.getFileType(material.FileURL).toLowerCase(), // Lowercase for frontend
-        Description: material.Description || 'Tài liệu học tập', // Default description
-        FileSize: material.FileSize || null, // Default file size
-        UploadDate: material.UploadDate || null, // Default upload date
+        FileType: this.getFileType(material.FileURL),
+        fileType: this.getFileType(material.FileURL).toLowerCase(), 
+        Description: material.Description || 'Tài liệu học tập', 
+        FileSize: material.FileSize || null, 
+        UploadDate: material.UploadDate || null, 
         canDownload: true,
       }));
 

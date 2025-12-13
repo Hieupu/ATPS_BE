@@ -30,7 +30,7 @@ const router = express.Router();
 router.get(
   "/courses",
   verifyToken,
-  authorizeRole("instructor","admin"),
+  authorizeRole("instructor", "admin"),
   listInstructorCourses
 );
 router.post(
@@ -107,7 +107,7 @@ router.delete(
 router.get(
   "/units/:unitId/assignments",
   verifyToken,
-  authorizeRole(["instructor", "admin", "learner"]),
+  authorizeRole("instructor", "admin", "learner"),
   getAssignmentsByUnitId
 );
 

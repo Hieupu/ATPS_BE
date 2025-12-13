@@ -41,6 +41,7 @@ const loginService = async (
   provider = "local",
   rememberMe = false
 ) => {
+  
   const user = await accountRepository.findAccountByEmail(email);
 
   if (!user) {
@@ -52,9 +53,7 @@ const loginService = async (
     }
     throw new ServiceError("Email hoặc mật khẩu không chính xác", 401);
   }
-
-  checkAccountStatus(user);
-
+  
   const userProvider = user.Provider.toLowerCase();
   const loginProvider = provider.toLowerCase();
 
@@ -86,6 +85,8 @@ const loginService = async (
       throw new ServiceError("Email hoặc mật khẩu không chính xác", 401);
     }
   }
+
+  checkAccountStatus(user);
 
   const role = await determineUserRole(user.AccID);
 

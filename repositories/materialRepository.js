@@ -6,11 +6,11 @@ class MaterialRepository {
       const db = await connectDB();
       const [rows] = await db.query(
         `SELECT 
+          CourseID,
           MaterialID,
           Title,
           FileURL,
-          Status,
-          CourseID
+          Status 
          FROM material
          WHERE CourseID = ? AND LOWER(Status) = 'VISIBLE'
          ORDER BY MaterialID DESC`,
