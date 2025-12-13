@@ -7,27 +7,34 @@ class ProgressService {
         learnerId,
         courseId
       );
-      console.log("progressData", progressData)
+      console.log("progressData", progressData);
 
       const formattedProgress = progressData.map((progress) => {
         const status = this.getProgressStatus(progress.ProgressPercentage);
         const performanceLevel = this.getPerformanceLevel(progress.AvgScore);
 
         // Parse thông tin enrollments
-        const enrollmentIds = progress.EnrollmentIDs ? progress.EnrollmentIDs.split(',') : [];
-        const classIds = progress.ClassIDs ? progress.ClassIDs.split(',') : [];
-        const classNames = progress.ClassNames ? progress.ClassNames.split(' | ') : [];
-        const enrollmentStatuses = progress.EnrollmentStatuses ? progress.EnrollmentStatuses.split('|') : [];
+        const enrollmentIds = progress.EnrollmentIDs
+          ? progress.EnrollmentIDs.split(",")
+          : [];
+        const classIds = progress.ClassIDs ? progress.ClassIDs.split(",") : [];
+        const classNames = progress.ClassNames
+          ? progress.ClassNames.split(" | ")
+          : [];
+        const enrollmentStatuses = progress.EnrollmentStatuses
+          ? progress.EnrollmentStatuses.split("|")
+          : [];
 
         // Parse thống kê từng lớp (JSON array)
         let classesDetail = [];
         try {
           if (progress.ClassesDetailJSON) {
-            const parsedClasses = typeof progress.ClassesDetailJSON === 'string' 
-              ? JSON.parse(progress.ClassesDetailJSON) 
-              : progress.ClassesDetailJSON;
-            
-            classesDetail = parsedClasses.map(cls => ({
+            const parsedClasses =
+              typeof progress.ClassesDetailJSON === "string"
+                ? JSON.parse(progress.ClassesDetailJSON)
+                : progress.ClassesDetailJSON;
+
+            classesDetail = parsedClasses.map((cls) => ({
               classId: cls.ClassID,
               name: cls.ClassName,
               status: cls.EnrollmentStatus,
@@ -37,11 +44,15 @@ class ProgressService {
               stats: {
                 totalAssignments: cls.TotalAssignments || 0,
                 completedAssignments: cls.CompletedAssignments || 0,
-                remainingAssignments: Math.max(0, (cls.TotalAssignments || 0) - (cls.CompletedAssignments || 0)),
+                remainingAssignments: Math.max(
+                  0,
+                  (cls.TotalAssignments || 0) - (cls.CompletedAssignments || 0)
+                ),
                 totalSessions: cls.TotalSessions || 0,
                 attendedSessions: cls.AttendedSessions || 0,
                 absentSessions: cls.AbsentSessions || 0,
-                totalStudyHours: Math.round(((cls.TotalStudyMinutes || 0) / 60) * 10) / 10,
+                totalStudyHours:
+                  Math.round(((cls.TotalStudyMinutes || 0) / 60) * 10) / 10,
                 avgScore: Math.round((cls.AvgScore || 0) * 10) / 10,
               },
               dates: {
@@ -52,15 +63,20 @@ class ProgressService {
             }));
           }
         } catch (e) {
-          console.error("Error parsing ClassesDetailJSON:", e, progress.ClassesDetailJSON);
+          console.error(
+            "Error parsing ClassesDetailJSON:",
+            e,
+            progress.ClassesDetailJSON
+          );
         }
 
         return {
           enrollmentIds: enrollmentIds,
           courseId: progress.CourseID,
           classIds: classIds,
-          totalEnrolledClasses: progress.TotalEnrolledClasses || classIds.length,
-          
+          totalEnrolledClasses:
+            progress.TotalEnrolledClasses || classIds.length,
+
           // Course Info
           course: {
             id: progress.CourseID,
@@ -70,32 +86,32 @@ class ProgressService {
             duration: progress.CourseDuration,
             level: progress.CourseLevel,
           },
-          
+
           // Class Info - multiple classes
           classes: classIds.map((id, index) => ({
             id: id,
-            name: classNames[index] || 'N/A',
-            status: enrollmentStatuses[index] || 'N/A',
+            name: classNames[index] || "N/A",
+            status: enrollmentStatuses[index] || "N/A",
           })),
-          
+
           // Chi tiết từng lớp
           classesDetail: classesDetail,
-          
+
           classInfo: {
-            names: classNames.join(', '),
+            names: classNames.join(", "),
             count: classIds.length,
             totalFees: progress.TotalClassFees,
             earliestStart: progress.EarliestClassStart,
             latestEnd: progress.LatestClassEnd,
           },
-          
+
           // Instructor Info
           instructor: {
             id: progress.InstructorID,
             name: progress.InstructorName,
             avatar: progress.InstructorAvatar,
           },
-          
+
           // Progress Overview (tổng hợp từ tất cả classes)
           progress: {
             overall: progress.ProgressPercentage,
@@ -104,31 +120,32 @@ class ProgressService {
             exams: progress.CompletionRate.exams,
             attendance: progress.AttendanceRate,
           },
-          
+
           // Statistics (tổng hợp)
           stats: {
             totalUnits: progress.TotalUnits,
             totalLessons: progress.TotalLessons,
             totalLessonHours: progress.TotalLessonHours,
-            
+
             totalAssignments: progress.TotalAssignments,
             completedAssignments: progress.CompletedAssignments,
             remainingAssignments: progress.RemainingAssignments,
-            
+
             totalExams: progress.TotalExams,
             completedExams: progress.CompletedExams,
             remainingExams: progress.RemainingExams,
-            
+
             totalSessions: progress.TotalSessions,
             attendedSessions: progress.AttendedSessions,
             absentSessions: progress.AbsentSessions,
-            
+
             totalStudyHours: progress.TotalStudyHours,
             avgScore: progress.AvgScore,
-            avgAssignmentScore: Math.round(progress.AvgAssignmentScore * 10) / 10,
+            avgAssignmentScore:
+              Math.round(progress.AvgAssignmentScore * 10) / 10,
             avgExamScore: Math.round(progress.AvgExamScore * 10) / 10,
           },
-          
+
           // Status & Flags
           status: {
             enrollmentStatuses: enrollmentStatuses,
@@ -136,7 +153,7 @@ class ProgressService {
             performance: performanceLevel,
             isCompleted: progress.IsCompleted,
           },
-          
+
           // Dates
           dates: {
             firstEnrolled: progress.FirstEnrollmentDate,
@@ -145,7 +162,7 @@ class ProgressService {
             classEnd: progress.LatestClassEnd,
             firstPayment: progress.FirstPaymentDate,
           },
-          
+
           // Payment
           payment: {
             totalAmount: progress.TotalPaidAmount,
@@ -168,16 +185,20 @@ class ProgressService {
         courseId
       );
 
+      if (!unitProgress) {
+        return null;
+      }
+
       return unitProgress.map((unit) => ({
         unitId: unit.UnitID,
         title: unit.UnitTitle,
         description: unit.UnitDescription,
         order: unit.UnitOrder,
         duration: unit.UnitDuration,
-        
+
         progress: unit.UnitProgress,
         isCompleted: unit.IsCompleted,
-        
+
         stats: {
           totalLessons: unit.TotalLessons,
           totalLessonHours: unit.TotalLessonHours,
@@ -195,7 +216,7 @@ class ProgressService {
   async getOverallStatistics(learnerId) {
     try {
       const stats = await progressRepository.getOverallStatistics(learnerId);
-      
+
       if (!stats) {
         return null;
       }

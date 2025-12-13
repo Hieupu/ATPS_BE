@@ -11,12 +11,6 @@ router.get(
   timeslotController.getAllTimeslots
 );
 
-router.post(
-  "/",
-  verifyToken,
-  authorizeFeature("admin"),
-  timeslotController.createTimeslot
-);
 
 // ✅ Distinct time ranges API - Phải đặt TRƯỚC route /:timeslotId để tránh bị match nhầm
 router.get(
@@ -30,20 +24,6 @@ router.get(
   verifyToken,
   authorizeFeature("admin"),
   timeslotController.getTimeslotById
-);
-
-router.put(
-  "/:timeslotId",
-  verifyToken,
-  authorizeFeature("admin"),
-  timeslotController.updateTimeslot
-);
-
-router.delete(
-  "/:timeslotId",
-  verifyToken,
-  authorizeFeature("admin"),
-  timeslotController.deleteTimeslot
 );
 
 // Date range APIs

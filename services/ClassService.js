@@ -10,13 +10,23 @@ const refundRepository = require("../repositories/refundRepository");
 const { generateSessions } = require("../utils/scheduleUtils");
 const connectDB = require("../config/db");
 
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 class ClassService {
   async createClass(data) {
     try {
       // Validate required fields (CourseID is optional)
       const className = data.Name || data.ClassName; // Support both old and new field names
       if (!className || !data.InstructorID) {
-        throw new Error("Name and InstructorID are required");
+        throw new ServiceError(
+          "Thiếu tên lớp (Name/ClassName) hoặc InstructorID",
+          400
+        );
       }
 
       // dbver5: Sử dụng các trường mới (không có ZoomURL)
@@ -39,7 +49,7 @@ class ClassService {
       if (classData.CourseID) {
         const course = await courseRepository.findById(classData.CourseID);
         if (!course) {
-          throw new Error("Course not found");
+          throw new ServiceError("Khóa học không tồn tại", 404);
         }
       }
 
@@ -48,7 +58,7 @@ class ClassService {
         classData.InstructorID
       );
       if (!instructor) {
-        throw new Error("Instructor not found");
+        throw new ServiceError("Giảng viên không tồn tại", 404);
       }
 
       // Create class
@@ -104,7 +114,7 @@ class ClassService {
   async getClassById(id) {
     try {
       if (!id) {
-        throw new Error("Class ID is required");
+        throw new ServiceError("Thiếu ClassID", 400);
       }
 
       const classData = await classRepository.findById(id);
@@ -124,10 +134,9 @@ class ClassService {
       // Check if class exists
       const existingClass = await classRepository.findById(id);
       if (!existingClass || existingClass.length === 0) {
-        throw new Error("Class not found");
+        throw new ServiceError("Lớp học không tồn tại", 404);
       }
 
-      // Whitelist allowed fields for dbver5 (không có ZoomURL)
       const allowedFields = [
         "Name",
         "CourseID",
@@ -164,7 +173,7 @@ class ClassService {
       // Check if class exists
       const existingClass = await classRepository.findById(id);
       if (!existingClass || existingClass.length === 0) {
-        throw new Error("Class not found");
+        throw new ServiceError("Lớp học không tồn tại", 404);
       }
 
       // Get all sessions for this class
@@ -254,7 +263,7 @@ class ClassService {
       // Lấy thông tin class để lấy InstructorID
       const classInfo = await classRepository.findById(classId);
       if (!classInfo || classInfo.length === 0) {
-        throw new Error("Class not found");
+        throw new ServiceError("Lớp học không tồn tại", 404);
       }
 
       console.log(
@@ -358,9 +367,9 @@ class ClassService {
           }
 
           const conflict = conflicts[0];
-          throw new Error(
-            `Instructor đã có ca học trùng thời gian: ${conflict.ClassName} - ${conflict.sessionTitle} ` +
-              `(${conflict.Date} ${conflict.StartTime}-${conflict.EndTime})`
+          throw new ServiceError(
+            `Giảng viên đã có ca trùng: ${conflict.ClassName} - ${conflict.sessionTitle} (${conflict.Date} ${conflict.StartTime}-${conflict.EndTime})`,
+            409
           );
         }
       }
@@ -395,7 +404,7 @@ class ClassService {
   async getClassSessions(classId) {
     try {
       // Sử dụng method đã có trong timeslotRepository
-      const timeslotService = require("./timeslotService");
+      const timeslotService = require("./TimeslotService");
       const sessions = await timeslotService.getClassSessionsForFrontend(
         classId
       );
@@ -516,7 +525,7 @@ class ClassService {
     try {
       const classData = await classRepository.findById(classId);
       if (!classData || classData.length === 0) {
-        throw new Error("Lớp học không tồn tại");
+        throw new ServiceError("Lớp học không tồn tại", 404);
       }
 
       const enrollmentCount = await this.getEnrollmentCount(classId);
@@ -749,7 +758,7 @@ class ClassService {
       // 1. Lấy thông tin lớp
       const classData = await classRepository.findById(classId);
       if (!classData || classData.length === 0) {
-        throw new Error("Class not found");
+        throw new ServiceError("Lớp học không tồn tại", 404);
       }
       const classInfo = classData[0];
 

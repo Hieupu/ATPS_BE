@@ -402,6 +402,7 @@ const classScheduleController = {
         numSuggestions,
         startDate,
         excludeClassId,
+        ClassID,
       } = req.query;
 
       if (!InstructorID || !TimeslotID || !Day) {
@@ -421,6 +422,7 @@ const classScheduleController = {
         numSuggestions: numSuggestions ? parseInt(numSuggestions) : 5,
         startDate,
         excludeClassId: excludeClassId ? parseInt(excludeClassId) : null,
+        ClassID: ClassID ? parseInt(ClassID) : null,
       });
 
       const suggestions =
@@ -431,6 +433,7 @@ const classScheduleController = {
           numSuggestions: numSuggestions ? parseInt(numSuggestions) : 5,
           startDate,
           excludeClassId: excludeClassId ? parseInt(excludeClassId) : null,
+          ClassID: ClassID ? parseInt(ClassID) : null,
         });
 
       console.log(
@@ -700,6 +703,7 @@ const classScheduleController = {
         sessionsPerWeek,
         requiredSlotsPerWeek,
         currentStartDate,
+        ClassID,
       } = req.body;
 
       console.log("[searchTimeslots] START", {
@@ -733,6 +737,7 @@ const classScheduleController = {
           ? parseInt(sessionsPerWeek)
           : 0,
         currentStartDate: currentStartDate || null,
+        ClassID: ClassID ? parseInt(ClassID) : null,
       });
 
       const durationMs = Date.now() - startTime;

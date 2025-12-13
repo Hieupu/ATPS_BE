@@ -8,6 +8,13 @@ const {
   validateDateDayConsistency,
 } = require("../utils/sessionValidation");
 
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 class SessionService {
   // Tạo session mới (Single Create)
   // Return: { success: session, conflict: null } hoặc { success: null, conflict: conflictInfo }
@@ -16,7 +23,7 @@ class SessionService {
       // Kiểm tra lớp tồn tại và lấy thông tin
       const classData = await classRepository.findById(sessionData.ClassID);
       if (!classData || classData.length === 0) {
-        throw new Error("Lớp học không tồn tại");
+        throw new ServiceError("Lớp học không tồn tại", 404);
       }
 
       // InstructorID từ request được ưu tiên (đã validate bắt buộc ở controller)
@@ -24,8 +31,9 @@ class SessionService {
       const instructorId =
         sessionData.InstructorID || classData[0].InstructorID;
       if (!instructorId) {
-        throw new Error(
-          `Không tìm thấy InstructorID cho ClassID ${sessionData.ClassID}`
+        throw new ServiceError(
+          `Không tìm thấy InstructorID cho ClassID ${sessionData.ClassID}`,
+          400
         );
       }
 
@@ -34,7 +42,7 @@ class SessionService {
         sessionData.TimeslotID
       );
       if (!timeslot || timeslot.length === 0) {
-        throw new Error("Timeslot không tồn tại");
+        throw new ServiceError("Timeslot không tồn tại", 404);
       }
 
       // Chuẩn bị session data
@@ -281,7 +289,7 @@ class SessionService {
       // Lấy thông tin session hiện tại
       const currentSession = await this.getSessionById(sessionId);
       if (!currentSession) {
-        throw new Error("Session không tồn tại");
+        throw new ServiceError("Buổi học không tồn tại", 404);
       }
 
       // Logic mới: Không cho phép update ZoomUUID (chỉ được giữ nguyên hoặc không có)
@@ -319,7 +327,10 @@ class SessionService {
           sessionDataToCheck
         );
         if (!dateDayValidation.isValid) {
-          throw new Error(dateDayValidation.error);
+          throw new ServiceError(
+            dateDayValidation.error || "Ngày không hợp lệ với thứ đã chọn",
+            400
+          );
         }
 
         // 2. Validate instructor leave
@@ -327,7 +338,11 @@ class SessionService {
           sessionDataToCheck
         );
         if (leaveValidation.hasConflict) {
-          throw new Error(leaveValidation.conflictInfo.message);
+          throw new ServiceError(
+            leaveValidation.conflictInfo.message ||
+              "Lịch nghỉ của giảng viên bị trùng",
+            409
+          );
         }
 
         // 3. Kiểm tra conflict với session khác, nhưng loại trừ session hiện tại
@@ -337,7 +352,7 @@ class SessionService {
       // Cập nhật session
       const updated = await sessionRepository.update(sessionId, updateData);
       if (updated.affectedRows === 0) {
-        throw new Error("Session không tồn tại");
+        throw new ServiceError("Buổi học không tồn tại", 404);
       }
 
       // ========== SYNCHRONIZATION FUNCTION: Đồng bộ class.Opendate/Enddate ==========
@@ -367,7 +382,7 @@ class SessionService {
       // Validate trạng thái lớp
       const session = await this.getSessionById(sessionId);
       if (!session) {
-        throw new Error("Session không tồn tại");
+        throw new ServiceError("Buổi học không tồn tại", 404);
       }
 
       const classData = await classRepository.findById(session.ClassID);
@@ -385,11 +400,11 @@ class SessionService {
         newTimeslotID
       );
       if (!validation.isValid) {
-        throw new Error(
+        const msg =
           validation.errors[0]?.message ||
-            validation.conflicts[0]?.conflictInfo?.message ||
-            "Validation failed"
-        );
+          validation.conflicts[0]?.conflictInfo?.message ||
+          "Kiểm tra hợp lệ không thành công";
+        throw new ServiceError(msg, 400);
       }
 
       // Update session
@@ -414,7 +429,7 @@ class SessionService {
       // Validate trạng thái lớp
       const session = await this.getSessionById(sessionId);
       if (!session) {
-        throw new Error("Session không tồn tại");
+        throw new ServiceError("Buổi học không tồn tại", 404);
       }
 
       const classData = await classRepository.findById(session.ClassID);
@@ -450,7 +465,7 @@ class SessionService {
       // Validate trạng thái lớp
       const classData = await classRepository.findById(classId);
       if (!classData || classData.length === 0) {
-        throw new Error("Lớp học không tồn tại");
+        throw new ServiceError("Lớp học không tồn tại", 404);
       }
 
       const {
@@ -481,27 +496,40 @@ class SessionService {
         preparedSessionData
       );
       if (leaveValidation.hasConflict) {
-        throw new Error(leaveValidation.conflictInfo.message);
+        throw new ServiceError(
+          leaveValidation.conflictInfo.message ||
+            "Lịch nghỉ của giảng viên bị trùng",
+          409
+        );
       }
 
       const dateDayValidation = await validateDateDayConsistency(
         preparedSessionData
       );
       if (!dateDayValidation.isValid) {
-        throw new Error(dateDayValidation.error);
+        throw new ServiceError(
+          dateDayValidation.error || "Ngày không khớp với thứ đã chọn",
+          400
+        );
       }
 
       const conflictCheck = await this.checkSessionConflictInfo(
         preparedSessionData
       );
       if (conflictCheck.hasConflict) {
-        throw new Error(conflictCheck.conflictInfo.message);
+        throw new ServiceError(
+          conflictCheck.conflictInfo.message || "Buổi học bị trùng lịch",
+          409
+        );
       }
 
       // Tạo session
       const result = await this.createSession(preparedSessionData);
       if (result.conflict) {
-        throw new Error(result.conflict.conflictInfo.message);
+        throw new ServiceError(
+          result.conflict.conflictInfo.message || "Buổi học bị trùng lịch",
+          409
+        );
       }
 
       return result.success;
@@ -516,7 +544,7 @@ class SessionService {
       // Lấy thông tin session trước khi xóa để biết ClassID
       const session = await this.getSessionById(sessionId);
       if (!session) {
-        throw new Error("Session không tồn tại");
+        throw new ServiceError("Buổi học không tồn tại", 404);
       }
 
       // Nếu có thông tin InstructorID, TimeslotID, Date thì giải phóng slot (OTHER -> AVAILABLE)
@@ -556,7 +584,7 @@ class SessionService {
   async createBulkSessions(sessionsData) {
     try {
       if (!sessionsData || sessionsData.length === 0) {
-        throw new Error("Không có dữ liệu sessions để tạo");
+        throw new ServiceError("Không có dữ liệu buổi học để tạo", 400);
       }
 
       // Logic mới: Validate timeslot pattern cho DRAFT classes
@@ -620,8 +648,9 @@ class SessionService {
               const sortedDates = Object.keys(sessionsByDate).sort();
 
               if (sortedDates.length === 0) {
-                throw new Error(
-                  `Lớp học (ClassID: ${classId}) có Status = DRAFT nhưng không có sessions hợp lệ`
+                throw new ServiceError(
+                  `Lớp (ClassID: ${classId}) ở trạng thái DRAFT nhưng không có buổi hợp lệ`,
+                  400
                 );
               }
 
@@ -648,14 +677,14 @@ class SessionService {
                       dateTimeslots.has(key)
                     )
                   ) {
-                    throw new Error(
-                      `Lớp học (ClassID: ${classId}) có Status = DRAFT: Các ca học trong ngày phải giống nhau cho tất cả các ngày. ` +
-                        `Ngày ${datesToCheck[0]} có ca học [${[
+                    throw new ServiceError(
+                      `Lớp (ClassID: ${classId}) trạng thái DRAFT: Các ca học phải giống nhau. ` +
+                        `Ngày ${datesToCheck[0]} có ca [${[
                           ...commonTimeslotsSet,
-                        ].join(", ")}] ` +
-                        `nhưng ngày ${date} có ca học [${[
+                        ].join(", ")}], ngày ${date} có ca [${[
                           ...dateTimeslots,
-                        ].join(", ")}]`
+                        ].join(", ")}]`,
+                      400
                     );
                   }
                 }
@@ -672,13 +701,13 @@ class SessionService {
                 );
 
                 if (!isSubset) {
-                  throw new Error(
-                    `Lớp học (ClassID: ${classId}) có Status = DRAFT: Ngày cuối cùng (${lastDate}) có ca học [${[
+                  throw new ServiceError(
+                    `Lớp (ClassID: ${classId}) trạng thái DRAFT: Ngày cuối (${lastDate}) có ca [${[
                       ...lastDateTimeslots,
-                    ].join(", ")}] ` +
-                      `không khớp với các ca học chung [${[
-                        ...commonTimeslotsSet,
-                      ].join(", ")}]`
+                    ].join(", ")}] không khớp ca chung [${[
+                      ...commonTimeslotsSet,
+                    ].join(", ")}]`,
+                    400
                   );
                 }
 
@@ -687,11 +716,12 @@ class SessionService {
                 if (totalSessions < numofsession) {
                   // Chưa đủ số buổi → ngày cuối phải có đủ các ca như các ngày khác
                   if (lastDateTimeslots.size < commonTimeslotsSet.size) {
-                    throw new Error(
-                      `Lớp học (ClassID: ${classId}) có Status = DRAFT: Chưa đủ số buổi học (${totalSessions}/${numofsession}). ` +
-                        `Ngày cuối cùng (${lastDate}) phải có đủ các ca học [${[
+                    throw new ServiceError(
+                      `Lớp (ClassID: ${classId}) trạng thái DRAFT: Chưa đủ số buổi (${totalSessions}/${numofsession}). ` +
+                        `Ngày cuối (${lastDate}) phải có đủ ca [${[
                           ...commonTimeslotsSet,
-                        ].join(", ")}]`
+                        ].join(", ")}]`,
+                      400
                     );
                   }
                 }
@@ -701,8 +731,9 @@ class SessionService {
                 // Nhưng vẫn cần kiểm tra số buổi
                 const totalSessions = classSessions.length;
                 if (totalSessions < numofsession) {
-                  throw new Error(
-                    `Lớp học (ClassID: ${classId}) có Status = DRAFT: Chưa đủ số buổi học (${totalSessions}/${numofsession})`
+                  throw new ServiceError(
+                    `Lớp (ClassID: ${classId}) trạng thái DRAFT: Chưa đủ số buổi (${totalSessions}/${numofsession})`,
+                    400
                   );
                 }
               }
@@ -1012,13 +1043,19 @@ class SessionService {
 
       // Validate required fields for instructor check
       if (InstructorID === undefined || InstructorID === null) {
-        throw new Error("InstructorID is required but was undefined/null");
+        throw new ServiceError(
+          "Thiếu InstructorID cho kiểm tra trùng lịch",
+          400
+        );
       }
       if (TimeslotID === undefined || TimeslotID === null) {
-        throw new Error("TimeslotID is required but was undefined/null");
+        throw new ServiceError("Thiếu TimeslotID cho kiểm tra trùng lịch", 400);
       }
       if (Date === undefined || Date === null) {
-        throw new Error("Date is required but was undefined/null");
+        throw new ServiceError(
+          "Thiếu ngày (Date) cho kiểm tra trùng lịch",
+          400
+        );
       }
 
       // 1. Kiểm tra instructor có bận không (trùng Date + TimeslotID + InstructorID)
@@ -1185,10 +1222,11 @@ class SessionService {
           sessionIndex !== null
             ? `Session ${sessionIndex}`
             : "Session bạn đang tạo";
-        throw new Error(
-          `${sessionInfo}: Instructor đã có ca học trùng thời gian. ` +
-            `Lớp "${conflict.className}" đã có session "${conflict.sessionTitle}" ` +
-            `vào ${conflict.Date} (${conflict.StartTime} - ${conflict.EndTime})`
+        throw new ServiceError(
+          `${sessionInfo}: Giảng viên đã có ca trùng. ` +
+            `Lớp "${conflict.className}" đã có buổi "${conflict.sessionTitle}" ` +
+            `vào ${conflict.Date} (${conflict.StartTime} - ${conflict.EndTime})`,
+          409
         );
       }
 
@@ -1224,10 +1262,11 @@ class SessionService {
           sessionIndex !== null
             ? `Session ${sessionIndex}`
             : "Session bạn đang tạo";
-        throw new Error(
-          `${sessionInfo}: Lớp học đã có session trùng ca học. ` +
-            `Session "${conflict.sessionTitle}" đã được tạo ` +
-            `vào ${conflict.Date} (${conflict.StartTime} - ${conflict.EndTime})`
+        throw new ServiceError(
+          `${sessionInfo}: Lớp học đã có buổi trùng ca. ` +
+            `Buổi "${conflict.sessionTitle}" đã được tạo ` +
+            `vào ${conflict.Date} (${conflict.StartTime} - ${conflict.EndTime})`,
+          409
         );
       }
 
@@ -1251,11 +1290,13 @@ class SessionService {
             session1.TimeslotID === session2.TimeslotID &&
             session1.InstructorID === session2.InstructorID
           ) {
-            throw new Error(
+            throw new ServiceError(
               `Session ${i + 1} và Session ${
                 j + 1
-              } trùng lịch: Instructor đã có ca học trùng thời gian ` +
-                `(${session1.Date}, TimeslotID: ${session1.TimeslotID})`
+              } trùng lịch: Giảng viên đã có ca trùng (${
+                session1.Date
+              }, TimeslotID: ${session1.TimeslotID})`,
+              409
             );
           }
 
@@ -1265,11 +1306,13 @@ class SessionService {
             session1.TimeslotID === session2.TimeslotID &&
             session1.ClassID === session2.ClassID
           ) {
-            throw new Error(
+            throw new ServiceError(
               `Session ${i + 1} và Session ${
                 j + 1
-              } trùng ca học: Lớp học đã có session trùng ca học ` +
-                `(${session1.Date}, TimeslotID: ${session1.TimeslotID})`
+              } trùng ca: Lớp đã có buổi trùng (${session1.Date}, TimeslotID: ${
+                session1.TimeslotID
+              })`,
+              409
             );
           }
         }

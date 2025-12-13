@@ -2,6 +2,13 @@ const certificateRepository = require("../repositories/certificateRepository");
 const notificationRepository = require("../repositories/notificationRepository");
 const instructorRepository = require("../repositories/instructorRepository");
 
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 class CertificateService {
   async getAllCertificates(filters = {}) {
     try {
@@ -31,7 +38,7 @@ class CertificateService {
         certificateId
       );
       if (!certificate) {
-        throw new Error("Certificate not found");
+        throw new ServiceError("Chứng chỉ không tồn tại", 404);
       }
       return certificate;
     } catch (error) {
@@ -45,7 +52,10 @@ class CertificateService {
       // Validate status
       const validStatuses = ["PENDING", "APPROVED", "REJECTED"];
       if (!validStatuses.includes(status)) {
-        throw new Error(`Invalid status. Must be one of: ${validStatuses.join(", ")}`);
+        throw new ServiceError(
+          `Trạng thái không hợp lệ. Chỉ cho phép: ${validStatuses.join(", ")}`,
+          400
+        );
       }
 
       // Get certificate info
@@ -53,7 +63,7 @@ class CertificateService {
         certificateId
       );
       if (!certificate) {
-        throw new Error("Certificate not found");
+        throw new ServiceError("Chứng chỉ không tồn tại", 404);
       }
 
       // Update status
@@ -62,7 +72,7 @@ class CertificateService {
         status
       );
       if (!updated) {
-        throw new Error("Failed to update certificate status");
+        throw new ServiceError("Cập nhật trạng thái chứng chỉ thất bại", 500);
       }
 
       // Get instructor info for notification

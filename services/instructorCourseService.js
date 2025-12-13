@@ -629,4 +629,8 @@ module.exports = {
   addMaterialService,
   updateMaterialService,
   deleteMaterialService,
+
+  // utils
+  makeCourseCode,
+  toDecimal2,
 };

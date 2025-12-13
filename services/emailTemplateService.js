@@ -3,6 +3,13 @@ const { sendEmail } = require("../utils/emailUtils");
 const emailLogService = require("./emailLogService");
 const accountRepository = require("../repositories/accountRepository");
 
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 const emailTemplateService = {
   // Lấy danh sách templates với pagination
   getAllTemplates: async (filters = {}) => {
@@ -38,7 +45,7 @@ const emailTemplateService = {
     try {
       const template = await emailTemplateRepository.findById(templateId);
       if (!template) {
-        throw new Error("Không tìm thấy mẫu email");
+        throw new ServiceError("Không tìm thấy mẫu email", 404);
       }
 
       // Parse Variables nếu có
@@ -77,7 +84,10 @@ const emailTemplateService = {
     try {
       const template = await emailTemplateRepository.findByCode(templateCode);
       if (!template) {
-        throw new Error(`Không tìm thấy mẫu email với mã: ${templateCode}`);
+        throw new ServiceError(
+          `Không tìm thấy mẫu email với mã: ${templateCode}`,
+          404
+        );
       }
 
       // Parse Variables nếu có
@@ -106,7 +116,7 @@ const emailTemplateService = {
         templateData.TemplateCode
       );
       if (existing) {
-        throw new Error("Mã mẫu email đã tồn tại");
+        throw new ServiceError("Mã mẫu email đã tồn tại", 409);
       }
 
       const template = await emailTemplateRepository.create(templateData);
@@ -134,7 +144,7 @@ const emailTemplateService = {
     try {
       const existing = await emailTemplateRepository.findById(templateId);
       if (!existing) {
-        throw new Error("Không tìm thấy mẫu email");
+        throw new ServiceError("Không tìm thấy mẫu email", 404);
       }
 
       // Nếu đổi TemplateCode, kiểm tra trùng
@@ -146,7 +156,7 @@ const emailTemplateService = {
           templateData.TemplateCode
         );
         if (codeExists) {
-          throw new Error("Mã mẫu email đã tồn tại");
+          throw new ServiceError("Mã mẫu email đã tồn tại", 409);
         }
       }
 
@@ -178,7 +188,7 @@ const emailTemplateService = {
     try {
       const template = await emailTemplateRepository.findById(templateId);
       if (!template) {
-        throw new Error("Không tìm thấy mẫu email");
+        throw new ServiceError("Không tìm thấy mẫu email", 404);
       }
 
       await emailTemplateRepository.delete(templateId);

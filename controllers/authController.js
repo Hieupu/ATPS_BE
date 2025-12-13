@@ -19,6 +19,7 @@ const {
 } = require("../utils/nodemailer");
 const jwt = require("jsonwebtoken");
 const connectDB = require("../config/db");
+const { log } = require("console");
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
@@ -38,6 +39,7 @@ const login = async (req, res) => {
       user,
     });
   } catch (error) {
+    console.error("Login error:", error);
     if (error instanceof ServiceError) {
       res.status(error.statusCode).json({ message: error.message });
     } else {

@@ -4,9 +4,22 @@ const connectDB = require("../config/db");
 // ==================== CONSTANTS ====================
 const EXAM_STATUSES = ["Draft", "Published", "Archived"];
 const EXAM_TYPES = ["Assignment", "Exam"];
-const INSTANCE_STATUSES = ["Scheduled", "Open", "Closed", "Archived", "Cancelled"];
+const INSTANCE_STATUSES = [
+  "Scheduled",
+  "Open",
+  "Closed",
+  "Archived",
+  "Cancelled",
+];
 const SECTION_TYPES = ["Listening", "Speaking", "Reading", "Writing"];
-const QUESTION_TYPES = ["multiple_choice", "true_false", "fill_in_blank", "matching", "essay", "speaking"];
+const QUESTION_TYPES = [
+  "multiple_choice",
+  "true_false",
+  "fill_in_blank",
+  "matching",
+  "essay",
+  "speaking",
+];
 const QUESTION_LEVELS = ["Easy", "Medium", "Hard"];
 
 // ==================== VALIDATION HELPERS ====================
@@ -33,22 +46,24 @@ function validateExamData(data) {
 
   // Status
   if (data.status && !EXAM_STATUSES.includes(data.status)) {
-    throw new Error(`Trạng thái không hợp lệ. Cho phép: ${EXAM_STATUSES.join(", ")}`);
+    throw new Error(
+      `Trạng thái không hợp lệ. Cho phép: ${EXAM_STATUSES.join(", ")}`
+    );
   }
 
   // Type
   if (data.type && !EXAM_TYPES.includes(data.type)) {
-    throw new Error(`Loại bài thi không hợp lệ. Cho phép: ${EXAM_TYPES.join(", ")}`);
+    throw new Error(
+      `Loại bài thi không hợp lệ. Cho phép: ${EXAM_TYPES.join(", ")}`
+    );
   }
 
   return data;
 }
 
 function validateInstanceData(data) {
-
   // Nếu gán bài EXAM → bắt buộc nhập thời gian
   if (data.instanceType === "Exam") {
-
     const startTime = assertValidDateStr(data.startTime, "Thời gian bắt đầu");
     const endTime = assertValidDateStr(data.endTime, "Thời gian kết thúc");
 
@@ -59,7 +74,6 @@ function validateInstanceData(data) {
 
   // Nếu Assignment → KHÔNG cần thời gian, nhưng nếu có thì validate
   if (data.instanceType === "Assignment") {
-
     if (data.startTime && data.endTime) {
       const start = new Date(data.startTime);
       const end = new Date(data.endTime);
@@ -93,7 +107,11 @@ function validateInstanceUpdateData(data) {
   if (!data.instanceType) throw new Error("Loại bài là bắt buộc");
 
   if (data.instanceType === "Exam") {
-    if (!data.classId || !Array.isArray(data.classId) || data.classId.length === 0) {
+    if (
+      !data.classId ||
+      !Array.isArray(data.classId) ||
+      data.classId.length === 0
+    ) {
       throw new Error("classId phải là mảng không rỗng cho Exam");
     }
     if (!data.startTime || !data.endTime) {
@@ -102,10 +120,17 @@ function validateInstanceUpdateData(data) {
   }
 
   if (data.instanceType === "Assignment") {
-    if (!data.unitId || !Array.isArray(data.unitId) || data.unitId.length === 0) {
+    if (
+      !data.unitId ||
+      !Array.isArray(data.unitId) ||
+      data.unitId.length === 0
+    ) {
       throw new Error("unitId phải là mảng không rỗng cho Assignment");
     }
-    if ((data.startTime && !data.endTime) || (!data.startTime && data.endTime)) {
+    if (
+      (data.startTime && !data.endTime) ||
+      (!data.startTime && data.endTime)
+    ) {
       throw new Error("Assignment phải có đủ Start và End time nếu đặt");
     }
   }
@@ -128,7 +153,9 @@ function validateInstanceUpdateData(data) {
 
 function validateSectionData(data) {
   if (!data.type || !SECTION_TYPES.includes(data.type)) {
-    throw new Error(`Loại section không hợp lệ. Cho phép: ${SECTION_TYPES.join(", ")}`);
+    throw new Error(
+      `Loại section không hợp lệ. Cho phép: ${SECTION_TYPES.join(", ")}`
+    );
   }
 
   if (data.orderIndex === undefined || data.orderIndex < 0) {
@@ -144,22 +171,30 @@ function validateQuestionData(data) {
   }
 
   if (data.type && !QUESTION_TYPES.includes(data.type)) {
-    throw new Error(`Loại câu hỏi không hợp lệ. Cho phép: ${QUESTION_TYPES.join(", ")}`);
+    throw new Error(
+      `Loại câu hỏi không hợp lệ. Cho phép: ${QUESTION_TYPES.join(", ")}`
+    );
   }
 
   if (data.level && !QUESTION_LEVELS.includes(data.level)) {
-    throw new Error(`Độ khó không hợp lệ. Cho phép: ${QUESTION_LEVELS.join(", ")}`);
+    throw new Error(
+      `Độ khó không hợp lệ. Cho phép: ${QUESTION_LEVELS.join(", ")}`
+    );
   }
 
   if (data.point && (data.point < 0 || data.point > 100)) {
     throw new Error("Điểm phải từ 0 đến 100");
   }
 
-  if (data.type === 'multiple_choice') {
-    if (!data.options || !Array.isArray(data.options) || data.options.length < 2) {
+  if (data.type === "multiple_choice") {
+    if (
+      !data.options ||
+      !Array.isArray(data.options) ||
+      data.options.length < 2
+    ) {
       throw new Error("Câu hỏi trắc nghiệm phải có ít nhất 2 lựa chọn");
     }
-    const correctCount = data.options.filter(opt => opt.isCorrect).length;
+    const correctCount = data.options.filter((opt) => opt.isCorrect).length;
     if (correctCount === 0) {
       throw new Error("Phải có ít nhất 1 đáp án đúng");
     }
@@ -176,7 +211,9 @@ function validateQuestionData(data) {
 const createExamService = async (instructorAccId, data) => {
   validateExamData(data);
 
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
   const examData = {
@@ -184,57 +221,77 @@ const createExamService = async (instructorAccId, data) => {
     description: data.description.trim(),
     status: data.status || "Draft",
     type: data.type || "Exam",
-    instructorId: instructorId
+    instructorId: instructorId,
   };
 
   const examId = await instructorExamRepository.createExam(examData);
 
   // Tạo sections với cấu trúc phân cấp nếu có
-  if (data.sections && Array.isArray(data.sections) && data.sections.length > 0) {
+  if (
+    data.sections &&
+    Array.isArray(data.sections) &&
+    data.sections.length > 0
+  ) {
     for (const parentSection of data.sections) {
       validateSectionData(parentSection);
 
       // Tạo parent section
-      const parentSectionId = await instructorExamRepository.createExamSection(examId, {
-        type: parentSection.type,
-        title: parentSection.title || null,
-        orderIndex: parentSection.orderIndex,
-        parentSectionId: null,
-        fileURL: parentSection.fileURL || null
-      });
+      const parentSectionId = await instructorExamRepository.createExamSection(
+        examId,
+        {
+          type: parentSection.type,
+          title: parentSection.title || null,
+          orderIndex: parentSection.orderIndex,
+          parentSectionId: null,
+          fileURL: parentSection.fileURL || null,
+        }
+      );
 
       // Tạo child sections nếu có
-      if (parentSection.childSections && Array.isArray(parentSection.childSections)) {
+      if (
+        parentSection.childSections &&
+        Array.isArray(parentSection.childSections)
+      ) {
         for (const childSection of parentSection.childSections) {
           validateSectionData(childSection);
 
-          const childSectionId = await instructorExamRepository.createExamSection(examId, {
-            type: childSection.type,
-            title: childSection.title || null,
-            orderIndex: childSection.orderIndex,
-            parentSectionId: parentSectionId,
-            fileURL: childSection.fileURL || null
-          });
+          const childSectionId =
+            await instructorExamRepository.createExamSection(examId, {
+              type: childSection.type,
+              title: childSection.title || null,
+              orderIndex: childSection.orderIndex,
+              parentSectionId: parentSectionId,
+              fileURL: childSection.fileURL || null,
+            });
 
           // Thêm questions vào child section
-          const questionIds = childSection.questionIds || childSection.questions || [];
+          const questionIds =
+            childSection.questionIds || childSection.questions || [];
           if (questionIds && questionIds.length > 0) {
-            await instructorExamRepository.addQuestionsToSection(childSectionId, questionIds);
+            await instructorExamRepository.addQuestionsToSection(
+              childSectionId,
+              questionIds
+            );
           }
         }
       }
 
       // Thêm questions trực tiếp vào parent section
-      const parentQuestionIds = parentSection.questionIds || parentSection.questions || [];
+      const parentQuestionIds =
+        parentSection.questionIds || parentSection.questions || [];
       if (parentQuestionIds && parentQuestionIds.length > 0) {
-        await instructorExamRepository.addQuestionsToSection(parentSectionId, parentQuestionIds);
+        await instructorExamRepository.addQuestionsToSection(
+          parentSectionId,
+          parentQuestionIds
+        );
       }
     }
   }
 
   return {
     examId,
-    message: "Tạo bài thi template thành công. Bạn có thể tạo exam instances để gán cho class/unit."
+    message:
+      "Tạo bài thi template thành công. Bạn có thể tạo exam instances để gán cho class/unit.",
   };
 };
 
@@ -244,17 +301,22 @@ const createExamService = async (instructorAccId, data) => {
 const updateExamService = async (instructorAccId, examId, data) => {
   validateExamData(data);
 
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
   const examData = {
     title: data.title.trim(),
     description: data.description.trim(),
     status: data.status || "Draft",
-    type: data.type || "Exam"
+    type: data.type || "Exam",
   };
 
   await instructorExamRepository.updateExam(examId, examData);
@@ -262,7 +324,9 @@ const updateExamService = async (instructorAccId, examId, data) => {
   // Cập nhật sections nếu có
   if (Array.isArray(data.sections)) {
     // Xóa tất cả sections cũ và tạo lại
-    const oldSections = await instructorExamRepository.getParentSectionsByExam(examId);
+    const oldSections = await instructorExamRepository.getParentSectionsByExam(
+      examId
+    );
     for (const section of oldSections) {
       await instructorExamRepository.deleteExamSection(section.SectionId);
     }
@@ -271,36 +335,51 @@ const updateExamService = async (instructorAccId, examId, data) => {
     for (const parentSection of data.sections) {
       validateSectionData(parentSection);
 
-      const parentSectionId = await instructorExamRepository.createExamSection(examId, {
-        type: parentSection.type,
-        title: parentSection.title || null,
-        orderIndex: parentSection.orderIndex,
-        parentSectionId: null,
-        fileURL: parentSection.fileURL || null
-      });
+      const parentSectionId = await instructorExamRepository.createExamSection(
+        examId,
+        {
+          type: parentSection.type,
+          title: parentSection.title || null,
+          orderIndex: parentSection.orderIndex,
+          parentSectionId: null,
+          fileURL: parentSection.fileURL || null,
+        }
+      );
 
-      if (parentSection.childSections && Array.isArray(parentSection.childSections)) {
+      if (
+        parentSection.childSections &&
+        Array.isArray(parentSection.childSections)
+      ) {
         for (const childSection of parentSection.childSections) {
           validateSectionData(childSection);
 
-          const childSectionId = await instructorExamRepository.createExamSection(examId, {
-            type: childSection.type,
-            title: childSection.title || null,
-            orderIndex: childSection.orderIndex,
-            parentSectionId: parentSectionId,
-            fileURL: childSection.fileURL || null
-          });
+          const childSectionId =
+            await instructorExamRepository.createExamSection(examId, {
+              type: childSection.type,
+              title: childSection.title || null,
+              orderIndex: childSection.orderIndex,
+              parentSectionId: parentSectionId,
+              fileURL: childSection.fileURL || null,
+            });
 
-          const questionIds = childSection.questionIds || childSection.questions || [];
+          const questionIds =
+            childSection.questionIds || childSection.questions || [];
           if (questionIds && questionIds.length > 0) {
-            await instructorExamRepository.addQuestionsToSection(childSectionId, questionIds);
+            await instructorExamRepository.addQuestionsToSection(
+              childSectionId,
+              questionIds
+            );
           }
         }
       }
 
-      const parentQuestionIds = parentSection.questionIds || parentSection.questions || [];
+      const parentQuestionIds =
+        parentSection.questionIds || parentSection.questions || [];
       if (parentQuestionIds && parentQuestionIds.length > 0) {
-        await instructorExamRepository.addQuestionsToSection(parentSectionId, parentQuestionIds);
+        await instructorExamRepository.addQuestionsToSection(
+          parentSectionId,
+          parentQuestionIds
+        );
       }
     }
   }
@@ -312,10 +391,15 @@ const updateExamService = async (instructorAccId, examId, data) => {
  * Lấy danh sách exams
  */
 const getExamsService = async (instructorAccId, filters = {}) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const exams = await instructorExamRepository.getExamsByInstructor(instructorId, filters);
+  const exams = await instructorExamRepository.getExamsByInstructor(
+    instructorId,
+    filters
+  );
   return exams;
 };
 
@@ -323,17 +407,24 @@ const getExamsService = async (instructorAccId, filters = {}) => {
  * Lấy chi tiết exam với cấu trúc phân cấp sections
  */
 const getExamDetailService = async (instructorAccId, examId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
   const exam = await instructorExamRepository.getExamById(examId);
   if (!exam) throw new Error("Không tìm thấy bài thi");
 
   // Lấy cấu trúc sections
-  const sections = await instructorExamRepository.getSectionsHierarchyByExam(examId);
+  const sections = await instructorExamRepository.getSectionsHierarchyByExam(
+    examId
+  );
 
   // Lấy danh sách instances
   const instances = await instructorExamRepository.getInstancesByExam(examId);
@@ -341,7 +432,7 @@ const getExamDetailService = async (instructorAccId, examId) => {
   return {
     ...exam,
     sections,
-    instances
+    instances,
   };
 };
 
@@ -349,10 +440,15 @@ const getExamDetailService = async (instructorAccId, examId) => {
  * Xóa exam (chuyển sang Archived)
  */
 const deleteExamService = async (instructorAccId, examId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
   await instructorExamRepository.deleteExam(examId);
@@ -363,10 +459,15 @@ const deleteExamService = async (instructorAccId, examId) => {
  * Lưu trữ exam
  */
 const archiveExamService = async (instructorAccId, examId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
   const success = await instructorExamRepository.archiveExam(examId);
@@ -379,10 +480,15 @@ const archiveExamService = async (instructorAccId, examId) => {
  * Khôi phục exam từ lưu trữ
  */
 const unarchiveExamService = async (instructorAccId, examId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
   const success = await instructorExamRepository.unarchiveExam(examId);
@@ -395,7 +501,9 @@ const unarchiveExamService = async (instructorAccId, examId) => {
  * Lấy danh sách exams đã lưu trữ
  */
 const getArchivedExamsService = async (instructorAccId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
   const exams = await instructorExamRepository.getArchivedExams(instructorId);
@@ -410,10 +518,15 @@ const getArchivedExamsService = async (instructorAccId) => {
 const createExamInstanceService = async (instructorAccId, examId, data) => {
   validateInstanceData(data);
 
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
   const exam = await instructorExamRepository.getExamById(examId);
@@ -449,17 +562,19 @@ const createExamInstanceService = async (instructorAccId, examId, data) => {
         isRandomQuestion: data.isRandomQuestion || false,
         isRandomAnswer: data.isRandomAnswer || false,
         status: data.status || "Scheduled",
-        attempt: data.attempt || 100
+        attempt: data.attempt || 100,
       };
 
-      const instanceId = await instructorExamRepository.createExamInstance(instanceData);
+      const instanceId = await instructorExamRepository.createExamInstance(
+        instanceData
+      );
       createdInstances.push(instanceId);
     }
 
     return {
       success: true,
       message: "Tạo instances thành công cho nhiều lớp",
-      instances: createdInstances
+      instances: createdInstances,
     };
   }
 
@@ -474,52 +589,70 @@ const createExamInstanceService = async (instructorAccId, examId, data) => {
         isRandomQuestion: data.isRandomQuestion || false,
         isRandomAnswer: data.isRandomAnswer || false,
         status: data.status || "Scheduled",
-        attempt: data.attempt || 100
+        attempt: data.attempt || 100,
       };
 
-      const instanceId = await instructorExamRepository.createExamInstance(instanceData);
+      const instanceId = await instructorExamRepository.createExamInstance(
+        instanceData
+      );
       createdInstances.push(instanceId);
     }
 
     return {
       success: true,
       message: "Tạo instances thành công cho nhiều unit",
-      instances: createdInstances
+      instances: createdInstances,
     };
   }
 
   throw new Error("Phải gán cho Class hoặc Unit để tạo instance");
 };
 
-
 /**
  * Cập nhật exam instance
  */
-const updateExamInstanceService = async (instructorAccId, examId, instanceId, data) => {
+const updateExamInstanceService = async (
+  instructorAccId,
+  examId,
+  instanceId,
+  data
+) => {
   // 1. VALIDATE INPUT
   validateInstanceUpdateData(data);
 
   // 2. LẤY INSTRUCTOR ID
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
   // 3. KIỂM TRA QUYỀN SỞ HỮU
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
   // 4. LẤY INSTANCE HIỆN TẠI (CHỈ ĐỂ LẤY GIÁ TRỊ MẶC ĐỊNH)
   const instance = await instructorExamRepository.getInstanceById(instanceId);
   if (!instance) throw new Error("Không tìm thấy phiên thi");
-  if (instance.ExamId != examId) throw new Error("Instance không thuộc exam này");
+  if (instance.ExamId != examId)
+    throw new Error("Instance không thuộc exam này");
 
   // 5. CHUẨN HÓA classId / unitId THÀNH MẢNG
-  const classIds = data.classId != null 
-    ? (Array.isArray(data.classId) ? data.classId : [data.classId])
-    : [];
+  const classIds =
+    data.classId != null
+      ? Array.isArray(data.classId)
+        ? data.classId
+        : [data.classId]
+      : [];
 
-  const unitIds = data.unitId != null 
-    ? (Array.isArray(data.unitId) ? data.unitId : [data.unitId])
-    : [];
+  const unitIds =
+    data.unitId != null
+      ? Array.isArray(data.unitId)
+        ? data.unitId
+        : [data.unitId]
+      : [];
 
   // 6. TRƯỜNG HỢP ĐỔI CLASS/UNIT → XÓA CŨ, TẠO MỚI
   if (classIds.length > 0 || unitIds.length > 0) {
@@ -546,7 +679,9 @@ const updateExamInstanceService = async (instructorAccId, examId, instanceId, da
         attempt: data.attempt ?? instance.Attempt,
       };
 
-      const newInstanceId = await instructorExamRepository.createExamInstance(newData);
+      const newInstanceId = await instructorExamRepository.createExamInstance(
+        newData
+      );
       newInstances.push(newInstanceId);
     }
 
@@ -575,15 +710,23 @@ const updateExamInstanceService = async (instructorAccId, examId, instanceId, da
   };
 };
 
-
 /**
  * Xóa exam instance
  */
-const deleteExamInstanceService = async (instructorAccId, examId, instanceId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+const deleteExamInstanceService = async (
+  instructorAccId,
+  examId,
+  instanceId
+) => {
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
   const instance = await instructorExamRepository.getInstanceById(instanceId);
@@ -602,10 +745,15 @@ const deleteExamInstanceService = async (instructorAccId, examId, instanceId) =>
  * Lấy danh sách instances của exam
  */
 const getExamInstancesService = async (instructorAccId, examId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
   const instances = await instructorExamRepository.getInstancesByExam(examId);
@@ -616,10 +764,15 @@ const getExamInstancesService = async (instructorAccId, examId) => {
  * Lấy danh sách classes có thể gán
  */
 const getAvailableClassesService = async (instructorAccId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const classes = await instructorExamRepository.getAvailableClassesByInstructor(instructorId);
+  const classes =
+    await instructorExamRepository.getAvailableClassesByInstructor(
+      instructorId
+    );
   return classes;
 };
 
@@ -627,10 +780,14 @@ const getAvailableClassesService = async (instructorAccId) => {
  * Lấy danh sách units có thể gán
  */
 const getAvailableUnitsService = async (instructorAccId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const units = await instructorExamRepository.getAvailableUnitsByInstructor(instructorId);
+  const units = await instructorExamRepository.getAvailableUnitsByInstructor(
+    instructorId
+  );
   return units;
 };
 
@@ -643,14 +800,14 @@ const checkAndUpdateInstanceStatusService = async () => {
     return {
       success: true,
       message: "Exam instance status checked and updated",
-      updates: result
+      updates: result,
     };
   } catch (error) {
     console.error(" Service: Check instance status error:", error);
     throw {
       status: 500,
       message: "Failed to check instance status",
-      error: error.message
+      error: error.message,
     };
   }
 };
@@ -660,26 +817,38 @@ const checkAndUpdateInstanceStatusService = async () => {
 /**
  * Tạo section mới
  */
-const createExamSectionService = async (instructorAccId, examId, sectionData) => {
+const createExamSectionService = async (
+  instructorAccId,
+  examId,
+  sectionData
+) => {
   validateSectionData(sectionData);
 
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
   // Nếu có parentSectionId, kiểm tra parent có tồn tại không
   if (sectionData.parentSectionId) {
-    const parentSection = await instructorExamRepository.getSectionById(sectionData.parentSectionId);
+    const parentSection = await instructorExamRepository.getSectionById(
+      sectionData.parentSectionId
+    );
     if (!parentSection) {
       throw new Error("Parent section không tồn tại");
     }
 
-    const belongsToExam = await instructorExamRepository.checkSectionBelongsToExam(
-      sectionData.parentSectionId,
-      examId
-    );
+    const belongsToExam =
+      await instructorExamRepository.checkSectionBelongsToExam(
+        sectionData.parentSectionId,
+        examId
+      );
     if (!belongsToExam) {
       throw new Error("Parent section không thuộc bài thi này");
     }
@@ -690,30 +859,41 @@ const createExamSectionService = async (instructorAccId, examId, sectionData) =>
     title: sectionData.title || null,
     orderIndex: sectionData.orderIndex,
     parentSectionId: sectionData.parentSectionId || null,
-    fileURL: sectionData.fileURL || null
+    fileURL: sectionData.fileURL || null,
   });
 
   return {
     sectionId,
     message: sectionData.parentSectionId
       ? "Tạo child section thành công"
-      : "Tạo parent section thành công"
+      : "Tạo parent section thành công",
   };
 };
 
 /**
  * Cập nhật section
  */
-const updateExamSectionService = async (instructorAccId, examId, sectionId, sectionData) => {
+const updateExamSectionService = async (
+  instructorAccId,
+  examId,
+  sectionId,
+  sectionData
+) => {
   validateSectionData(sectionData);
 
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
-  const belongsToExam = await instructorExamRepository.checkSectionBelongsToExam(sectionId, examId);
+  const belongsToExam =
+    await instructorExamRepository.checkSectionBelongsToExam(sectionId, examId);
   if (!belongsToExam) {
     throw new Error("Section không thuộc bài thi này");
   }
@@ -723,15 +903,18 @@ const updateExamSectionService = async (instructorAccId, examId, sectionId, sect
       throw new Error("Section không thể là parent của chính nó");
     }
 
-    const parentSection = await instructorExamRepository.getSectionById(sectionData.parentSectionId);
+    const parentSection = await instructorExamRepository.getSectionById(
+      sectionData.parentSectionId
+    );
     if (!parentSection) {
       throw new Error("Parent section không tồn tại");
     }
 
-    const parentBelongsToExam = await instructorExamRepository.checkSectionBelongsToExam(
-      sectionData.parentSectionId,
-      examId
-    );
+    const parentBelongsToExam =
+      await instructorExamRepository.checkSectionBelongsToExam(
+        sectionData.parentSectionId,
+        examId
+      );
     if (!parentBelongsToExam) {
       throw new Error("Parent section không thuộc bài thi này");
     }
@@ -742,7 +925,7 @@ const updateExamSectionService = async (instructorAccId, examId, sectionId, sect
     title: sectionData.title || null,
     orderIndex: sectionData.orderIndex,
     parentSectionId: sectionData.parentSectionId || null,
-    fileURL: sectionData.fileURL || null
+    fileURL: sectionData.fileURL || null,
   });
 
   return { message: "Cập nhật section thành công" };
@@ -752,33 +935,52 @@ const updateExamSectionService = async (instructorAccId, examId, sectionId, sect
  * Xóa section
  */
 const deleteExamSectionService = async (instructorAccId, examId, sectionId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
-  const belongsToExam = await instructorExamRepository.checkSectionBelongsToExam(sectionId, examId);
+  const belongsToExam =
+    await instructorExamRepository.checkSectionBelongsToExam(sectionId, examId);
   if (!belongsToExam) {
     throw new Error("Section không thuộc bài thi này");
   }
 
   await instructorExamRepository.deleteExamSection(sectionId);
 
-  return { message: "Xóa section thành công (bao gồm child sections và questions)" };
+  return {
+    message: "Xóa section thành công (bao gồm child sections và questions)",
+  };
 };
 
 /**
  * Lấy danh sách sections
  */
-const getSectionsService = async (instructorAccId, examId, hierarchical = true) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+const getSectionsService = async (
+  instructorAccId,
+  examId,
+  hierarchical = true
+) => {
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
-  const sections = await instructorExamRepository.getSectionsHierarchyByExam(examId);
+  const sections = await instructorExamRepository.getSectionsHierarchyByExam(
+    examId
+  );
   return sections;
 };
 
@@ -786,13 +988,19 @@ const getSectionsService = async (instructorAccId, examId, hierarchical = true) 
  * Lấy chi tiết section
  */
 const getSectionDetailService = async (instructorAccId, examId, sectionId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
-  const belongsToExam = await instructorExamRepository.checkSectionBelongsToExam(sectionId, examId);
+  const belongsToExam =
+    await instructorExamRepository.checkSectionBelongsToExam(sectionId, examId);
   if (!belongsToExam) {
     throw new Error("Section không thuộc bài thi này");
   }
@@ -800,13 +1008,17 @@ const getSectionDetailService = async (instructorAccId, examId, sectionId) => {
   const section = await instructorExamRepository.getSectionById(sectionId);
   if (!section) throw new Error("Không tìm thấy section");
 
-  const childSections = await instructorExamRepository.getChildSectionsByParent(sectionId);
-  const questions = await instructorExamRepository.getQuestionsBySection(sectionId);
+  const childSections = await instructorExamRepository.getChildSectionsByParent(
+    sectionId
+  );
+  const questions = await instructorExamRepository.getQuestionsBySection(
+    sectionId
+  );
 
   return {
     ...section,
     childSections,
-    questions
+    questions,
   };
 };
 
@@ -818,7 +1030,9 @@ const getSectionDetailService = async (instructorAccId, examId, sectionId) => {
 const createQuestionService = async (instructorAccId, questionData) => {
   validateQuestionData(questionData);
 
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
   const data = {
@@ -829,13 +1043,16 @@ const createQuestionService = async (instructorAccId, questionData) => {
     status: questionData.status || "Active",
     topic: questionData.topic || null,
     level: questionData.level || null,
-    point: questionData.point || 1
+    point: questionData.point || 1,
   };
 
   const questionId = await instructorExamRepository.createQuestion(data);
 
-  if (questionData.type === 'multiple_choice' && questionData.options) {
-    await instructorExamRepository.createQuestionOptions(questionId, questionData.options);
+  if (questionData.type === "multiple_choice" && questionData.options) {
+    await instructorExamRepository.createQuestionOptions(
+      questionId,
+      questionData.options
+    );
   }
 
   return { questionId, message: "Tạo câu hỏi thành công" };
@@ -845,10 +1062,15 @@ const createQuestionService = async (instructorAccId, questionData) => {
  * Lấy danh sách câu hỏi
  */
 const getQuestionsService = async (instructorAccId, filters = {}) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const questions = await instructorExamRepository.getQuestionsByInstructor(instructorId, filters);
+  const questions = await instructorExamRepository.getQuestionsByInstructor(
+    instructorId,
+    filters
+  );
   return questions;
 };
 
@@ -859,7 +1081,9 @@ const getQuestionDetailService = async (instructorAccId, questionId) => {
   const question = await instructorExamRepository.getQuestionById(questionId);
   if (!question) throw new Error("Không tìm thấy câu hỏi");
 
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (question.InstructorID !== instructorId) {
     throw new Error("Không có quyền truy cập câu hỏi này");
   }
@@ -876,7 +1100,9 @@ const updateQuestionService = async (instructorAccId, questionId, data) => {
   const question = await instructorExamRepository.getQuestionById(questionId);
   if (!question) throw new Error("Không tìm thấy câu hỏi");
 
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (question.InstructorID !== instructorId) {
     throw new Error("Không có quyền sửa câu hỏi này");
   }
@@ -888,7 +1114,7 @@ const updateQuestionService = async (instructorAccId, questionId, data) => {
     topic: data.topic,
     level: data.level,
     point: data.point,
-    status: data.status || "Active"
+    status: data.status || "Active",
   };
 
   await instructorExamRepository.updateQuestion(questionId, questionData);
@@ -903,7 +1129,9 @@ const deleteQuestionService = async (instructorAccId, questionId) => {
   const question = await instructorExamRepository.getQuestionById(questionId);
   if (!question) throw new Error("Không tìm thấy câu hỏi");
 
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (question.InstructorID !== instructorId) {
     throw new Error("Không có quyền xóa câu hỏi này");
   }
@@ -917,43 +1145,70 @@ const deleteQuestionService = async (instructorAccId, questionId) => {
 /**
  * Thêm câu hỏi vào section
  */
-const addQuestionsToSectionService = async (instructorAccId, examId, sectionId, questionIds) => {
+const addQuestionsToSectionService = async (
+  instructorAccId,
+  examId,
+  sectionId,
+  questionIds
+) => {
   if (!Array.isArray(questionIds) || questionIds.length === 0) {
     throw new Error("Danh sách câu hỏi không hợp lệ");
   }
 
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
-  const belongsToExam = await instructorExamRepository.checkSectionBelongsToExam(sectionId, examId);
+  const belongsToExam =
+    await instructorExamRepository.checkSectionBelongsToExam(sectionId, examId);
   if (!belongsToExam) {
     throw new Error("Section không thuộc bài thi này");
   }
 
   await instructorExamRepository.addQuestionsToSection(sectionId, questionIds);
 
-  return { message: `Thêm ${questionIds.length} câu hỏi vào section thành công` };
+  return {
+    message: `Thêm ${questionIds.length} câu hỏi vào section thành công`,
+  };
 };
 
 /**
  * Xóa câu hỏi khỏi section
  */
-const removeQuestionFromSectionService = async (instructorAccId, examId, sectionId, questionId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+const removeQuestionFromSectionService = async (
+  instructorAccId,
+  examId,
+  sectionId,
+  questionId
+) => {
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
-  const belongsToExam = await instructorExamRepository.checkSectionBelongsToExam(sectionId, examId);
+  const belongsToExam =
+    await instructorExamRepository.checkSectionBelongsToExam(sectionId, examId);
   if (!belongsToExam) {
     throw new Error("Section không thuộc bài thi này");
   }
 
-  await instructorExamRepository.removeQuestionFromSection(sectionId, questionId);
+  await instructorExamRepository.removeQuestionFromSection(
+    sectionId,
+    questionId
+  );
 
   return { message: "Xóa câu hỏi khỏi section thành công" };
 };
@@ -961,14 +1216,26 @@ const removeQuestionFromSectionService = async (instructorAccId, examId, section
 /**
  * Cập nhật thứ tự câu hỏi trong section
  */
-const updateQuestionOrderService = async (instructorAccId, examId, sectionId, questionId, newOrderIndex) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+const updateQuestionOrderService = async (
+  instructorAccId,
+  examId,
+  sectionId,
+  questionId,
+  newOrderIndex
+) => {
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
-  const belongsToExam = await instructorExamRepository.checkSectionBelongsToExam(sectionId, examId);
+  const belongsToExam =
+    await instructorExamRepository.checkSectionBelongsToExam(sectionId, examId);
   if (!belongsToExam) {
     throw new Error("Section không thuộc bài thi này");
   }
@@ -977,7 +1244,11 @@ const updateQuestionOrderService = async (instructorAccId, examId, sectionId, qu
     throw new Error("Order index phải >= 0");
   }
 
-  await instructorExamRepository.updateQuestionOrder(sectionId, questionId, newOrderIndex);
+  await instructorExamRepository.updateQuestionOrder(
+    sectionId,
+    questionId,
+    newOrderIndex
+  );
 
   return { message: "Cập nhật thứ tự câu hỏi thành công" };
 };
@@ -988,16 +1259,23 @@ const updateQuestionOrderService = async (instructorAccId, examId, sectionId, qu
  * Lấy kết quả thi theo instance
  */
 const getExamResultsService = async (instructorAccId, instanceId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
   const instance = await instructorExamRepository.getInstanceById(instanceId);
   if (!instance) throw new Error("Không tìm thấy phiên thi");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(instance.ExamId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    instance.ExamId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập phiên thi này");
 
-  const results = await instructorExamRepository.getExamResultsByInstance(instanceId);
+  const results = await instructorExamRepository.getExamResultsByInstance(
+    instanceId
+  );
 
   return results;
 };
@@ -1005,14 +1283,26 @@ const getExamResultsService = async (instructorAccId, instanceId) => {
 /**
  * Lấy bài thi của learner để chấm
  */
-const getLearnerSubmissionService = async (instructorAccId, examId, learnerId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+const getLearnerSubmissionService = async (
+  instructorAccId,
+  examId,
+  learnerId
+) => {
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
-  const submission = await instructorExamRepository.getLearnerExamSubmission(examId, learnerId);
+  const submission = await instructorExamRepository.getLearnerExamSubmission(
+    examId,
+    learnerId
+  );
 
   return submission;
 };
@@ -1021,13 +1311,21 @@ const getLearnerSubmissionService = async (instructorAccId, examId, learnerId) =
  * Chấm bài tự động
  */
 const autoGradeExamService = async (instructorAccId, examId, learnerId) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
-  const submission = await instructorExamRepository.getLearnerExamSubmission(examId, learnerId);
+  const submission = await instructorExamRepository.getLearnerExamSubmission(
+    examId,
+    learnerId
+  );
 
   let totalScore = 0;
   let maxScore = 0;
@@ -1035,8 +1333,11 @@ const autoGradeExamService = async (instructorAccId, examId, learnerId) => {
   for (const question of submission) {
     maxScore += question.Point;
 
-    if (question.Type === 'multiple_choice' || question.Type === 'true_false') {
-      if (question.LearnerAnswer && question.LearnerAnswer === question.CorrectAnswer) {
+    if (question.Type === "multiple_choice" || question.Type === "true_false") {
+      if (
+        question.LearnerAnswer &&
+        question.LearnerAnswer === question.CorrectAnswer
+      ) {
         totalScore += question.Point;
       }
     }
@@ -1048,7 +1349,7 @@ const autoGradeExamService = async (instructorAccId, examId, learnerId) => {
     learnerId,
     examId,
     score: score.toFixed(2),
-    feedback: "Chấm điểm tự động"
+    feedback: "Chấm điểm tự động",
   });
 
   return { score: score.toFixed(2), message: "Chấm bài tự động thành công" };
@@ -1057,11 +1358,22 @@ const autoGradeExamService = async (instructorAccId, examId, learnerId) => {
 /**
  * Chấm bài thủ công
  */
-const manualGradeExamService = async (instructorAccId, examId, learnerId, score, feedback) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+const manualGradeExamService = async (
+  instructorAccId,
+  examId,
+  learnerId,
+  score,
+  feedback
+) => {
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  const hasAccess = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+  const hasAccess = await instructorExamRepository.checkExamOwnership(
+    examId,
+    instructorId
+  );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
   if (score < 0 || score > 100) {
@@ -1072,14 +1384,21 @@ const manualGradeExamService = async (instructorAccId, examId, learnerId, score,
     learnerId,
     examId,
     score,
-    feedback: feedback || ""
+    feedback: feedback || "",
   });
 
   return { message: "Chấm bài thành công" };
 };
 
-const importQuestionsFromExcel = async (instructorAccId, examId, sectionId, fileBuffer) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+const importQuestionsFromExcel = async (
+  instructorAccId,
+  examId,
+  sectionId,
+  fileBuffer
+) => {
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy giảng viên");
 
   const workbook = XLSX.read(fileBuffer, { type: "buffer" });
@@ -1104,7 +1423,6 @@ const importQuestionsFromExcel = async (instructorAccId, examId, sectionId, file
     D: ["tuychond", "optiond", "d"],
   };
 
-
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
 
@@ -1119,7 +1437,7 @@ const importQuestionsFromExcel = async (instructorAccId, examId, sectionId, file
         point: Number(row["Điểm"]) || 1,
         status: "Active",
         correctAnswer: null,
-        options: []
+        options: [],
       };
 
       let options = [];
@@ -1127,7 +1445,7 @@ const importQuestionsFromExcel = async (instructorAccId, examId, sectionId, file
       if (type === "multiple_choice") {
         const ansKeys = (row["Đáp án"] || "")
           .split(",")
-          .map(x => x.trim().toUpperCase())
+          .map((x) => x.trim().toUpperCase())
           .filter(Boolean);
 
         const rowKeys = Object.keys(row).map((key) => ({
@@ -1143,9 +1461,14 @@ const importQuestionsFromExcel = async (instructorAccId, examId, sectionId, file
         ["A", "B", "C", "D"].forEach((letter) => {
           const colName = findColumn(optionCandidates[letter]);
           const fallback = `Tùy chọn ${letter}`;
-          const finalCol = colName || Object.keys(row).find(k => k === fallback);
+          const finalCol =
+            colName || Object.keys(row).find((k) => k === fallback);
 
-          if (finalCol && row[finalCol] && row[finalCol].toString().trim() !== "") {
+          if (
+            finalCol &&
+            row[finalCol] &&
+            row[finalCol].toString().trim() !== ""
+          ) {
             const content = row[finalCol].toString().trim();
 
             options.push({
@@ -1160,29 +1483,31 @@ const importQuestionsFromExcel = async (instructorAccId, examId, sectionId, file
         if (options.length < 2) {
           throw new Error("Câu hỏi trắc nghiệm phải có ít nhất 2 lựa chọn");
         }
-        const correctContents = ansKeys.map(k => optionMap[k]).filter(Boolean);
+        const correctContents = ansKeys
+          .map((k) => optionMap[k])
+          .filter(Boolean);
         questionData.correctAnswer = correctContents.join(",");
 
         questionData.options = options;
-      }
-
-      else if (type === "true_false") {
+      } else if (type === "true_false") {
         questionData.correctAnswer =
           (row["Đáp án"] || "").toString().toLowerCase() === "true"
             ? "true"
             : "false";
-      }
-
-      else if (type === "fill_in_blank") {
+      } else if (type === "fill_in_blank") {
         questionData.correctAnswer = row["Đáp án"] || "";
-      }
-
-      else if (type === "matching") {
+      } else if (type === "matching") {
         const left = (row["Tùy chọn A"] || "")
-          .toString().split("\n").map(s => s.trim()).filter(Boolean);
+          .toString()
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean);
 
         const right = (row["Tùy chọn B"] || "")
-          .toString().split("\n").map(s => s.trim()).filter(Boolean);
+          .toString()
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean);
 
         if (left.length !== right.length) {
           throw new Error("Matching: số lượng bên trái và bên phải không khớp");
@@ -1203,23 +1528,28 @@ const importQuestionsFromExcel = async (instructorAccId, examId, sectionId, file
         status: questionData.status,
         topic: questionData.topic,
         level: questionData.level,
-        point: questionData.point
+        point: questionData.point,
       });
 
       if (type === "multiple_choice" && options.length > 0) {
-        await instructorExamRepository.createQuestionOptions(questionId, options);
+        await instructorExamRepository.createQuestionOptions(
+          questionId,
+          options
+        );
       }
 
       newQuestionIdsForSection.push(questionId);
       created.push({ row: i + 2, questionId });
-
     } catch (err) {
       errors.push({ row: i + 2, error: err.message });
     }
   }
 
   if (sectionId && newQuestionIdsForSection.length > 0) {
-    await instructorExamRepository.addQuestionsToSection(sectionId, newQuestionIdsForSection);
+    await instructorExamRepository.addQuestionsToSection(
+      sectionId,
+      newQuestionIdsForSection
+    );
   }
 
   return {
@@ -1236,7 +1566,9 @@ const createFullExamService = async (instructorAccId, data) => {
   // 2) Validate instance
   validateInstanceData(data.instance);
 
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
+    instructorAccId
+  );
   if (!instructorId) throw new Error("Không tìm thấy giảng viên");
 
   // --- Tạo exam ---
@@ -1245,35 +1577,44 @@ const createFullExamService = async (instructorAccId, data) => {
     description: data.exam.description,
     status: "Draft",
     type: "Exam",
-    instructorId
+    instructorId,
   });
 
   // --- Tạo sections ---
   if (Array.isArray(data.sections)) {
     for (const parent of data.sections) {
-      const parentId = await instructorExamRepository.createExamSection(examId, {
-        type: parent.type,
-        title: parent.title,
-        orderIndex: parent.orderIndex,
-        parentSectionId: null,
-        fileURL: parent.fileURL || null
-      });
+      const parentId = await instructorExamRepository.createExamSection(
+        examId,
+        {
+          type: parent.type,
+          title: parent.title,
+          orderIndex: parent.orderIndex,
+          parentSectionId: null,
+          fileURL: parent.fileURL || null,
+        }
+      );
 
       // Child sections
       if (Array.isArray(parent.childSections)) {
         for (const child of parent.childSections) {
-          const childId = await instructorExamRepository.createExamSection(examId, {
-            type: child.type,
-            title: child.title,
-            orderIndex: child.orderIndex,
-            parentSectionId: parentId,
-            fileURL: child.fileURL || null
-          });
+          const childId = await instructorExamRepository.createExamSection(
+            examId,
+            {
+              type: child.type,
+              title: child.title,
+              orderIndex: child.orderIndex,
+              parentSectionId: parentId,
+              fileURL: child.fileURL || null,
+            }
+          );
 
           // ✅ BƯỚC 1: TẠO CÂU HỎI MỚI (newQuestions)
           const createdQuestionIds = [];
-          
-          if (Array.isArray(child.newQuestions) && child.newQuestions.length > 0) {
+
+          if (
+            Array.isArray(child.newQuestions) &&
+            child.newQuestions.length > 0
+          ) {
             for (const newQ of child.newQuestions) {
               // Validate câu hỏi mới
               validateQuestionData(newQ);
@@ -1295,12 +1636,18 @@ const createFullExamService = async (instructorAccId, data) => {
                 status: "Active",
                 topic: newQ.topic || null,
                 level: newQ.level || "Medium",
-                point: newQ.point || 1
+                point: newQ.point || 1,
               });
 
               // Tạo options cho multiple_choice
-              if (newQ.type === "multiple_choice" && Array.isArray(newQ.options)) {
-                await instructorExamRepository.createQuestionOptions(questionId, newQ.options);
+              if (
+                newQ.type === "multiple_choice" &&
+                Array.isArray(newQ.options)
+              ) {
+                await instructorExamRepository.createQuestionOptions(
+                  questionId,
+                  newQ.options
+                );
               }
 
               createdQuestionIds.push(questionId);
@@ -1309,19 +1656,25 @@ const createFullExamService = async (instructorAccId, data) => {
 
           // ✅ BƯỚC 2: GẮN CÂU HỎI (cả có sẵn + mới tạo)
           const allQuestionIds = [
-            ...(child.questions || []),        // Câu hỏi từ ngân hàng
-            ...createdQuestionIds              // Câu hỏi vừa tạo
+            ...(child.questions || []), // Câu hỏi từ ngân hàng
+            ...createdQuestionIds, // Câu hỏi vừa tạo
           ];
 
           if (allQuestionIds.length > 0) {
-            await instructorExamRepository.addQuestionsToSection(childId, allQuestionIds);
+            await instructorExamRepository.addQuestionsToSection(
+              childId,
+              allQuestionIds
+            );
           }
         }
       }
 
       // Questions trực tiếp trong parent (nếu có)
       if (parent.questions?.length > 0) {
-        await instructorExamRepository.addQuestionsToSection(parentId, parent.questions);
+        await instructorExamRepository.addQuestionsToSection(
+          parentId,
+          parent.questions
+        );
       }
     }
   }
@@ -1336,19 +1689,19 @@ const createFullExamService = async (instructorAccId, data) => {
     isRandomQuestion: data.instance.isRandomQuestion,
     isRandomAnswer: data.instance.isRandomAnswer,
     attempt: data.instance.attempt,
-    status: "Scheduled"
+    status: "Scheduled",
   };
 
-  const instanceId = await instructorExamRepository.createExamInstance(instancePayload);
+  const instanceId = await instructorExamRepository.createExamInstance(
+    instancePayload
+  );
 
   return {
     examId,
     instanceId,
-    message: "Tạo full exam hoàn tất"
+    message: "Tạo full exam hoàn tất",
   };
 };
-
-
 
 module.exports = {
   // Exam CRUD
@@ -1397,4 +1750,8 @@ module.exports = {
   autoGradeExamService,
   manualGradeExamService,
 
+  // Utils / validation
+  validateQuestionData,
+  validateExamData,
+  assertValidDateStr,
 };

@@ -12,7 +12,8 @@ class AdminRepository {
         a.AccID,
         acc.Email,
         acc.Phone,
-        acc.Status as AccountStatus
+        acc.Status as AccountStatus,
+        acc.Gender
       FROM admin a
       LEFT JOIN account acc ON a.AccID = acc.AccID
       WHERE a.AdminID = ?
@@ -27,8 +28,7 @@ class AdminRepository {
     const pool = await connectDB();
     const { page = 1, limit = 10, search = "" } = options;
     const safeLimit = Number(limit) > 0 ? Number(limit) : 10;
-    const safeOffset =
-      Number(page) > 0 ? (Number(page) - 1) * safeLimit : 0;
+    const safeOffset = Number(page) > 0 ? (Number(page) - 1) * safeLimit : 0;
 
     let query = `
       SELECT 
@@ -40,7 +40,8 @@ class AdminRepository {
         a.AccID,
         acc.Email,
         acc.Phone,
-        acc.Status as AccountStatus
+        acc.Status as AccountStatus,
+        acc.Gender
       FROM admin a
       LEFT JOIN account acc ON a.AccID = acc.AccID
       WHERE 1=1
@@ -110,8 +111,6 @@ class AdminRepository {
 
     return await this.findById(adminId);
   }
-
 }
 
 module.exports = new AdminRepository();
-

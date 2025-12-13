@@ -1,11 +1,5 @@
 const connectDB = require("../config/db");
 
-/**
- * TimeslotRepository - dbver5
- *
- * Hỗ trợ trường mới:
- * - Day: Thứ trong tuần (T2, T3, T4, T5, T6, T7, CN)
- */
 class TimeslotRepository {
   async create(timeslotData) {
     const pool = await connectDB();

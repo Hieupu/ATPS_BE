@@ -1,10 +1,17 @@
 const payrollRepository = require("../repositories/payrollRepository");
 
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 class PayrollService {
   async getInstructorPayroll(startDate, endDate, instructorId = null) {
     try {
       if (!startDate || !endDate) {
-        throw new Error("StartDate và EndDate là bắt buộc");
+        throw new ServiceError("Thiếu StartDate hoặc EndDate", 400);
       }
 
       const payrollData = await payrollRepository.getInstructorPayroll(

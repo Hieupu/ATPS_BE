@@ -1,6 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const { verifyToken, authorizeFeature } = require("../middlewares/middware");
+const {
+  verifyToken,
+  authorizeFeature,
+  authorizeRole,
+} = require("../middlewares/middware");
 const sessionController = require("../controllers/sessionController");
 const classScheduleController = require("../controllers/classScheduleController");
 const {
@@ -54,7 +58,7 @@ router.get(
 router.get(
   "/instructor/:instructorId",
   verifyToken,
-  authorizeFeature(["instructor", "admin"]),
+  authorizeRole("instructor", "admin"),
   sessionController.getSessionsByInstructorId
 );
 

@@ -226,23 +226,7 @@ class ScheduleRepository {
     }
   }
 
-  async createTimeslot(timeslotData) {
-    try {
-      const db = await connectDB();
-      const { StartTime, EndTime, Day } = timeslotData;
-
-      const [result] = await db.query(
-        `INSERT INTO timeslot (StartTime, EndTime, Day)
-         VALUES (?, ?, ?)`,
-        [StartTime, EndTime, Day]
-      );
-
-      return { TimeslotID: result.insertId };
-    } catch (error) {
-      console.error("Database error in createTimeslot:", error);
-      throw error;
-    }
-  }
+  
 
   async getAvailableInstructorSlots(instructorId) {
     try {

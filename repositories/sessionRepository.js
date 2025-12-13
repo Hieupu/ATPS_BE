@@ -42,7 +42,6 @@ class SessionRepository {
     return `zoom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  // Lấy session theo ID (dbver5 schema - tự động lấy ZoomUUID qua s.*)
   async findById(sessionId) {
     if (!sessionId) {
       throw new Error("SessionID là bắt buộc");
@@ -160,7 +159,7 @@ class SessionRepository {
       session.ClassID,
       session.TimeslotID,
       session.Date,
-      session.ZoomUUID || this.generateZoomUUID(), // dbver5: Tự động tạo nếu không có
+      session.ZoomUUID || this.generateZoomUUID(), 
     ]);
 
     const query = `

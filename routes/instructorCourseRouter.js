@@ -30,7 +30,7 @@ const router = express.Router();
 router.get(
   "/courses",
   verifyToken,
-  authorizeRole(["instructor","admin"]),
+  authorizeRole("instructor","admin"),
   listInstructorCourses
 );
 router.post(
@@ -74,7 +74,7 @@ router.post(
 router.get(
   "/courses/:courseId",
   verifyToken,
-  authorizeRole(["instructor", "admin"]),
+  authorizeRole("instructor", "admin"),
   getCourseDetail
 );
 
@@ -82,7 +82,7 @@ router.get(
 router.get(
   "/courses/:courseId/units",
   verifyToken,
-  authorizeRole(["instructor", "admin"]),
+  authorizeRole("instructor", "admin"),
   listUnitsByCourse
 );
 router.post(
@@ -115,7 +115,7 @@ router.get(
 router.get(
   "/units/:unitId/lessons",
   verifyToken,
-  authorizeRole(["instructor", "admin"]),
+  authorizeRole("instructor", "admin"),
   listLessonsByUnit
 );
 router.post(
@@ -143,7 +143,7 @@ router.delete(
 router.get(
   "/courses/:courseId/materials",
   verifyToken,
-  authorizeRole(["instructor", "admin"]),
+  authorizeRole("instructor", "admin"),
   listMaterialsByCourse
 );
 router.post(

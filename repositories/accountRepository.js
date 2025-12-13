@@ -123,6 +123,7 @@ class AccountRepository {
       Status: u.Status,
       Provider: u.Provider || "local",
       Role: u.Role || "learner",
+      Gender: u.Gender || "other",
     };
   }
 
@@ -131,27 +132,34 @@ class AccountRepository {
     return this.findAccountById(accountId);
   }
 
+  async createAccountWithRole(
+    {
+      username,
+      email,
+      phone = "",
+      password,
+      status = "active",
+      provider = "local",
+      gender = "other",
+    },
+    dbConnection = null
+  ) {
+    // Cho phép truyền connection để dùng chung transaction (ví dụ khi tạo instructor)
+    const db = dbConnection || (await connectDB());
+    const execute = db.query ? db.query.bind(db) : db.execute.bind(db);
 
-  async createAccountWithRole({
-    username,
-    email,
-    phone = "",
-    password,
-    status = "active",
-    provider = "local",
-    gender = "other",
-  }) {
-    const db = await connectDB();
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedUsername =
       username || normalizedEmail.split("@")[0] || "user";
+    const normalizedPhone = phone?.trim() || "";
+
     try {
-      const [result] = await db.query(
+      const [result] = await execute(
         "INSERT INTO account (Username, Email, Phone, Password, Status, Provider, Gender) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [
           normalizedUsername,
           normalizedEmail,
-          phone || "",
+          normalizedPhone,
           password,
           status,
           provider,
@@ -190,6 +198,7 @@ class AccountRepository {
       "Phone",
       "Status",
       "Password",
+      "Gender",
       // Username và Provider không được update qua đây
       // AccID là primary key, không thể update
     ];

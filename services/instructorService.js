@@ -1,6 +1,13 @@
 const instructorRepository = require("../repositories/instructorRepository");
 const courseRepository = require("../repositories/courseRepository");
 
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 class InstructorService {
   async listInstructors() {
     // getAllInstructors đã có đầy đủ TotalCourses, TotalStudents, InstructorFee, Certificates
@@ -44,8 +51,16 @@ class InstructorService {
     try {
       return await instructorRepository.getAllInstructorsAdmin();
     } catch (error) {
-      console.error("Error in getAllInstructorsAdmin service:", error);
-      throw error;
+      if (error instanceof ServiceError) {
+        throw error;
+      }
+      if (error.code === "PERMISSION_DENIED") {
+        throw new ServiceError("Lỗi khi lấy danh sách giảng viên", 403);
+      }
+      throw new ServiceError(
+        "Lỗi khi lấy danh sách giảng viên",
+        error?.status || 500
+      );
     }
   }
 
@@ -102,7 +117,7 @@ class InstructorService {
     try {
       // Validate required fields
       if (!data.AccID || !data.FullName) {
-        throw new Error("AccID and FullName are required");
+        throw new ServiceError("Thiếu AccID hoặc FullName", 400);
       }
 
       // Create instructor
@@ -126,7 +141,7 @@ class InstructorService {
     try {
       const instructor = await instructorRepository.findById(id);
       if (!instructor) {
-        throw new Error("Instructor not found");
+        throw new ServiceError("Giảng viên không tồn tại", 404);
       }
       return instructor;
     } catch (error) {
@@ -139,7 +154,7 @@ class InstructorService {
     try {
       const instructor = await instructorRepository.findByAccountId(accountId);
       if (!instructor) {
-        throw new Error("Instructor not found");
+        throw new ServiceError("Giảng viên không tồn tại", 404);
       }
       return instructor;
     } catch (error) {
@@ -152,7 +167,7 @@ class InstructorService {
       // Check if instructor exists
       const existingInstructor = await instructorRepository.findById(id);
       if (!existingInstructor) {
-        throw new Error("Instructor not found");
+        throw new ServiceError("Giảng viên không tồn tại", 404);
       }
 
       // Update instructor
@@ -168,7 +183,7 @@ class InstructorService {
       // Check if instructor exists
       const existingInstructor = await instructorRepository.findById(id);
       if (!existingInstructor) {
-        throw new Error("Instructor not found");
+        throw new ServiceError("Giảng viên không tồn tại", 404);
       }
 
       // Delete instructor
@@ -194,7 +209,7 @@ class InstructorService {
         instructorId
       );
       if (!instructor) {
-        throw new Error("Instructor not found");
+        throw new ServiceError("Giảng viên không tồn tại", 404);
       }
       return instructor;
     } catch (error) {
@@ -209,7 +224,7 @@ class InstructorService {
         instructorId
       );
       if (!existingInstructor) {
-        throw new Error("Instructor not found");
+        throw new ServiceError("Giảng viên không tồn tại", 404);
       }
 
       // Lấy Type và truyền vào getSchedule
@@ -243,7 +258,7 @@ class InstructorService {
         instructorId
       );
       if (!existingInstructor) {
-        throw new Error("Instructor not found");
+        throw new ServiceError("Giảng viên không tồn tại", 404);
       }
 
       const statistics = await instructorRepository.getStatistics(instructorId);
@@ -271,7 +286,7 @@ class InstructorService {
       !startDate ||
       !endDatePlan
     ) {
-      throw new Error("Thiếu tham số bắt buộc");
+      throw new ServiceError("Thiếu tham số bắt buộc", 400);
     }
 
     const sessionRepository = require("../repositories/sessionRepository");

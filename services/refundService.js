@@ -2,13 +2,20 @@ const refundRepository = require("../repositories/refundRepository");
 const enrollmentRepository = require("../repositories/enrollmentRepository");
 const paymentRepository = require("../repositories/paymentRepository");
 
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 class RefundService {
   // Tạo yêu cầu hoàn tiền
   async createRefund(refundData) {
     try {
       // Validate required fields
       if (!refundData.EnrollmentID || !refundData.Reason) {
-        throw new Error("EnrollmentID và Reason là bắt buộc");
+        throw new ServiceError("Thiếu EnrollmentID hoặc Reason", 400);
       }
 
       // Kiểm tra enrollment tồn tại
@@ -16,7 +23,7 @@ class RefundService {
         refundData.EnrollmentID
       );
       if (!enrollment) {
-        throw new Error("Enrollment không tồn tại");
+        throw new ServiceError("Enrollment không tồn tại", 404);
       }
 
       // Kiểm tra đã có yêu cầu hoàn tiền pending chưa
@@ -24,8 +31,9 @@ class RefundService {
         refundData.EnrollmentID
       );
       if (existingRefund && existingRefund.Status === "pending") {
-        throw new Error(
-          "Đã có yêu cầu hoàn tiền đang chờ xử lý cho enrollment này"
+        throw new ServiceError(
+          "Đã có yêu cầu hoàn tiền đang chờ xử lý cho enrollment này",
+          409
         );
       }
 
@@ -82,7 +90,7 @@ class RefundService {
     try {
       const refund = await refundRepository.findById(refundId);
       if (!refund) {
-        throw new Error("Không tìm thấy yêu cầu hoàn tiền");
+        throw new ServiceError("Không tìm thấy yêu cầu hoàn tiền", 404);
       }
       return refund;
     } catch (error) {
@@ -96,7 +104,7 @@ class RefundService {
       // Kiểm tra yêu cầu hoàn tiền tồn tại
       const existingRefund = await refundRepository.findById(refundId);
       if (!existingRefund) {
-        throw new Error("Không tìm thấy yêu cầu hoàn tiền");
+        throw new ServiceError("Không tìm thấy yêu cầu hoàn tiền", 404);
       }
 
       // Bảng refundrequest hiện không có cột TargetClassID, tránh cập nhật gây lỗi
@@ -114,7 +122,7 @@ class RefundService {
     try {
       const deleted = await refundRepository.delete(refundId);
       if (!deleted) {
-        throw new Error("Không tìm thấy yêu cầu hoàn tiền");
+        throw new ServiceError("Không tìm thấy yêu cầu hoàn tiền", 404);
       }
       return true;
     } catch (error) {
@@ -127,12 +135,13 @@ class RefundService {
     try {
       const refund = await refundRepository.findById(refundId);
       if (!refund) {
-        throw new Error("Không tìm thấy yêu cầu hoàn tiền");
+        throw new ServiceError("Không tìm thấy yêu cầu hoàn tiền", 404);
       }
 
       if (refund.Status !== "pending") {
-        throw new Error(
-          "Chỉ có thể duyệt yêu cầu hoàn tiền ở trạng thái pending"
+        throw new ServiceError(
+          "Chỉ có thể duyệt yêu cầu hoàn tiền ở trạng thái pending",
+          400
         );
       }
 
@@ -233,12 +242,13 @@ class RefundService {
     try {
       const refund = await refundRepository.findById(refundId);
       if (!refund) {
-        throw new Error("Không tìm thấy yêu cầu hoàn tiền");
+        throw new ServiceError("Không tìm thấy yêu cầu hoàn tiền", 404);
       }
 
       if (refund.Status !== "pending") {
-        throw new Error(
-          "Chỉ có thể từ chối yêu cầu hoàn tiền ở trạng thái pending"
+        throw new ServiceError(
+          "Chỉ có thể từ chối yêu cầu hoàn tiền ở trạng thái pending",
+          400
         );
       }
 
@@ -282,13 +292,14 @@ class RefundService {
     try {
       const refund = await refundRepository.findById(refundId);
       if (!refund) {
-        throw new Error("Không tìm thấy yêu cầu hoàn tiền");
+        throw new ServiceError("Không tìm thấy yêu cầu hoàn tiền", 404);
       }
 
       // Chỉ gửi khi đang pending (đang chờ xử lý)
       if (refund.Status !== "pending") {
-        throw new Error(
-          "Chỉ gửi yêu cầu thông tin khi yêu cầu hoàn tiền đang chờ xử lý"
+        throw new ServiceError(
+          "Chỉ gửi yêu cầu thông tin khi yêu cầu hoàn tiền đang chờ xử lý",
+          400
         );
       }
 
@@ -308,7 +319,7 @@ class RefundService {
     try {
       const refund = await refundRepository.findById(refundId);
       if (!refund) {
-        throw new Error("Không tìm thấy yêu cầu hoàn tiền");
+        throw new ServiceError("Không tìm thấy yêu cầu hoàn tiền", 404);
       }
       return await refundRepository.findRelatedClasses(refundId);
     } catch (error) {

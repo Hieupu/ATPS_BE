@@ -163,8 +163,9 @@ app.use("/api/timeslots", timeslotRouter);
 app.use("/api/schedule", scheduleRoutes);
 
 // Attendance & Progress routes
-app.use("/api/attendance", attendanceRouter);
 app.use("/api/attendance", attendanceRoutes);
+app.use("/api/attendances", attendanceRouter);
+
 app.use("/api/progress", progressRoutes);
 
 // Material routes
@@ -243,7 +244,6 @@ cron.schedule(
     timezone: "Asia/Ho_Chi_Minh",
   }
 );
-
 
 const PORT = process.env.PORT || 9999;
 connectDB().then(() => {

@@ -16,34 +16,7 @@ const logError = (context, error) => {
 
 const timeslotController = {
   // Tạo timeslot (Admin API)
-  createTimeslot: async (req, res) => {
-    try {
-      const timeslotData = req.body;
-
-      if (!timeslotData.StartTime || !timeslotData.EndTime) {
-        return res.status(400).json({
-          success: false,
-          message: "StartTime và EndTime là bắt buộc",
-        });
-      }
-
-      const newTimeslot = await timeslotService.createTimeslot(timeslotData);
-
-      res.status(201).json({
-        success: true,
-        message: "Tạo timeslot thành công",
-        data: newTimeslot,
-      });
-    } catch (error) {
-      console.error("Error creating timeslot:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi tạo timeslot",
-        error: error.message,
-      });
-    }
-  },
-
+ 
   // Lấy tất cả timeslots
   getAllTimeslots: async (req, res) => {
     try {
@@ -157,66 +130,6 @@ const timeslotController = {
         success: false,
         message: "Lỗi khi lấy timeslots theo địa điểm",
         error: error.message,
-      });
-    }
-  },
-
-  // Cập nhật timeslot
-  updateTimeslot: async (req, res) => {
-    try {
-      const timeslotId = req.params.timeslotId || req.params.id;
-      const updateData = req.body;
-
-      const updatedTimeslot = await timeslotService.updateTimeslot(
-        timeslotId,
-        updateData
-      );
-
-      if (!updatedTimeslot) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy timeslot",
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        message: "Cập nhật timeslot thành công",
-        data: updatedTimeslot,
-      });
-    } catch (error) {
-      console.error("Error updating timeslot:", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi cập nhật timeslot",
-        error: error.message,
-      });
-    }
-  },
-
-  // Xóa timeslot
-  deleteTimeslot: async (req, res) => {
-    try {
-      const timeslotId = req.params.timeslotId || req.params.id;
-
-      const deleted = await timeslotService.deleteTimeslot(timeslotId);
-
-      if (!deleted) {
-        return res.status(404).json({
-          success: false,
-          message: "Không tìm thấy timeslot",
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        message: "Xóa timeslot thành công",
-      });
-    } catch (error) {
-      logError("TimeslotController.deleteTimeslot", error);
-      res.status(500).json({
-        success: false,
-        message: "Lỗi khi xóa timeslot",
       });
     }
   },

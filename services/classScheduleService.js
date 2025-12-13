@@ -11,7 +11,14 @@ const {
 const { getDayOfWeek } = require("../utils/sessionValidation");
 const { CLASS_STATUS } = require("../constants/classStatus");
 
-/**`  
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
+/**`
  * Hàm Tạo Lịch Hàng loạt (Bulk Schedule Creation)
  * Nhận đầu vào: OpendatePlan, Numofsession, InstructorID, và danh sách SelectedTimeslotIDs
  * @param {Object} params
@@ -38,13 +45,13 @@ async function createBulkSchedule(params) {
     !InstructorID ||
     !SelectedTimeslotIDs
   ) {
-    throw new Error("Thiếu tham số bắt buộc");
+    throw new ServiceError("Thiếu tham số bắt buộc", 400);
   }
 
   // Lấy thông tin lớp
   const classData = await classRepository.findById(ClassID);
   if (!classData || classData.length === 0) {
-    throw new Error("Lớp học không tồn tại");
+    throw new ServiceError("Lớp học không tồn tại", 404);
   }
   const className =
     classData[0].Name || classData[0].ClassName || `Class ${ClassID}`;
@@ -84,8 +91,9 @@ async function createBulkSchedule(params) {
   }
 
   if (sessionsToCreate.length < Numofsession) {
-    throw new Error(
-      `Không thể tạo đủ ${Numofsession} buổi học với lịch đã chọn`
+    throw new ServiceError(
+      `Không thể tạo đủ ${Numofsession} buổi học với lịch đã chọn`,
+      400
     );
   }
 
@@ -108,7 +116,7 @@ async function countLearners(classId) {
     );
     return activeEnrollments.length;
   } catch (error) {
-    throw new Error(`Lỗi khi đếm học viên: ${error.message}`);
+    throw new ServiceError(`Lỗi khi đếm học viên: ${error.message}`, 500);
   }
 }
 
@@ -121,7 +129,7 @@ async function checkFullClass(classId) {
   try {
     const classData = await classRepository.findById(classId);
     if (!classData || classData.length === 0) {
-      throw new Error("Lớp học không tồn tại");
+      throw new ServiceError("Lớp học không tồn tại", 404);
     }
 
     const maxLearners = classData[0].maxStudent || 0;
@@ -134,7 +142,7 @@ async function checkFullClass(classId) {
       availableSlots: Math.max(0, maxLearners - currentLearners),
     };
   } catch (error) {
-    throw new Error(`Lỗi khi kiểm tra đầy lớp: ${error.message}`);
+    throw new ServiceError(`Lỗi khi kiểm tra đầy lớp: ${error.message}`, 500);
   }
 }
 
@@ -153,10 +161,7 @@ async function validateStatusForEdit(classId) {
     const status = classData[0].Status;
 
     // Không cho sửa nếu lớp đã đóng hoặc hủy
-    if (
-      status === CLASS_STATUS.CLOSE ||
-      status === CLASS_STATUS.CANCEL 
-    ) {
+    if (status === CLASS_STATUS.CLOSE || status === CLASS_STATUS.CANCEL) {
       return {
         canEdit: false,
         reason: `Không thể sửa lịch lớp ở trạng thái ${status}`,
@@ -294,16 +299,20 @@ async function rescheduleSession(sessionId, newSchedule) {
   // Validate trước
   const validation = await validateReschedule(sessionId, newSchedule);
   if (!validation.isValid) {
-    throw new Error(
-      `Validation failed: ${validation.errors.map((e) => e.message).join(", ")}`
+    throw new ServiceError(
+      `Kiểm tra không hợp lệ: ${validation.errors
+        .map((e) => e.message)
+        .join(", ")}`,
+      400
     );
   }
 
   if (validation.conflicts.length > 0) {
-    throw new Error(
+    throw new ServiceError(
       `Có xung đột: ${validation.conflicts
         .map((c) => c.conflictInfo.message || c.conflictInfo)
-        .join(", ")}`
+        .join(", ")}`,
+      409
     );
   }
 
@@ -325,20 +334,26 @@ async function cancelSession(sessionId) {
   try {
     const session = await sessionService.getSessionById(sessionId);
     if (!session) {
-      throw new Error("Session không tồn tại");
+      throw new ServiceError("Buổi học không tồn tại", 404);
     }
 
     // Kiểm tra status lớp
     const statusValidation = await validateStatusForEdit(session.ClassID);
     if (!statusValidation.canEdit) {
-      throw new Error(statusValidation.reason);
+      throw new ServiceError(
+        statusValidation.reason || "Không được phép chỉnh sửa buổi học",
+        400
+      );
     }
 
     // Xóa session (sẽ tự động sync class dates)
     const deleted = await sessionService.deleteSession(sessionId);
     return deleted;
   } catch (error) {
-    throw new Error(`Lỗi khi hủy buổi học: ${error.message}`);
+    throw new ServiceError(
+      `Lỗi khi hủy buổi học: ${error.message}`,
+      error.status || 500
+    );
   }
 }
 
@@ -353,13 +368,16 @@ async function addMakeupSession(classId, sessionData) {
     // Kiểm tra status lớp
     const statusValidation = await validateStatusForEdit(classId);
     if (!statusValidation.canEdit) {
-      throw new Error(statusValidation.reason);
+      throw new ServiceError(
+        statusValidation.reason || "Không được phép chỉnh sửa lớp",
+        400
+      );
     }
 
     // Lấy thông tin lớp để lấy InstructorID
     const classData = await classRepository.findById(classId);
     if (!classData || classData.length === 0) {
-      throw new Error("Lớp học không tồn tại");
+      throw new ServiceError("Lớp học không tồn tại", 404);
     }
 
     // Chuẩn bị session data
@@ -376,16 +394,20 @@ async function addMakeupSession(classId, sessionData) {
     const result = await sessionService.createSession(preparedSessionData);
 
     if (result.conflict) {
-      throw new Error(
+      throw new ServiceError(
         `Không thể thêm buổi học bù: ${
           result.conflict.conflictInfo.message || "Có xung đột"
-        }`
+        }`,
+        409
       );
     }
 
     return result.success;
   } catch (error) {
-    throw new Error(`Lỗi khi thêm buổi học bù: ${error.message}`);
+    throw new ServiceError(
+      `Lỗi khi thêm buổi học bù: ${error.message}`,
+      error.status || 500
+    );
   }
 }
 
