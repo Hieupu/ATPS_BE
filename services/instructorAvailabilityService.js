@@ -1,8 +1,15 @@
-const instructorTimeslotRepository = require("../repositories/instructorTimeslotRepository");
+const instructorTimeslotRepository = require("../repositories/InstructorTimeslotRepository");
 const instructorRepository = require("../repositories/instructorRepository");
 const sessionRepository = require("../repositories/sessionRepository");
 const notificationRepository = require("../repositories/notificationRepository");
 const logService = require("./logService");
+
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
 
 /**
  * InstructorAvailabilityService
@@ -25,7 +32,7 @@ class InstructorAvailabilityService {
       // Kiểm tra instructor tồn tại
       const instructor = await instructorRepository.findById(instructorId);
       if (!instructor) {
-        throw new Error("Instructor not found");
+        throw new ServiceError("Giảng viên không tồn tại", 404);
       }
 
       // Lấy lịch bận để dạy (AVAILABLE, OTHER, HOLIDAY)
@@ -95,7 +102,7 @@ class InstructorAvailabilityService {
       // Kiểm tra instructor tồn tại
       const instructor = await instructorRepository.findById(instructorId);
       if (!instructor) {
-        throw new Error("Instructor not found");
+        throw new ServiceError("Giảng viên không tồn tại", 404);
       }
 
       const type = instructorType || instructor.Type || "parttime";
@@ -318,7 +325,7 @@ class InstructorAvailabilityService {
       // Lấy thông tin instructor để có AccID
       const instructor = await instructorRepository.findById(instructorId);
       if (!instructor) {
-        throw new Error("Instructor not found");
+        throw new ServiceError("Giảng viên không tồn tại", 404);
       }
 
       // Gửi notification cho giảng viên

@@ -365,6 +365,32 @@ class CourseRepository {
     }
   }
 
+  async update(courseId, updateData) {
+    try {
+      const db = await connectDB();
+      const fields = Object.keys(updateData);
+      const values = Object.values(updateData);
+
+      if (fields.length === 0) {
+        throw new Error("No fields to update");
+      }
+
+      const setClause = fields.map((field) => `${field} = ?`).join(", ");
+      const query = `UPDATE course SET ${setClause} WHERE CourseID = ?`;
+
+      const [result] = await db.query(query, [...values, courseId]);
+
+      if (result.affectedRows === 0) {
+        return null;
+      }
+
+      return await this.findById(courseId);
+    } catch (error) {
+      console.error("Database error in update:", error);
+      throw error;
+    }
+  }
+
   async getCourseWithDetails(courseId) {
     try {
       const db = await connectDB();
@@ -523,7 +549,7 @@ class CourseRepository {
          WHERE Status = 'enrolled'
          GROUP BY ClassID
        ) enr ON cl.ClassID = enr.ClassID
-       WHERE cl.CourseID = ? AND cl.Status = 'active'
+       WHERE cl.CourseID = ? AND cl.Status IN ('active', 'ACTIVE', 'PUBLISHED', 'APPROVED', 'PENDING_APPROVAL', 'DRAFT')
        GROUP BY cl.ClassID, cl.Name, cl.ZoomID,
          cl.Zoompass, cl.Status, cl.Fee, cl.Maxstudent, 
          cl.Opendate, cl.Enddate, cl.Numofsession, 
@@ -933,16 +959,43 @@ class CourseRepository {
       const [rows] = await db.query(`
         SELECT 
           c.CourseID,
+          c.InstructorID,
           c.Title,
           c.Description,
+          c.Image,
           c.Duration,
+          c.Objectives,
+          c.Requirements,
+          c.Level,
           c.Status,
-          i.InstructorID,
-          i.FullName as InstructorName,
-          i.ProfilePicture as InstructorAvatar,
-          i.Major as InstructorMajor
+          c.Code,
+          i.FullName AS InstructorName,
+          i.ProfilePicture AS InstructorAvatar,
+          i.Major AS InstructorMajor,
+          
+          -- 1. Đếm số lượng Chương (Unit)
+          (SELECT COUNT(*) 
+           FROM unit u 
+           WHERE u.CourseID = c.CourseID 
+             AND u.Status != 'DELETED') AS UnitCount,
+
+          -- 2. Đếm số lượng Bài học (Lesson)
+          (SELECT COUNT(*) 
+           FROM lesson l 
+           INNER JOIN unit u ON l.UnitID = u.UnitID
+           WHERE u.CourseID = c.CourseID 
+             AND l.Status != 'DELETED' 
+             AND u.Status != 'DELETED') AS LessonCount,
+
+          -- 3. Đếm số lượng Tài liệu (Material) - giống instructor repository
+          (SELECT COUNT(*) 
+           FROM material m 
+           WHERE m.CourseID = c.CourseID 
+             AND m.Status != 'DELETED') AS MaterialMissingCount
+
         FROM course c
         INNER JOIN instructor i ON c.InstructorID = i.InstructorID
+        WHERE c.Status IN ('IN_REVIEW', 'APPROVED', 'PUBLISHED')
         ORDER BY c.CourseID DESC
       `);
 
@@ -1122,28 +1175,28 @@ class CourseRepository {
     }
   }
 
-  /**
-   * Lấy LearnerID từ AccountID (có thể đã có, nhưng thêm cho chắc)
-   */
-  async getLearnerIdByAccountId(accountId) {
-    try {
-      const db = await connectDB();
+  //   /**
+  //    * Lấy LearnerID từ AccountID (có thể đã có, nhưng thêm cho chắc)
+  //    */
+  //   async getLearnerIdByAccountId(accountId) {
+  //     try {
+  //       const db = await connectDB();
 
-      const [rows] = await db.query(
-        `SELECT LearnerID FROM learner WHERE AccID = ?`,
-        [accountId]
-      );
+  //       const [rows] = await db.query(
+  //         `SELECT LearnerID FROM learner WHERE AccID = ?`,
+  //         [accountId]
+  //       );
 
-      if (!rows.length) {
-        throw new Error("Learner profile not found");
-      }
+  //       if (!rows.length) {
+  //         throw new Error("Learner profile not found");
+  //       }
 
-      return rows[0].LearnerID;
-    } catch (error) {
-      console.error("Database error in getLearnerIdByAccountId:", error);
-      throw error;
-    }
-  }
+  //       return rows[0].LearnerID;
+  //     } catch (error) {
+  //       console.error("Database error in getLearnerIdByAccountId:", error);
+  //       throw error;
+  //     }
+  //   }
 }
 
 module.exports = new CourseRepository();

@@ -134,12 +134,18 @@ const verifyToken = async (req, res, next) => {
  * Middleware phân quyền dựa trên features
  * @param {string} featureName - Tên feature cần kiểm tra
  */
+// featureName: string hoặc mảng string; cho phép nếu user có ít nhất một feature trong danh sách
 const authorizeFeature = (featureName) => (req, res, next) => {
   const userFeatures = req.user?.features || [];
+  const required = Array.isArray(featureName) ? featureName : [featureName];
 
-  if (!userFeatures.includes(featureName)) {
+  const hasPermission = required.some((f) => userFeatures.includes(f));
+
+  if (!hasPermission) {
     return res.status(403).json({
-      message: `Access denied: missing feature permission '${featureName}'`,
+      message: `Access denied: missing feature permission '${required.join(
+        ","
+      )}'`,
     });
   }
 

@@ -1,14 +1,5 @@
 const connectDB = require("../config/db");
 
-/**
- * ClassRepository - dbver5
- *
- * Hỗ trợ các trường mới:
- * - ZoomID, Zoompass
- * - OpendatePlan, Opendate (tự động sync)
- * - EnddatePlan, Enddate (tự động sync)
- * - Numofsession, Maxstudent
- */
 class ClassRepository {
   async create(classData) {
     const pool = await connectDB();
@@ -26,14 +17,11 @@ class ClassRepository {
       Maxstudent,
     } = classData;
 
-    // dbver5: Hỗ trợ các trường mới: ZoomID, Zoompass, OpendatePlan, EnddatePlan, Numofsession, Maxstudent
-    // Opendate và Enddate sẽ được đồng bộ tự động từ session (synchronization function)
-    // Lưu ý: dbver5 không có ZoomURL, chỉ có ZoomID và Zoompass
     const query = `
       INSERT INTO \`class\` (
         Name, CourseID, InstructorID, Status, ZoomID, Zoompass, Fee, 
         OpendatePlan, Opendate, EnddatePlan, Enddate,
-        Numofsession, Maxstudent
+        Numofsession,Maxstudent
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
@@ -146,33 +134,12 @@ class ClassRepository {
     return await this.findById(id);
   }
 
-  async delete(id) {
-    const pool = await connectDB();
-    const query = `DELETE FROM \`class\` WHERE ClassID = ?`;
-    const [result] = await pool.execute(query, [id]);
-    return result.affectedRows > 0;
-  }
-
   async exists(id) {
     const pool = await connectDB();
     const query = `SELECT 1 FROM \`class\` WHERE ClassID = ?`;
     const [rows] = await pool.execute(query, [id]);
     return rows.length > 0;
   }
-
-  // Method này không còn cần thiết vì dbver5 không có trường CurrentStudents
-  // Số học viên được tính trực tiếp từ enrollment khi query
-  // Giữ lại method này để backward compatibility nhưng không làm gì
-  async updateStudentCount(classId) {
-    // dbver5: Không có trường CurrentStudents
-    // Số học viên được tính động từ enrollment trong các query SELECT
-    // Method này giữ lại để không break code cũ, nhưng không thực hiện gì
-    return true;
-  }
-
-  // =====================================================
-  // WORKFLOW 4 BƯỚC - CLASS MANAGEMENT
-  // =====================================================
 
   // Cập nhật lớp (workflow method - override update above)
   async updateWorkflow(classId, updateData) {
@@ -209,7 +176,7 @@ class ClassRepository {
       FROM \`class\` c
       LEFT JOIN course co ON c.CourseID = co.CourseID
       LEFT JOIN instructor i ON c.InstructorID = i.InstructorID
-      LEFT JOIN enrollment e ON c.ClassID = e.ClassID AND e.Status = 'active'
+      LEFT JOIN enrollment e ON c.ClassID = e.ClassID AND e.Status = 'Enrolled'
       WHERE c.Status = ?
       GROUP BY c.ClassID
       ORDER BY c.ClassID DESC
@@ -232,25 +199,27 @@ class ClassRepository {
     const [rows] = await pool.execute(query, [status]);
     return rows[0].total;
   }
-
-  // Lấy lớp có thể đăng ký (OPEN - dbver5)
+  // Lấy lớp có thể đăng ký (ACTIVE, ONGOING - dbver7)
   async findAvailableClasses(options = {}) {
     const pool = await connectDB();
     const { limit = 10, offset = 0, search = "" } = options;
 
     let query = `
       SELECT 
-        c.*,
-        co.Title as courseTitle,
-        co.Description as courseDescription,
-        i.FullName as instructorName,
-        i.Major as instructorMajor,
-        COUNT(e.EnrollmentID) as currentLearners
-      FROM \`class\` c
-      LEFT JOIN course co ON c.CourseID = co.CourseID
-      LEFT JOIN instructor i ON c.InstructorID = i.InstructorID
-      LEFT JOIN enrollment e ON c.ClassID = e.ClassID AND e.Status = 'active'
-      WHERE c.Status = 'OPEN' OR c.Status = 'PUBLISHED'
+    c.*,
+    co.Title AS courseTitle,
+    co.Description AS courseDescription,
+    i.FullName AS instructorName,
+    i.Major AS instructorMajor,
+    COUNT(e.EnrollmentID) AS currentLearners
+FROM class c
+LEFT JOIN course co ON c.CourseID = co.CourseID
+LEFT JOIN instructor i ON c.InstructorID = i.InstructorID
+LEFT JOIN enrollment e 
+       ON c.ClassID = e.ClassID 
+      AND e.Status = 'Enrolled'
+WHERE c.Status IN ('ACTIVE', 'ONGOING')
+GROUP BY c.ClassID;
     `;
 
     const params = [];
@@ -272,15 +241,14 @@ class ClassRepository {
     return rows;
   }
 
-  // Đếm lớp có thể đăng ký (OPEN - dbver5)
   async countAvailableClasses(search = "") {
     const pool = await connectDB();
     let query = `
       SELECT COUNT(*) as total
-      FROM \`class\` c
+      FROM class c
       LEFT JOIN course co ON c.CourseID = co.CourseID
-      LEFT JOIN enrollment e ON c.ClassID = e.ClassID AND e.Status = 'active'
-      WHERE c.Status = 'OPEN' OR c.Status = 'PUBLISHED'
+      LEFT JOIN enrollment e ON c.ClassID = e.ClassID AND e.Status = 'Enrolled'
+      WHERE c.Status = 'ACTIVE'
     `;
 
     const params = [];

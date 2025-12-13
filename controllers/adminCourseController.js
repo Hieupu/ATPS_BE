@@ -1,4 +1,4 @@
-const courseService = require("../services/courseService");
+const courseService = require("../services/CourseService");
 const instructorService = require("../services/instructorService");
 const learnerService = require("../services/learnerService");
 const logService = require("../services/logService");
@@ -47,14 +47,15 @@ const courseController = {
   getAllCourses: async (req, res) => {
     try {
       // Kiểm tra xem có phải admin không (từ req.user hoặc query param)
-      const isAdmin = req.user?.Role === 'admin' || req.query.isAdmin === 'true';
+      const isAdmin =
+        req.user?.Role === "admin" || req.query.isAdmin === "true";
       const { status } = req.query;
-      
+
       const options = {
         isAdmin,
         status: status ? (Array.isArray(status) ? status : [status]) : null,
       };
-      
+
       const courses = await courseService.getAllCourses(options);
 
       res.json({
@@ -370,7 +371,8 @@ const courseController = {
       if (course.Status !== "IN_REVIEW" && course.Status !== "DRAFT") {
         return res.status(400).json({
           success: false,
-          message: "Chỉ có thể duyệt khóa học ở trạng thái IN_REVIEW hoặc DRAFT",
+          message:
+            "Chỉ có thể duyệt khóa học ở trạng thái IN_REVIEW hoặc DRAFT",
         });
       }
 

@@ -153,7 +153,7 @@ const instructorController = {
       // Validation chi tiết
       const validationErrors = [];
 
-      if (!FullName || !FullName.trim()) {
+      if (!FullName || FullName.trim() === "") {
         validationErrors.push("FullName là bắt buộc");
       }
 
@@ -197,30 +197,24 @@ const instructorController = {
       transactionStarted = true;
       console.log("[createInstructor] Transaction started");
 
-      // Hash password
+      // Hash password và dùng repository để tạo account trong cùng transaction
       const hashedPassword = await bcrypt.hash(Password, 10);
       const username =
         Email.split("@")[0] || FullName.toLowerCase().replace(/\s+/g, "");
 
-      // Tạo account trước (sử dụng connection từ transaction)
-      const normalizedEmail = Email.trim().toLowerCase();
-      const normalizedUsername =
-        username || normalizedEmail.split("@")[0] || "user";
-
       console.log("[createInstructor] Creating account...");
-      const [accountResult] = await connection.execute(
-        "INSERT INTO account (Username, Email, Phone, Password, Status, Provider, Gender) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [
-          normalizedUsername,
-          normalizedEmail,
-          Phone || "",
-          hashedPassword,
-          Status || "active",
-          "local",
-          Gender || "other",
-        ]
+      const accId = await accountRepository.createAccountWithRole(
+        {
+          username,
+          email: Email.trim().toLowerCase(),
+          phone: Phone?.trim() || "",
+          password: hashedPassword,
+          status: Status || "active",
+          provider: "local",
+          gender: Gender || "other",
+        },
+        connection
       );
-      const accId = accountResult.insertId;
       console.log("[createInstructor] Account created, AccID:", accId);
 
       // Tạo instructor với AccID vừa tạo
@@ -548,6 +542,56 @@ const instructorController = {
       res.status(500).json({
         success: false,
         message: "Lỗi khi tải CV",
+        error: error.message,
+      });
+    }
+  },
+
+  // Check timeslot availability
+  checkTimeslotAvailability: async (req, res) => {
+    try {
+      const {
+        InstructorID,
+        dayOfWeek,
+        timeslotId,
+        startDate,
+        endDatePlan,
+        instructorType,
+      } = req.body;
+
+      if (
+        !InstructorID ||
+        dayOfWeek === undefined ||
+        !timeslotId ||
+        !startDate ||
+        !endDatePlan ||
+        !instructorType
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Thiếu tham số bắt buộc",
+        });
+      }
+
+      const result = await instructorService.checkTimeslotAvailability({
+        InstructorID,
+        dayOfWeek: parseInt(dayOfWeek),
+        timeslotId: parseInt(timeslotId),
+        startDate,
+        endDatePlan,
+        instructorType,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Kiểm tra timeslot availability thành công",
+        data: result,
+      });
+    } catch (error) {
+      console.error("Error checking timeslot availability:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi kiểm tra timeslot availability",
         error: error.message,
       });
     }

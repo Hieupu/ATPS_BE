@@ -4,8 +4,10 @@
   "description": "ATPS Backend API - Admin Training Platform System",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon server"
+    "test": "jest",
+    "test:watch": "jest --watchAll",
+    "start": "nodemon server",
+    "seed:test": "node scripts/run_test_data.js"
   },
   "keywords": [
     "atps",
@@ -48,20 +50,5 @@
   },
   "engines": {
     "node": ">=14.0.0"
-  },
-  "jest": {
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/scripts/**/*.test.js",
-      "**/test/**/*.test.js"
-    ],
-    "collectCoverageFrom": [
-      "services/**/*.js",
-      "controllers/**/*.js",
-      "utils/**/*.js",
-      "!**/node_modules/**"
-    ],
-    "coverageDirectory": "coverage",
-    "verbose": true
   }
 }

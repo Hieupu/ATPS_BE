@@ -18,7 +18,7 @@ class LogRepository {
 
     const query = `
       INSERT INTO \`log\` (Action, Timestamp, AccID, Detail)
-      VALUES (?, NOW(), ?, ?)
+      VALUES (?, DATE_ADD(UTC_TIMESTAMP(), INTERVAL 7 HOUR), ?, ?)
     `;
 
     const [result] = await pool.execute(query, [

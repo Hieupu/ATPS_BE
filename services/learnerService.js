@@ -1,12 +1,19 @@
 const learnerRepository = require("../repositories/learnerRepository");
 const enrollmentRepository = require("../repositories/enrollmentRepository");
 
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 class LearnerService {
   async createLearner(data) {
     try {
       // Validate required fields
       if (!data.AccID) {
-        throw new Error("AccID is required");
+        throw new ServiceError("Thiếu AccID", 400);
       }
 
       // Create learner
@@ -30,7 +37,7 @@ class LearnerService {
     try {
       const learner = await learnerRepository.findById(id);
       if (!learner) {
-        throw new Error("Learner not found");
+        throw new ServiceError("Học viên không tồn tại", 404);
       }
       return learner;
     } catch (error) {
@@ -42,7 +49,7 @@ class LearnerService {
     try {
       const learner = await learnerRepository.findByAccountId(accountId);
       if (!learner) {
-        throw new Error("Learner not found");
+        throw new ServiceError("Học viên không tồn tại", 404);
       }
       return learner;
     } catch (error) {
@@ -55,7 +62,7 @@ class LearnerService {
       // Check if learner exists
       const existingLearner = await learnerRepository.findById(id);
       if (!existingLearner) {
-        throw new Error("Learner not found");
+        throw new ServiceError("Học viên không tồn tại", 404);
       }
 
       // Update learner
@@ -71,7 +78,7 @@ class LearnerService {
       // Check if learner exists
       const existingLearner = await learnerRepository.findById(id);
       if (!existingLearner) {
-        throw new Error("Learner not found");
+        throw new ServiceError("Học viên không tồn tại", 404);
       }
 
       // Delete learner
@@ -104,7 +111,7 @@ class LearnerService {
     try {
       const learner = await learnerRepository.findById(learnerId);
       if (!learner) {
-        throw new Error("Learner not found");
+        throw new ServiceError("Học viên không tồn tại", 404);
       }
       const enrollments = await enrollmentRepository.findByLearnerId(learnerId);
       return { ...learner, enrollments };

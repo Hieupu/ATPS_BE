@@ -1,5 +1,5 @@
-const classService = require("../services/classService");
-const courseService = require("../services/courseService");
+const classService = require("../services/ClassService");
+const courseService = require("../services/CourseService");
 const instructorService = require("../services/instructorService");
 const enrollmentService = require("../services/enrollmentService");
 const logService = require("../services/logService");
@@ -532,8 +532,6 @@ const classController = {
         Zoompass,
         // Support old field names for backward compatibility
         StartDate,
-        ExpectedSessions,
-        MaxLearners,
       } = req.body;
 
       // Support both Name and ClassName (backward compatibility)
@@ -541,8 +539,8 @@ const classController = {
 
       // Support old field names: StartDate -> OpendatePlan, ExpectedSessions -> Numofsession, MaxLearners -> Maxstudent
       const opendatePlan = OpendatePlan || StartDate;
-      const numofsession = Numofsession || ExpectedSessions;
-      const maxstudent = Maxstudent || MaxLearners;
+      const numofsession = Numofsession;
+      const maxstudent = Maxstudent;
 
       // Validation bắt buộc theo dbver5
       // Kiểm tra kỹ: null, undefined, empty string, hoặc 0 (cho số)
@@ -575,20 +573,11 @@ const classController = {
       });
 
       if (missingFields.length > 0) {
-        console.error("[classController] ERROR: Missing required fields:", missingFields);
-        console.error("[classController] Field values:", {
-          Name: className,
-          InstructorID,
-          OpendatePlan: opendatePlan,
-          Numofsession: numofsession,
-          Maxstudent: maxstudent,
-          "Raw OpendatePlan": OpendatePlan,
-          "Raw StartDate": StartDate,
-          "Raw Numofsession": Numofsession,
-          "Raw ExpectedSessions": ExpectedSessions,
-          "Raw Maxstudent": Maxstudent,
-          "Raw MaxLearners": MaxLearners,
-        });
+        console.error(
+          "[classController] ERROR: Missing required fields:",
+          missingFields
+        );
+        
 
         // Tạo errors object cho từng field thiếu
         const errors = {};
@@ -649,21 +638,7 @@ const classController = {
         });
       }
 
-      // Tạo lớp với status DRAFT (dbver5: không có ZoomURL)
-      console.log("[classController] Calling classService.createClass with data:", {
-        Name: className,
-        CourseID: CourseID || null,
-        InstructorID,
-        Fee: Fee || null,
-        OpendatePlan: opendatePlan,
-        EnddatePlan: EnddatePlan || null,
-        Numofsession: numofsessionValue,
-        Maxstudent: maxstudentValue,
-        ZoomID: ZoomID || null,
-        Zoompass: Zoompass || null,
-        Status: "DRAFT",
-      });
-      
+
       const classData = await classService.createClass({
         Name: className,
         CourseID: CourseID || null,
@@ -678,19 +653,25 @@ const classController = {
         Status: "DRAFT",
       });
 
-      console.log("[classController] classService.createClass result:", JSON.stringify(classData, null, 2));
+      console.log(
+        "[classController] classService.createClass result:",
+        JSON.stringify(classData, null, 2)
+      );
 
       const classId = classData?.ClassID;
       const classDisplayName = className || `Class ${classId}`;
-      
+
       console.log("[classController] Created class with ID:", classId);
 
       // Tạo sessions nếu có trong request body
       console.log("[classController] Checking for sessions in request body...");
       console.log("[classController] req.body.sessions:", req.body.sessions);
-      console.log("[classController] Is array?", Array.isArray(req.body.sessions));
+      console.log(
+        "[classController] Is array?",
+        Array.isArray(req.body.sessions)
+      );
       console.log("[classController] Length:", req.body.sessions?.length || 0);
-      
+
       let createdSessions = [];
       if (
         req.body.sessions &&
@@ -726,37 +707,6 @@ const classController = {
             }: Date phải có format YYYY-MM-DD`;
             continue;
           }
-
-          // Validate Date vs Timeslot Day
-          // NOTE: Bỏ qua validation này vì một timeslot có thể được dùng cho nhiều ngày khác nhau
-          // Trường Day trong bảng timeslot chỉ là gợi ý/mặc định, không phải ràng buộc cứng
-          // Nếu cần strict validation, có thể bật lại bằng cách uncomment đoạn code dưới
-          /*
-          try {
-            const timeslot = await timeslotRepository.findById(
-              session.TimeslotID
-            );
-            if (timeslot && timeslot.Day) {
-              const { getDayOfWeek } = require("../utils/sessionValidation");
-              const dateDay = getDayOfWeek(session.Date);
-
-              if (dateDay !== timeslot.Day) {
-                sessionErrors[`session_${index}_Date`] = `Session ${
-                  index + 1
-                }: Date ${
-                  session.Date
-                } (${dateDay}) không khớp với Timeslot Day (${timeslot.Day})`;
-                continue;
-              }
-            }
-          } catch (error) {
-            console.error(`Error validating session ${index + 1}:`, error);
-            sessionErrors[`session_${index}`] = `Session ${
-              index + 1
-            }: Lỗi khi validate - ${error.message}`;
-            continue;
-          }
-          */
 
           sessionsData.push({
             ClassID: classId,
@@ -800,15 +750,25 @@ const classController = {
         sessionsCreated: createdSessions.length,
         sessions: createdSessions.length > 0 ? createdSessions : undefined,
       };
-      
-      console.log("[classController] ========== createClass SUCCESS ==========");
-      console.log("[classController] Response data:", JSON.stringify(responseData, null, 2));
+
+      console.log(
+        "[classController] ========== createClass SUCCESS =========="
+      );
+      console.log(
+        "[classController] Response data:",
+        JSON.stringify(responseData, null, 2)
+      );
       console.log("[classController] ClassID:", classId);
-      console.log("[classController] Sessions created:", createdSessions.length);
-      
+      console.log(
+        "[classController] Sessions created:",
+        createdSessions.length
+      );
+
       res.status(201).json(responseData);
     } catch (error) {
-      console.error("[classController] ========== createClass ERROR ==========");
+      console.error(
+        "[classController] ========== createClass ERROR =========="
+      );
       console.error("[classController] Error creating class:", error);
       console.error("[classController] Error name:", error?.name);
       console.error("[classController] Error message:", error?.message);
@@ -899,8 +859,6 @@ const classController = {
         });
       }
 
-      // Cập nhật status: DRAFT -> APPROVED (admin duyệt lớp)
-      // Lưu ý: Đã loại bỏ WAITING/PENDING vì admin đã chọn course từ bước 1
       const updatedClass = await classService.updateClass(classId, {
         Status: "APPROVED",
       });
@@ -922,7 +880,6 @@ const classController = {
         });
       }
 
-      // Ghi log
       if (adminAccID) {
         await logService.logAction({
           action: "APPROVE_CLASS",
@@ -973,8 +930,6 @@ const classController = {
         });
       }
 
-      // Kiểm tra status hiện tại: chỉ chấp nhận DRAFT
-      // Lưu ý: Đã loại bỏ WAITING/PENDING vì admin đã chọn course từ bước 1
       if (classData.Status !== "DRAFT") {
         return res.status(400).json({
           success: false,
@@ -1222,11 +1177,8 @@ const classController = {
           },
         });
       } else if (
-        Status === "ACTIVE" ||
-        Status === "OPEN" ||
-        Status === "PUBLISHED"
+        Status === "ACTIVE" 
       ) {
-        // Hỗ trợ alias: OPEN, PUBLISHED -> ACTIVE
         const updatedClass = await classService.updateClass(classId, {
           Status: "ACTIVE",
         });
@@ -1237,12 +1189,8 @@ const classController = {
           data: updatedClass,
         });
       } else if (
-        Status === "CLOSE" ||
-        Status === "CLOSED" ||
-        Status === "DONE" ||
-        Status === "COMPLETED"
+        Status === "CLOSE" 
       ) {
-        // Hỗ trợ alias: CLOSED, DONE, COMPLETED -> CLOSE
         const updatedClass = await classService.updateClass(classId, {
           Status: "CLOSE",
         });
@@ -1252,9 +1200,8 @@ const classController = {
           message: "Cập nhật status thành công",
           data: updatedClass,
         });
-      } else if (Status === "CANCEL" || Status === "CANCELLED") {
-        // Hỗ trợ alias: CANCELLED -> CANCEL
-        // Gọi method cancelClass để xử lý logic hủy lớp
+      } else if (Status === "CANCEL") {
+
         const result = await classService.cancelClass(classId);
 
         return res.json({
@@ -1268,7 +1215,6 @@ const classController = {
         const updatedClass = await classService.updateClass(classId, {
           Status: Status,
         });
-
         return res.json({
           success: true,
           message: "Cập nhật status thành công",

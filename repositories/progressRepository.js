@@ -466,7 +466,6 @@ class ProgressRepository {
           COUNT(DISTINCT l.LessonID) as TotalLessons,
           COALESCE(SUM(l.Duration), 0) as TotalLessonDuration,
           
-          -- Đếm assignments trong unit
           (SELECT COUNT(DISTINCT ei.InstanceId)
            FROM exam_instances ei
            INNER JOIN exam ex ON ei.ExamId = ex.ExamID

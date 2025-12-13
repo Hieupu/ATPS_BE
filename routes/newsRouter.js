@@ -4,7 +4,9 @@ const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
 const newsController = require("../controllers/newsController");
-// const { authenticate, authorize } = require("../middleware/auth"); // Uncomment khi có auth middleware
+const { verifyToken, authorizeFeature } = require("../middlewares/middware");
+router.use(verifyToken);
+router.use(authorizeFeature("admin"));
 
 const uploadDir = path.join(__dirname, "..", "public", "assets", "news");
 fs.mkdirSync(uploadDir, { recursive: true });
@@ -34,10 +36,6 @@ const upload = multer({
     cb(null, true);
   },
 });
-
-// Tất cả routes đều yêu cầu authentication và authorization (admin/staff)
-// router.use(authenticate);
-// router.use(authorize(["admin", "staff"]));
 
 // Upload image cho tin tức
 router.post(

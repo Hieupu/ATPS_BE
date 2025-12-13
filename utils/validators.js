@@ -1,5 +1,12 @@
 const { body, validationResult } = require("express-validator");
 
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 // Middleware để xử lý validation errors
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
@@ -56,7 +63,6 @@ const validateClass = [
       "Status phải là một trong: Chưa phân giảng viên, Sắp khai giảng, Đang hoạt động, Đã kết thúc, Tạm dừng"
     ),
 
-  // dbver5: Không có ZoomURL, chỉ có ZoomID và Zoompass
   body("ZoomID")
     .optional({ nullable: true })
     .isLength({ max: 11 })
@@ -109,18 +115,6 @@ const validateClassUpdate = [
     .withMessage(
       "Status phải là một trong: Chưa phân giảng viên, Sắp khai giảng, Đang hoạt động, Đã kết thúc, Tạm dừng"
     ),
-
-  // dbver5: Không có ZoomURL, chỉ có ZoomID và Zoompass
-  body("ZoomID")
-    .optional({ nullable: true })
-    .isLength({ max: 11 })
-    .withMessage("ZoomID tối đa 11 ký tự"),
-
-  body("Zoompass")
-    .optional({ nullable: true })
-    .isLength({ max: 6 })
-    .withMessage("Zoompass tối đa 6 ký tự"),
-
   body("OpendatePlan")
     .optional({ nullable: true })
     .isISO8601()
@@ -795,7 +789,129 @@ const validateSearchTimeslots = [
   handleValidationErrors,
 ];
 
+// =====================
+// Reusable Validation Helper Functions
+// =====================
+
+/**
+ * Validate email format
+ * @param {string} email - Email to validate
+ * @returns {Object} { isValid: boolean, error: string | null }
+ */
+const validateEmailFormat = (email) => {
+  if (!email || !email.trim()) {
+    return { isValid: false, error: "Email là bắt buộc" };
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!emailRegex.test(normalizedEmail)) {
+    return { isValid: false, error: "Email không hợp lệ" };
+  }
+
+  return { isValid: true, error: null, normalizedEmail };
+};
+
+/**
+ * Validate password strength
+ * @param {string} password - Password to validate
+ * @param {boolean} isRequired - Whether password is required
+ * @returns {Object} { isValid: boolean, error: string | null }
+ */
+const validatePassword = (password, isRequired = false) => {
+  if (isRequired && !password) {
+    return { isValid: false, error: "Mật khẩu là bắt buộc" };
+  }
+
+  if (password && password.length < 6) {
+    return {
+      isValid: false,
+      error: "Mật khẩu phải có ít nhất 6 ký tự",
+    };
+  }
+
+  return { isValid: true, error: null };
+};
+
+/**
+ * Validate Vietnamese phone number format
+ * @param {string} phone - Phone number to validate
+ * @param {boolean} isRequired - Whether phone is required
+ * @returns {Object} { isValid: boolean, error: string | null, cleanedPhone: string | null }
+ */
+const validatePhoneFormat = (phone, isRequired = false) => {
+  if (isRequired && (!phone || !phone.trim())) {
+    return { isValid: false, error: "Số điện thoại là bắt buộc" };
+  }
+
+  if (!phone || !phone.trim()) {
+    return { isValid: true, error: null, cleanedPhone: null };
+  }
+
+  const phoneRegex = /^(\+84|0)[1-9][0-9]{8,9}$/;
+  const cleanedPhone = phone.trim().replace(/\s+/g, "");
+
+  if (!phoneRegex.test(cleanedPhone)) {
+    return {
+      isValid: false,
+      error: "Số điện thoại không hợp lệ (ví dụ: 0123456789 hoặc +84123456789)",
+    };
+  }
+
+  return { isValid: true, error: null, cleanedPhone };
+};
+
+/**
+ * Validate FullName
+ * @param {string} fullName - Full name to validate
+ * @returns {Object} { isValid: boolean, error: string | null, trimmedName: string | null }
+ */
+const validateFullName = (fullName) => {
+  if (!fullName || fullName.trim() === "") {
+    return { isValid: false, error: "Họ tên là bắt buộc" };
+  }
+
+  const trimmedName = fullName.trim();
+  if (trimmedName.length === 0) {
+    return { isValid: false, error: "Họ tên là bắt buộc" };
+  }
+
+  return { isValid: true, error: null, trimmedName };
+};
+
+/**
+ * Check if email already exists in database
+ * @param {Function} findAccountByEmail - Repository function to find account by email
+ * @param {string} email - Email to check
+ * @param {number} excludeAccountId - Account ID to exclude from check (for updates)
+ * @returns {Promise<Object>} { exists: boolean, error: string | null }
+ */
+const checkEmailExists = async (
+  findAccountByEmail,
+  email,
+  excludeAccountId = null
+) => {
+  try {
+    const normalizedEmail = email.trim().toLowerCase();
+    const existingAccount = await findAccountByEmail(normalizedEmail);
+
+    if (existingAccount) {
+      // If updating, exclude current account
+      if (excludeAccountId && existingAccount.AccID === excludeAccountId) {
+        return { exists: false, error: null };
+      }
+      return { exists: true, error: "Email đã tồn tại" };
+    }
+
+    return { exists: false, error: null };
+  } catch (error) {
+    return { exists: false, error: error.message };
+  }
+};
+
 module.exports = {
+  ServiceError,
   handleValidationErrors,
   validateClass,
   validateClassUpdate,
@@ -816,4 +932,10 @@ module.exports = {
   validateSessionTimeslotUpdate,
   validateAttendance,
   validateAttendanceUpdate,
+  // Reusable validation helpers
+  validateEmailFormat,
+  validatePassword,
+  validatePhoneFormat,
+  validateFullName,
+  checkEmailExists,
 };

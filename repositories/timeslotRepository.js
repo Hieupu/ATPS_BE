@@ -1,11 +1,5 @@
 const connectDB = require("../config/db");
 
-/**
- * TimeslotRepository - dbver5
- *
- * Hỗ trợ trường mới:
- * - Day: Thứ trong tuần (T2, T3, T4, T5, T6, T7, CN)
- */
 class TimeslotRepository {
   async create(timeslotData) {
     const pool = await connectDB();
@@ -803,6 +797,42 @@ class TimeslotRepository {
 
     const [stats] = await pool.execute(query);
     return stats;
+  }
+
+  // Lấy danh sách distinct StartTime và EndTime từ bảng timeslot
+  async getDistinctTimeRanges() {
+    try {
+      const pool = await connectDB();
+      if (!pool) {
+        throw new Error("Database connection failed");
+      }
+
+      const query = `
+        SELECT DISTINCT StartTime, EndTime 
+        FROM timeslot 
+        WHERE StartTime IS NOT NULL AND EndTime IS NOT NULL
+        ORDER BY StartTime ASC, EndTime ASC
+      `;
+
+      const [rows] = await pool.execute(query);
+
+      console.log("📌 Raw rows result:", rows);
+      console.log("📌 Rows type:", typeof rows);
+      console.log(
+        "📌 Rows length:",
+        Array.isArray(rows) ? rows.length : "NOT ARRAY"
+      );
+      if (!Array.isArray(rows)) {
+        console.error("Unexpected result format from database:", typeof rows);
+        return [];
+      }
+
+      return rows;
+    } catch (error) {
+      console.error("Database error in getDistinctTimeRanges:", error);
+      console.error("Error stack:", error.stack);
+      throw error;
+    }
   }
 }
 

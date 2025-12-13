@@ -178,6 +178,53 @@ class ZoomController {
   }
 }
 
+ async createMeeting(req, res) {
+    try {
+      const { topic, start_time, duration, weekly_days, end_times } = req.body;
+      const tokenUrl = `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${process.env.ZOOM_ACCOUNT_ID}`;
+      const authHeader = Buffer.from(
+        `${process.env.ZOOM_CLIENT_ID}:${process.env.ZOOM_CLIENT_SECRET}`
+      ).toString("base64");
+      const response = await axios.post(tokenUrl, null, {
+        headers: { Authorization: `Basic ${authHeader}` },
+      });
+      const accessToken = response.data.access_token;
+      const meetingData = {
+        topic: topic,
+        type: 8,
+        start_time: start_time ,
+        timezone: "Asia/Ho_Chi_Minh",
+        duration: duration || 120,
+        recurrence: {
+          type: 2,
+          repeat_interval: 1,
+          weekly_days: weekly_days,
+          end_times: end_times,
+        },
+        settings: {
+          join_before_host: false,
+          mute_upon_entry: true,
+          waiting_room: false,
+          approval_type: 0,
+          auto_recording: "cloud",
+        },
+      };
+      const meetingResponse = await axios.post(
+        "https://api.zoom.us/v2/users/me/meetings",
+        meetingData,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      res.json(meetingResponse.data);
+    } catch (error) {
+      console.error("Zoom API Error:", error.response?.data || error.message);
+      res.status(500).json({ error: error.response?.data || error.message });
+    }
+  }
 }
 
 module.exports = new ZoomController();

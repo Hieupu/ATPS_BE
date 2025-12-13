@@ -1,8 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const promotionController = require("../controllers/promotionController");
-const { verifyToken, authorizeFeature } = require("../middlewares/auth");
-
+const { verifyToken, authorizeFeature } = require("../middlewares/middware");
+router.use(verifyToken);
+router.use(authorizeFeature("admin"));
 // Tất cả routes đều yêu cầu authentication và authorization (admin)
 // Trừ route validate/:code là public
 router.use(async (req, res, next) => {

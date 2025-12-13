@@ -30,7 +30,7 @@ const router = express.Router();
 router.get(
   "/courses",
   verifyToken,
-  authorizeRole("instructor"),
+  authorizeRole("instructor", "admin"),
   listInstructorCourses
 );
 router.post(

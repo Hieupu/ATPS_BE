@@ -13,6 +13,7 @@ const {
   requestSessionChange,
   approveSessionChange,
   rejectSessionChange,
+  getAllSessionChangeRequests,
 } = require("../controllers/instructorClassController");
 
 const { verifyToken, authorizeRole } = require("../middlewares/middware");
@@ -105,6 +106,14 @@ router.post(
 );
 
 // Route Admin Duyệt yêu cầu
+// 0. Lấy danh sách tất cả yêu cầu (cho admin)
+router.get(
+  "/session/request",
+  verifyToken,
+  authorizeRole("admin"),
+  getAllSessionChangeRequests
+);
+
 // 1. Duyệt yêu cầu (Approve)
 router.put(
   "/session/request/:requestId/approve",

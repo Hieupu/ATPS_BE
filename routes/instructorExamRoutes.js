@@ -9,15 +9,17 @@ const {
   archiveExam,
   unarchiveExam,
   getArchivedExams,
+  createFullExamController,
 
   // Exam Instances
   createExamInstance,
   updateExamInstance,
   deleteExamInstance,
   getExamInstances,
-  getAvailableClasses,
-  getAvailableUnits,
+  getClassesByCourse,
+  getUnitByCourse,
   checkAndUpdateInstanceStatus,
+  getInstructorCourses,
 
   // Section Management
   createExamSection,
@@ -61,6 +63,7 @@ router.use(verifyToken);
 // ==================== EXAM ROUTES ====================
 router.get("/exams", getExams);
 router.post("/exams", createExam);
+router.post("/exams/full", createFullExamController);
 router.get("/exams/archived", getArchivedExams);
 router.get("/exams/:examId", getExamDetail);
 router.put("/exams/:examId", updateExam);
@@ -73,9 +76,11 @@ router.get("/exams/:examId/instances", getExamInstances);
 router.post("/exams/:examId/instances", createExamInstance);
 router.put("/exams/:examId/instances/:instanceId", updateExamInstance);
 router.delete("/exams/:examId/instances/:instanceId", deleteExamInstance);
-router.get("/available-classes", getAvailableClasses);
-router.get("/available-units", getAvailableUnits);
+router.get("/course/:courseId/classes", getClassesByCourse);
+router.get("/course/:courseId/units", getUnitByCourse);
 router.post("/instances/check-status", checkAndUpdateInstanceStatus);
+router.get("/courses", getInstructorCourses);
+
 
 // ==================== SECTION MANAGEMENT ROUTES ====================
 router.get("/exams/:examId/sections", getSections);

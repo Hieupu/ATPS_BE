@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
-const { verifyToken, authorizeFeature } = require("../middlewares/auth");
+const { verifyToken, authorizeFeature } = require("../middlewares/middware");
 const instructorController = require("../controllers/admininstructorController");
 const publicInstructorController = require("../controllers/instructorController");
 
@@ -146,6 +146,14 @@ router.get(
   verifyToken,
   authorizeFeature("admin"),
   instructorController.getInstructorStatistics
+);
+
+// Check timeslot availability
+router.post(
+  "/check-timeslot-availability",
+  verifyToken,
+  authorizeFeature("admin"),
+  instructorController.checkTimeslotAvailability
 );
 
 // Admin API for getting instructor by ID (có Status và Gender)

@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { verifyToken, authorizeFeature } = require("../middlewares/auth");
+const { verifyToken, authorizeFeature } = require("../middlewares/middware");
 const timeslotController = require("../controllers/timeslotController");
 
 // Admin APIs
@@ -11,11 +11,12 @@ router.get(
   timeslotController.getAllTimeslots
 );
 
-router.post(
-  "/",
+
+// ✅ Distinct time ranges API - Phải đặt TRƯỚC route /:timeslotId để tránh bị match nhầm
+router.get(
+  "/distinct-time-ranges",
   verifyToken,
-  authorizeFeature("admin"),
-  timeslotController.createTimeslot
+  timeslotController.getDistinctTimeRanges
 );
 
 router.get(
@@ -23,20 +24,6 @@ router.get(
   verifyToken,
   authorizeFeature("admin"),
   timeslotController.getTimeslotById
-);
-
-router.put(
-  "/:timeslotId",
-  verifyToken,
-  authorizeFeature("admin"),
-  timeslotController.updateTimeslot
-);
-
-router.delete(
-  "/:timeslotId",
-  verifyToken,
-  authorizeFeature("admin"),
-  timeslotController.deleteTimeslot
 );
 
 // Date range APIs
@@ -121,7 +108,5 @@ router.get(
 
 // Public APIs
 router.get("/available", timeslotController.getAllTimeslots);
-
-router.get("/:timeslotId", timeslotController.getTimeslotById);
 
 module.exports = router;

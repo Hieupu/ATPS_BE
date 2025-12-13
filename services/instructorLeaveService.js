@@ -1,10 +1,17 @@
-const instructorTimeslotRepository = require("../repositories/instructorTimeslotRepository");
+const instructorTimeslotRepository = require("../repositories/InstructorTimeslotRepository");
 const sessionRepository = require("../repositories/sessionRepository");
 const timeslotRepository = require("../repositories/timeslotRepository");
 const {
   getDayOfWeek,
   convertVietnameseDayToEnglish,
 } = require("../utils/sessionValidation");
+
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
 
 /**
  * Thêm "Lịch Nghỉ Cố định" hàng loạt
@@ -26,14 +33,17 @@ async function addBulkInstructorLeave(params) {
   );
 
   if (!InstructorID || !Date || !Status) {
-    throw new Error("Thiếu tham số bắt buộc");
+    throw new ServiceError("Thiếu InstructorID, Date hoặc Status", 400);
   }
 
   if (!blockEntireDay) {
     // Nếu không block toàn bộ ngày, chỉ cần thêm 1 record với TimeslotID cụ thể
     const { TimeslotID } = params;
     if (!TimeslotID) {
-      throw new Error("TimeslotID là bắt buộc khi không block toàn bộ ngày");
+      throw new ServiceError(
+        "TimeslotID là bắt buộc khi không block toàn bộ ngày",
+        400
+      );
     }
 
     // Kiểm tra xung đột với session đã có
@@ -45,8 +55,9 @@ async function addBulkInstructorLeave(params) {
       );
 
     if (sessionConflict) {
-      throw new Error(
-        `Giảng viên đã có lịch dạy vào ca này. Vui lòng hủy buổi học trước.`
+      throw new ServiceError(
+        `Giảng viên đã có lịch dạy vào ca này. Vui lòng hủy buổi học trước.`,
+        409
       );
     }
 
@@ -85,8 +96,9 @@ async function addBulkInstructorLeave(params) {
   );
 
   if (slotsForDay.length === 0) {
-    throw new Error(
-      `Không tìm thấy ca học nào cho ${dayOfWeek} trong hệ thống`
+    throw new ServiceError(
+      `Không tìm thấy ca học nào cho ${dayOfWeek} trong hệ thống`,
+      404
     );
   }
 
@@ -104,58 +116,69 @@ async function addBulkInstructorLeave(params) {
           Date
         );
 
-        if (sessionConflict) {
-          conflicts.push({
-            TimeslotID: slot.TimeslotID,
-            StartTime: slot.StartTime,
-            EndTime: slot.EndTime,
-            reason: `Giảng viên đã có lịch dạy lớp "${sessionConflict.ClassName}" vào ca này`,
-          });
-          console.log(`[addBulkInstructorLeave] Conflict với session: InstructorID=${InstructorID}, TimeslotID=${slot.TimeslotID}, Date=${Date}`);
-          continue; // Bỏ qua ca này
-        }
+      if (sessionConflict) {
+        conflicts.push({
+          TimeslotID: slot.TimeslotID,
+          StartTime: slot.StartTime,
+          EndTime: slot.EndTime,
+          reason: `Giảng viên đã có lịch dạy lớp "${sessionConflict.ClassName}" vào ca này`,
+        });
+        console.log(
+          `[addBulkInstructorLeave] Conflict với session: InstructorID=${InstructorID}, TimeslotID=${slot.TimeslotID}, Date=${Date}`
+        );
+        continue; // Bỏ qua ca này
+      }
 
-    // Kiểm tra xem đã có lịch nghỉ chưa
-    const existingLeave = await instructorTimeslotRepository.checkConflict(
-      InstructorID,
-      slot.TimeslotID,
-      Date
-    );
+      // Kiểm tra xem đã có lịch nghỉ chưa
+      const existingLeave = await instructorTimeslotRepository.checkConflict(
+        InstructorID,
+        slot.TimeslotID,
+        Date
+      );
 
-    if (existingLeave) {
-      // Đã có lịch nghỉ, bỏ qua
-      console.log(`[addBulkInstructorLeave] Đã có lịch nghỉ: InstructorID=${InstructorID}, TimeslotID=${slot.TimeslotID}, Date=${Date}`);
-      continue;
+      if (existingLeave) {
+        // Đã có lịch nghỉ, bỏ qua
+        console.log(
+          `[addBulkInstructorLeave] Đã có lịch nghỉ: InstructorID=${InstructorID}, TimeslotID=${slot.TimeslotID}, Date=${Date}`
+        );
+        continue;
+      }
+      // INSERT lịch nghỉ
+      const result = await instructorTimeslotRepository.create({
+        InstructorID,
+        TimeslotID: slot.TimeslotID,
+        Date,
+        Status,
+        Note,
+      });
+
+      console.log(
+        `[addBulkInstructorLeave] Đã insert: InstructorTimeslotID=${result.InstructorTimeslotID}, InstructorID=${InstructorID}, TimeslotID=${slot.TimeslotID}, Date=${Date}`
+      );
+
+      insertedSlots.push({
+        TimeslotID: slot.TimeslotID,
+        StartTime: slot.StartTime,
+        EndTime: slot.EndTime,
+        Date,
+        Status,
+      });
+    } catch (error) {
+      console.error(
+        `[addBulkInstructorLeave] Lỗi khi xử lý slot ${slot.TimeslotID}:`,
+        error
+      );
+      conflicts.push({
+        TimeslotID: slot.TimeslotID,
+        StartTime: slot.StartTime,
+        EndTime: slot.EndTime,
+        reason: error.message || "Lỗi không xác định",
+      });
     }
-    // INSERT lịch nghỉ
-    const result = await instructorTimeslotRepository.create({
-      InstructorID,
-      TimeslotID: slot.TimeslotID,
-      Date,
-      Status,
-      Note,
-    });
-
-    console.log(`[addBulkInstructorLeave] Đã insert: InstructorTimeslotID=${result.InstructorTimeslotID}, InstructorID=${InstructorID}, TimeslotID=${slot.TimeslotID}, Date=${Date}`);
-
-    insertedSlots.push({
-      TimeslotID: slot.TimeslotID,
-      StartTime: slot.StartTime,
-      EndTime: slot.EndTime,
-      Date,
-      Status,
-    });
-  } catch (error) {
-    console.error(`[addBulkInstructorLeave] Lỗi khi xử lý slot ${slot.TimeslotID}:`, error);
-    conflicts.push({
-      TimeslotID: slot.TimeslotID,
-      StartTime: slot.StartTime,
-      EndTime: slot.EndTime,
-      reason: error.message || "Lỗi không xác định",
-    });
   }
-  }
-  console.log(`[addBulkInstructorLeave] Kết quả: inserted=${insertedSlots.length}, conflicts=${conflicts.length}`);
+  console.log(
+    `[addBulkInstructorLeave] Kết quả: inserted=${insertedSlots.length}, conflicts=${conflicts.length}`
+  );
 
   return {
     inserted: insertedSlots.length,
@@ -183,7 +206,7 @@ async function checkFutureConflicts(params) {
   const { InstructorID, Date, TimeslotID, Status } = params;
 
   if (!InstructorID || !Date || !TimeslotID) {
-    throw new Error("Thiếu tham số bắt buộc");
+    throw new ServiceError("Thiếu InstructorID, Date hoặc TimeslotID", 400);
   }
 
   const connectDB = require("../config/db");
@@ -321,7 +344,7 @@ async function handleAffectedClass(params) {
   } else if (action === "reschedule") {
     // Dời lịch
     if (!newSchedule || !newSchedule.Date || !newSchedule.TimeslotID) {
-      throw new Error("Thiếu thông tin lịch mới");
+      throw new ServiceError("Thiếu thông tin lịch mới", 400);
     }
 
     for (const sessionId of sessionIds) {
@@ -351,7 +374,7 @@ async function handleAffectedClass(params) {
     // Lấy thông tin session đầu tiên để biết TimeslotID và Day
     const session = await sessionRepository.findById(sessionIds[0]);
     if (!session || session.length === 0) {
-      throw new Error("Session không tồn tại");
+      throw new ServiceError("Buổi học không tồn tại", 404);
     }
 
     const sessionData = session[0];
@@ -439,14 +462,14 @@ async function listInstructorLeaves(params = {}) {
 async function deleteInstructorLeave(leaveId) {
   console.log("[instructorLeaveService] deleteInstructorLeave id:", leaveId);
   if (!leaveId) {
-    throw new Error("InstructorTimeslotID là bắt buộc");
+    throw new ServiceError("Thiếu InstructorTimeslotID", 400);
   }
 
   const numericId = parseInt(leaveId, 10);
   const result = await instructorTimeslotRepository.deleteLeave(numericId);
 
   if (result.affectedRows === 0) {
-    throw new Error("Lịch nghỉ không tồn tại hoặc đã bị xóa");
+    throw new ServiceError("Lịch nghỉ không tồn tại hoặc đã bị xóa", 404);
   }
 
   return { success: true };
@@ -461,13 +484,13 @@ async function deleteLeavesByDate(date, status = "HOLIDAY") {
     status
   );
   if (!date) {
-    throw new Error("Date là bắt buộc");
+    throw new ServiceError("Thiếu Date", 400);
   }
 
   const result = await instructorTimeslotRepository.deleteByDate(date, status);
 
   if (result.deleted === 0) {
-    throw new Error("Không tìm thấy lịch nghỉ nào cho ngày này");
+    throw new ServiceError("Không tìm thấy lịch nghỉ nào cho ngày này", 404);
   }
 
   return {
@@ -490,7 +513,7 @@ async function addHolidayForAllInstructors(data) {
   } = data;
 
   if (!startDateStr || Status !== "HOLIDAY") {
-    throw new Error("Date là bắt buộc và Status phải là HOLIDAY");
+    throw new ServiceError("Thiếu Date hoặc Status không phải HOLIDAY", 400);
   }
 
   const instructorRepository = require("../repositories/instructorRepository");
@@ -570,7 +593,7 @@ async function addHolidayForAllInstructors(data) {
 // Đồng bộ lịch nghỉ HOLIDAY cho giảng viên
 async function syncHolidayForInstructor(instructorId) {
   if (!instructorId) {
-    throw new Error("InstructorID là bắt buộc");
+    throw new ServiceError("Thiếu InstructorID", 400);
   }
 
   // Lấy tất cả unique DATE từ instructortimeslot có Status = HOLIDAY

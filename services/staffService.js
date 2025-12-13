@@ -1,11 +1,27 @@
 const staffRepository = require("../repositories/staffRepository");
 
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 class StaffService {
   async getAllStaff(options = {}) {
     try {
       return await staffRepository.findAll(options);
     } catch (error) {
-      throw error;
+      if (error instanceof ServiceError) {
+        throw error;
+      }
+      if (error.code === "PERMISSION_DENIED") {
+        throw new ServiceError("Lỗi khi lấy danh sách nhân viên", 403);
+      }
+      throw new ServiceError(
+        "Lỗi khi lấy danh sách nhân viên",
+        error?.status || 500
+      );
     }
   }
 
@@ -13,7 +29,7 @@ class StaffService {
     try {
       const staff = await staffRepository.findById(staffId);
       if (!staff) {
-        throw new Error("Staff not found");
+        throw new ServiceError("Nhân viên không tồn tại", 404);
       }
       return staff;
     } catch (error) {
@@ -24,10 +40,10 @@ class StaffService {
   async createStaff(data) {
     try {
       if (!data.AccID) {
-        throw new Error("AccID is required");
+        throw new ServiceError("Thiếu AccID", 400);
       }
-      if (!data.FullName) {
-        throw new Error("FullName is required");
+      if (!data.FullName || data.FullName.trim() === "") {
+        throw new ServiceError("Thiếu FullName", 400);
       }
 
       const staff = await staffRepository.create(data);
@@ -41,26 +57,22 @@ class StaffService {
     try {
       const updated = await staffRepository.update(staffId, data);
       if (!updated) {
-        throw new Error("Staff not found");
+        throw new ServiceError("Nhân viên không tồn tại", 404);
       }
       return updated;
     } catch (error) {
-      throw error;
-    }
-  }
-
-  async deleteStaff(staffId) {
-    try {
-      const deleted = await staffRepository.delete(staffId);
-      if (!deleted) {
-        throw new Error("Staff not found");
+      if (error instanceof ServiceError) {
+        throw error;
       }
-      return deleted;
-    } catch (error) {
-      throw error;
+      if (error.code === "PERMISSION_DENIED") {
+        throw new ServiceError("Lỗi khi cập nhật nhân viên", 403);
+      }
+      throw new ServiceError(
+        "Lỗi khi cập nhật nhân viên",
+        error?.status || 500
+      );
     }
   }
 }
 
 module.exports = new StaffService();
-

@@ -2,24 +2,31 @@ const enrollmentRepository = require("../repositories/enrollmentRepository");
 const learnerRepository = require("../repositories/learnerRepository");
 const courseRepository = require("../repositories/courseRepository");
 
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 class EnrollmentService {
   async createEnrollment(data) {
     try {
       // Validate required fields
       if (!data.LearnerID || !data.CourseID) {
-        throw new Error("LearnerID and CourseID are required");
+        throw new ServiceError("Thiếu LearnerID hoặc CourseID", 400);
       }
 
       // Check if learner exists
       const learner = await learnerRepository.findById(data.LearnerID);
       if (!learner) {
-        throw new Error("Learner not found");
+        throw new ServiceError("Học viên không tồn tại", 404);
       }
 
       // Check if course exists
       const course = await courseRepository.findById(data.CourseID);
       if (!course) {
-        throw new Error("Course not found");
+        throw new ServiceError("Khóa học không tồn tại", 404);
       }
 
       // Check if enrollment already exists
@@ -29,7 +36,7 @@ class EnrollmentService {
           data.CourseID
         );
       if (existingEnrollment) {
-        throw new Error("Enrollment already exists");
+        throw new ServiceError("Đăng ký đã tồn tại", 409);
       }
 
       // Create enrollment
@@ -53,7 +60,7 @@ class EnrollmentService {
     try {
       const enrollment = await enrollmentRepository.findById(id);
       if (!enrollment) {
-        throw new Error("Enrollment not found");
+        throw new ServiceError("Đăng ký không tồn tại", 404);
       }
       return enrollment;
     } catch (error) {
@@ -84,7 +91,7 @@ class EnrollmentService {
       // Check if enrollment exists
       const existingEnrollment = await enrollmentRepository.findById(id);
       if (!existingEnrollment) {
-        throw new Error("Enrollment not found");
+        throw new ServiceError("Đăng ký không tồn tại", 404);
       }
 
       // Update enrollment
@@ -100,7 +107,7 @@ class EnrollmentService {
       // Check if enrollment exists
       const existingEnrollment = await enrollmentRepository.findById(id);
       if (!existingEnrollment) {
-        throw new Error("Enrollment not found");
+        throw new ServiceError("Đăng ký không tồn tại", 404);
       }
 
       // Delete enrollment

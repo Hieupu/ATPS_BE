@@ -2,6 +2,13 @@ const bcrypt = require("bcryptjs");
 const staffService = require("../services/staffService");
 const accountService = require("../services/accountService");
 const accountRepository = require("../repositories/accountRepository");
+const {
+  validateEmailFormat,
+  validatePassword,
+  validatePhoneFormat,
+  validateFullName,
+  checkEmailExists,
+} = require("../utils/validators");
 
 const staffController = {
   getAllStaff: async (req, res) => {
@@ -44,7 +51,9 @@ const staffController = {
       res.status(status).json({
         success: false,
         message:
-          status === 404 ? "Không tìm thấy nhân viên" : "Lỗi khi lấy thông tin nhân viên",
+          status === 404
+            ? "Không tìm thấy nhân viên"
+            : "Lỗi khi lấy thông tin nhân viên",
         error: error.message,
       });
     }
@@ -66,38 +75,67 @@ const staffController = {
         Gender = "other",
       } = req.body;
 
-      if (!FullName) {
+      // Validate FullName using utils
+      const fullNameValidation = validateFullName(FullName);
+      if (!fullNameValidation.isValid) {
         return res.status(400).json({
           success: false,
-          message: "FullName là bắt buộc",
+          message: fullNameValidation.error,
         });
       }
 
       let accountId = AccID;
 
       if (!accountId) {
-        if (!Email || !Password) {
+        // Validate Email using utils
+        const emailValidation = validateEmailFormat(Email);
+        if (!emailValidation.isValid) {
           return res.status(400).json({
             success: false,
-            message: "Thiếu thông tin Email hoặc Password để tạo tài khoản",
+            message: emailValidation.error,
           });
         }
 
-        const existingAccount = await accountRepository.findAccountByEmail(
-          Email.trim().toLowerCase()
-        );
-        if (existingAccount) {
+        // Validate Password using utils
+        const passwordValidation = validatePassword(Password, true);
+        if (!passwordValidation.isValid) {
           return res.status(400).json({
             success: false,
-            message: "Email đã tồn tại",
+            message: passwordValidation.error,
+          });
+        }
+
+        // Validate Phone format using utils (if provided)
+        if (Phone && Phone.trim()) {
+          const phoneValidation = validatePhoneFormat(Phone, false);
+          if (!phoneValidation.isValid) {
+            return res.status(400).json({
+              success: false,
+              message: phoneValidation.error,
+            });
+          }
+        }
+
+        // Check duplicate email using utils
+        const emailCheck = await checkEmailExists(
+          accountRepository.findAccountByEmail.bind(accountRepository),
+          Email
+        );
+        if (emailCheck.exists) {
+          return res.status(400).json({
+            success: false,
+            message: emailCheck.error,
           });
         }
 
         const hashedPassword = await bcrypt.hash(Password, 10);
+        const phoneValidation = validatePhoneFormat(Phone, false);
         accountId = await accountRepository.createAccountWithRole({
-          username: Username || FullName?.trim().replace(/\s+/g, "").toLowerCase(),
-          email: Email,
-          phone: Phone || "",
+          username:
+            Username ||
+            fullNameValidation.trimmedName.replace(/\s+/g, "").toLowerCase(),
+          email: emailValidation.normalizedEmail,
+          phone: phoneValidation.cleanedPhone || "",
           password: hashedPassword,
           status: Status || "active",
           provider: "local",
@@ -107,10 +145,10 @@ const staffController = {
 
       const newStaff = await staffService.createStaff({
         AccID: accountId,
-        FullName,
-        DateOfBirth,
-        ProfilePicture,
-        Address,
+        FullName: fullNameValidation.trimmedName,
+        DateOfBirth: DateOfBirth || null,
+        ProfilePicture: ProfilePicture || null,
+        Address: Address || null,
       });
 
       let accountInfo = null;
@@ -128,6 +166,7 @@ const staffController = {
           Email: accountInfo?.Email || Email,
           Phone: accountInfo?.Phone || Phone,
           Status: accountInfo?.Status || Status,
+          Gender: accountInfo?.Gender || Gender,
         },
       });
     } catch (error) {
@@ -158,7 +197,9 @@ const staffController = {
       res.status(status).json({
         success: false,
         message:
-          status === 404 ? "Không tìm thấy nhân viên" : "Lỗi khi cập nhật nhân viên",
+          status === 404
+            ? "Không tìm thấy nhân viên"
+            : "Lỗi khi cập nhật nhân viên",
         error: error.message,
       });
     }
@@ -187,4 +228,3 @@ const staffController = {
 };
 
 module.exports = staffController;
-

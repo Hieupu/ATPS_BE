@@ -8,7 +8,11 @@ class MaterialService {
       // Format data
       const formattedMaterials = materials.map((material) => ({
         ...material,
-        fileType: this.getFileType(material.FileURL),
+        FileType: this.getFileType(material.FileURL),
+        fileType: this.getFileType(material.FileURL).toLowerCase(), 
+        Description: material.Description || 'Tài liệu học tập', 
+        FileSize: material.FileSize || null, 
+        UploadDate: material.UploadDate || null, 
         canDownload: true,
       }));
 
