@@ -551,35 +551,39 @@ class ProgressRepository {
       const db = await connectDB();
       
       const query = `
-        SELECT 
-          COUNT(DISTINCT e.EnrollmentID) as TotalEnrollments,
-          COUNT(DISTINCT c.CourseID) as TotalCourses,
-          
-          COALESCE(SUM(
-            CASE WHEN e.Status IN ('Enrolled', 'enrolled', 'ACTIVE', 'active') THEN 1 ELSE 0 END
-          ), 0) as ActiveCourses,
-          
-          COALESCE(SUM(
-            TIMESTAMPDIFF(MINUTE, ts.StartTime, ts.EndTime)
-          ), 0) as TotalMinutesLearned,
-          
-          COUNT(DISTINCT s.SubmissionID) as TotalSubmissions,
-          
-          COALESCE(AVG(s.Score), 0) as OverallAvgScore,
-          
-          COUNT(DISTINCT a.AttendanceID) as TotalAttendances,
-          
-          COUNT(DISTINCT er.ResultID) as TotalExamsTaken
-          
-        FROM enrollment e
-        INNER JOIN class cl ON e.ClassID = cl.ClassID
-        INNER JOIN course c ON cl.CourseID = c.CourseID
-        LEFT JOIN attendance a ON a.LearnerID = e.LearnerID AND a.Status = 'present'
-        LEFT JOIN session se ON a.SessionID = se.SessionID
-        LEFT JOIN timeslot ts ON se.TimeslotID = ts.TimeslotID
-        LEFT JOIN submission s ON s.LearnerID = e.LearnerID
-        LEFT JOIN examresult er ON er.LearnerID = e.LearnerID
-        WHERE e.LearnerID = ?
+         SELECT 
+  COUNT(DISTINCT e.EnrollmentID) as TotalEnrollments,
+  COUNT(DISTINCT cl.CourseID) as TotalCourses,
+  
+  COUNT(DISTINCT CASE 
+    WHEN e.Status IN ('Enrolled', 'enrolled') 
+    THEN e.EnrollmentID 
+  END) as ActiveCourses,
+  
+  IFNULL(SUM(
+    CASE 
+      WHEN a.Status = 'present' 
+      THEN TIMESTAMPDIFF(MINUTE, ts.StartTime, ts.EndTime)
+      ELSE 0 
+    END
+  ), 0) as TotalMinutesLearned,
+  
+  IFNULL(COUNT(DISTINCT s.SubmissionID), 0) as TotalSubmissions,
+  
+  IFNULL(AVG(s.Score), 0) as OverallAvgScore,
+  
+  IFNULL(COUNT(DISTINCT a.AttendanceID), 0) as TotalAttendances,
+  
+  IFNULL(COUNT(DISTINCT er.ResultID), 0) as TotalExamsTaken
+  
+FROM enrollment e
+INNER JOIN class cl ON e.ClassID = cl.ClassID
+LEFT JOIN attendance a ON a.LearnerID = e.LearnerID
+LEFT JOIN session se ON a.SessionID = se.SessionID
+LEFT JOIN timeslot ts ON se.TimeslotID = ts.TimeslotID
+LEFT JOIN submission s ON s.LearnerID = e.LearnerID
+LEFT JOIN examresult er ON er.LearnerID = e.LearnerID
+WHERE e.LearnerID = ?
       `;
 
       const [rows] = await db.query(query, [learnerId]);
