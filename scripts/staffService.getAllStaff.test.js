@@ -10,7 +10,7 @@ describe("staffService.getAllStaff", () => {
     jest.clearAllMocks();
   });
 
-  test("returns empty array when repository returns empty", async () => {
+  test("UTCID01 - repository trả về mảng rỗng -> trả về mảng rỗng", async () => {
     staffRepository.findAll.mockResolvedValue([]);
 
     const result = await staffService.getAllStaff();
@@ -19,7 +19,7 @@ describe("staffService.getAllStaff", () => {
     expect(result).toEqual([]);
   });
 
-  test("throws ServiceError (status 500) when repository fails with generic error", async () => {
+  test("UTCID02 - repository lỗi generic -> ServiceError 500 với message tiếng Việt", async () => {
     staffRepository.findAll.mockRejectedValue(new Error("db down"));
 
     await expect(staffService.getAllStaff()).rejects.toMatchObject({
@@ -28,7 +28,7 @@ describe("staffService.getAllStaff", () => {
     });
   });
 
-  test("propagates ServiceError status when repository throws with status", async () => {
+  test("UTCID03 - repository lỗi có status 404 -> ServiceError 404 với message tiếng Việt", async () => {
     const err = new Error("Not found");
     err.status = 404;
     staffRepository.findAll.mockRejectedValue(err);
@@ -39,7 +39,7 @@ describe("staffService.getAllStaff", () => {
     });
   });
 
-  test("returns 403 when repository signals PERMISSION_DENIED error", async () => {
+  test("UTCID04 - repository PERMISSION_DENIED -> ServiceError 403 với message tiếng Việt", async () => {
     const err = new Error("Forbidden");
     err.code = "PERMISSION_DENIED";
     staffRepository.findAll.mockRejectedValue(err);
@@ -50,7 +50,7 @@ describe("staffService.getAllStaff", () => {
     });
   });
 
-  test("handles null options", async () => {
+  test("UTCID05 - gọi với null options -> gọi repository với null và trả về kết quả", async () => {
     const fakeStaff = [{ StaffID: 1, AccID: 10, FullName: "Staff A" }];
     staffRepository.findAll.mockResolvedValue(fakeStaff);
 

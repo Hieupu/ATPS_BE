@@ -36,23 +36,24 @@ describe("authService - determineUserRole", () => {
   test("UTCID03 - accountId là parent -> trả về 'parent'", async () => {
     const mockQuery = jest
       .fn()
-      .mockResolvedValueOnce([[]])
-      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[]]) // instructor
+      .mockResolvedValueOnce([[]]) // learner
+      .mockResolvedValueOnce([[]]) // admin
       .mockResolvedValueOnce([[{ ParentID: 3 }]]);
 
     connectDB.mockResolvedValue({ query: mockQuery });
 
-    const role = await determineUserRole(4);
+    const role = await determineUserRole(3);
     expect(role).toBe("parent");
   });
 
   test("UTCID04 - accountId là admin -> trả về 'admin'", async () => {
     const mockQuery = jest
       .fn()
-      .mockResolvedValueOnce([[]])
-      .mockResolvedValueOnce([[]])
-      .mockResolvedValueOnce([[]])
-      .mockResolvedValueOnce([[{ AdminID: 4 }]]);
+      .mockResolvedValueOnce([[]]) 
+      .mockResolvedValueOnce([[]]) 
+      .mockResolvedValueOnce([[{ AdminID: 4 }]])
+      .mockResolvedValueOnce([[]]);
 
     connectDB.mockResolvedValue({ query: mockQuery });
 
