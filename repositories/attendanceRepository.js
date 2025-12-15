@@ -51,7 +51,7 @@ async getLearnerAttendance(learnerId) {
     }
   }
 
-  async getAttendanceStats(learnerId, sessionId = null) {
+  async getAttendanceStats(learnerId) {
     try {
       const db = await connectDB();
       let query = `
@@ -59,7 +59,6 @@ async getLearnerAttendance(learnerId) {
           COUNT(*) as TotalSessions,
           SUM(CASE WHEN a.Status = 'Present' THEN 1 ELSE 0 END) as PresentCount,
           SUM(CASE WHEN a.Status = 'Absent' THEN 1 ELSE 0 END) as AbsentCount,
-          SUM(CASE WHEN a.Status = 'Late' THEN 1 ELSE 0 END) as LateCount,
           ROUND((SUM(CASE WHEN a.Status = 'Present' THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0)), 2) as AttendanceRate
         FROM attendance a
         INNER JOIN session s ON a.SessionID = s.SessionID
@@ -67,11 +66,6 @@ async getLearnerAttendance(learnerId) {
       `;
 
       const params = [learnerId];
-
-      if (sessionId) {
-        query += ` AND a.SessionID = ?`;
-        params.push(sessionId);
-      }
 
       const [rows] = await db.query(query, params);
       return rows[0];

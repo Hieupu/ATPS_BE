@@ -60,18 +60,14 @@ class AttendanceService {
     }
   }
 
-  async getAttendanceStats(learnerId, sessionId = null) {
+  async getAttendanceStats(learnerId) {
     try {
-      const stats = await attendanceRepository.getAttendanceStats(
-        learnerId,
-        sessionId
-      );
+      const stats = await attendanceRepository.getAttendanceStats(learnerId);
 
       return {
         totalSessions: stats.TotalSessions || 0,
         totalPresent: stats.PresentCount || 0,
         totalAbsent: stats.AbsentCount || 0,
-        totalLate: stats.LateCount || 0,
         attendanceRate: stats.AttendanceRate || 0,
         grade: this.calculateAttendanceGrade(stats.AttendanceRate || 0),
         status: this.getAttendanceStatus(stats.AttendanceRate || 0),
