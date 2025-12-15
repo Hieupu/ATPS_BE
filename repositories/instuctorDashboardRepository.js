@@ -335,7 +335,7 @@ class InstructorDashboardRepository {
            WHERE a.SessionID = s.SessionID
        )
        AND (
-         (s.Date = CURDATE() AND HOUR(NOW()) >= 22)
+         (s.Date = CURDATE() AND HOUR(NOW()) >= 15)
          OR
          (s.Date = SUBDATE(CURDATE(), 1))
        )`,
