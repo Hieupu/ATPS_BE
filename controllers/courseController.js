@@ -306,10 +306,10 @@ const getScheduleClasses = async (req, res) => {
       dateTo, 
       instructorId,
       courseId,
-      month,      // Thêm tham số mới
-      levels,     // Thêm tham số mới
-      days,       // Thêm tham số mới
-      timeSlot    // Thêm tham số mới
+      month,      
+      levels,     
+      days,       
+      timeSlot   
     } = req.query;
 
     const classes = await courseRepository.getScheduleClasses({
@@ -318,10 +318,10 @@ const getScheduleClasses = async (req, res) => {
       dateTo,
       instructorId,
       courseId,
-      month,      // Truyền thêm vào repository
-      levels,     // Truyền thêm vào repository
-      days,       // Truyền thêm vào repository
-      timeSlot    // Truyền thêm vào repository
+      month,     
+      levels,     
+      days,      
+      timeSlot   
     });
 
     res.json({
