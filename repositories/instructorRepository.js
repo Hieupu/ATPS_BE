@@ -324,12 +324,13 @@ class InstructorRepository {
       );
 
       const [certRows] = await db.query(
-        `SELECT CertificateID, Title, FileURL
-        FROM certificate
-        WHERE InstructorID = ?
-        ORDER BY CertificateID DESC`,
-        [instructorId]
-      );
+    `SELECT CertificateID, Title, FileURL
+    FROM certificate
+    WHERE InstructorID = ? 
+    AND LOWER(Status) = 'published'
+    ORDER BY CertificateID DESC`,
+    [instructorId]
+);
 
       return {
         ...instructor,

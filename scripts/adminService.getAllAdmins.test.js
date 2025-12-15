@@ -10,7 +10,7 @@ describe("adminService.getAllAdmins", () => {
     jest.clearAllMocks();
   });
 
-  test("returns list of admins from repository with options", async () => {
+  test("UTCID01 - repository trả về danh sách admin với options -> trả về danh sách admin", async () => {
     const fakeAdmins = [{ AccID: 1, FullName: "Admin A" }];
     adminRepository.findAll.mockResolvedValue(fakeAdmins);
 
@@ -20,7 +20,7 @@ describe("adminService.getAllAdmins", () => {
     expect(result).toEqual(fakeAdmins);
   });
 
-  test("returns empty list when repository returns empty", async () => {
+  test("UTCID02 - repository trả về mảng rỗng -> trả về mảng rỗng", async () => {
     adminRepository.findAll.mockResolvedValue([]);
 
     const result = await adminService.getAllAdmins();
@@ -29,7 +29,7 @@ describe("adminService.getAllAdmins", () => {
     expect(result).toEqual([]);
   });
 
-  test("throws ServiceError (status 500) when repository fails with generic error", async () => {
+  test("UTCID03 - repository lỗi generic -> ServiceError 500 với message tiếng Việt", async () => {
     adminRepository.findAll.mockRejectedValue(new Error("db down"));
 
     await expect(adminService.getAllAdmins()).rejects.toMatchObject({
@@ -38,7 +38,7 @@ describe("adminService.getAllAdmins", () => {
     });
   });
 
-  test("propagates ServiceError status when repository throws with status", async () => {
+  test("UTCID04 - repository lỗi có status 404 -> ServiceError 404 với message tiếng Việt", async () => {
     const err = new Error("Not found");
     err.status = 404;
     adminRepository.findAll.mockRejectedValue(err);
@@ -49,7 +49,7 @@ describe("adminService.getAllAdmins", () => {
     });
   });
 
-  test("returns 403 when repository signals permission error", async () => {
+  test("UTCID05 - repository lỗi có status 403 -> ServiceError 403 với message tiếng Việt", async () => {
     const err = new Error("Forbidden");
     err.status = 403;
     adminRepository.findAll.mockRejectedValue(err);
