@@ -120,6 +120,7 @@ const getFullDashboardDataService = async (instructorId) => {
   const { start, end } = getDateRange(7);
   const SUBMISSION_LIMIT = 5;
   const NOTIFICATION_LIMIT = 5;
+  const SESSION_CHANGE_LIMIT = 5;
   const [
     courses,
     classes,
@@ -147,7 +148,10 @@ const getFullDashboardDataService = async (instructorId) => {
     ),
 
     instructorDashboardRepository.getAttendanceByInstructorId(instructorId),
-    instructorDashboardRepository.getExamsByInstructorId(instructorId),
+    instructorDashboardRepository.getExamsByInstructorId(
+      instructorId,
+      SUBMISSION_LIMIT
+    ),
 
     instructorDashboardRepository.getSubmissionsByInstructorId(
       instructorId,
@@ -162,7 +166,8 @@ const getFullDashboardDataService = async (instructorId) => {
     ),
 
     instructorDashboardRepository.getSessionChangeRequestsByInstructorId(
-      instructorId
+      instructorId,
+      SESSION_CHANGE_LIMIT
     ),
     instructorDashboardRepository.getMissedAttendanceAlerts(instructorId),
   ]);

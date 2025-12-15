@@ -92,7 +92,6 @@ class InstructorDashboardRepository {
   ) {
     const db = await connectDB();
 
-    // Câu query gốc
     let sql = `SELECT 
           s.SessionID, s.ClassID, s.Title,
           DATE_FORMAT(s.Date, '%Y-%m-%d') as SessionDate, 
@@ -104,16 +103,13 @@ class InstructorDashboardRepository {
 
     const params = [instructorId];
 
-    // Logic thêm điều kiện ngày tháng
     if (startDate && endDate) {
       sql += ` AND s.Date BETWEEN ? AND ?`;
       params.push(startDate, endDate);
     }
 
-    // Sắp xếp ngày gần nhất trước
     sql += ` ORDER BY s.Date ASC`;
 
-    // Logic thêm giới hạn số lượng
     if (limit) {
       sql += ` LIMIT ?`;
       params.push(limit);
@@ -155,40 +151,56 @@ class InstructorDashboardRepository {
   }
 
   // 7. GET EXAMS/ASSIGNMENTS (Bài tập/Kiểm tra của Instructor này)
-  async getExamsByInstructorId(instructorId) {
+  async getExamsByInstructorId(instructorId, limit) {
     const db = await connectDB();
 
-    const [rows] = await db.query(
-      `SELECT 
-          e.ExamID,
-          e.Title,
-          ei.ClassId,
-          e.Type,
-          DATE_FORMAT(ei.EndTime, '%Y-%m-%d') as DueDate,
+    let sql = `
+    SELECT
+      e.ExamID,
+      e.Title,
+      e.Type,
+      c.ClassID,
+      c.Name AS ClassName,
+      COUNT(DISTINCT en.LearnerID) AS TotalLearners,
+      COUNT(DISTINCT CASE WHEN s.SubmissionID IS NOT NULL THEN s.LearnerID END) AS SubmittedCount,
+      COUNT(DISTINCT CASE WHEN s.Score IS NOT NULL THEN s.LearnerID END) AS GradedCount,
+      COUNT(DISTINCT CASE WHEN s.SubmissionID IS NOT NULL AND s.Score IS NULL THEN s.LearnerID END) AS UngradedCount,
+      DATE_FORMAT(ei.EndTime, '%Y-%m-%d') AS DueDate
+    FROM exam e
+    JOIN exam_instances ei ON e.ExamID = ei.ExamId
+    JOIN class c ON ei.ClassId = c.ClassID
+    LEFT JOIN enrollment en ON en.ClassID = c.ClassID
+    LEFT JOIN submission s ON s.ExamID = e.ExamID AND s.LearnerID = en.LearnerID
+    WHERE e.InstructorID = ?
+    GROUP BY e.ExamID, e.Title, e.Type, c.ClassID, c.Name, ei.EndTime
+    ORDER BY (UngradedCount > 0) DESC, ei.EndTime ASC
+  `;
 
-          COUNT(s.SubmissionID) as TotalSubmissions,
+    const params = [instructorId];
 
-          SUM(CASE WHEN s.Score IS NULL THEN 1 ELSE 0 END) as UngradedCount
-          
-       FROM exam e
-       JOIN exam_instances ei ON e.ExamID = ei.ExamId
+    if (Number.isInteger(limit)) {
+      sql += ` LIMIT ?`;
+      params.push(limit);
+    }
 
-       LEFT JOIN submission s ON e.ExamID = s.ExamID 
-       
-       WHERE e.InstructorID = ?
-       GROUP BY e.ExamID, e.Title, ei.ClassId, e.Type, ei.EndTime`,
-      [instructorId]
-    );
+    const [rows] = await db.query(sql, params);
 
     return rows.map((row) => ({
       examId: row.ExamID,
       title: row.Title,
-      classId: row.ClassId,
-      type: row.Type ? row.Type.toUpperCase() : "EXAM",
+      type: row.Type?.toUpperCase() || "EXAM",
+      classId: row.ClassID,
+      className: row.ClassName,
       dueDate: row.DueDate,
-
-      totalSubmissions: row.TotalSubmissions,
-      ungradedCount: Number(row.UngradedCount || 0),
+      totalLearners: Number(row.TotalLearners),
+      submittedCount: Number(row.SubmittedCount),
+      gradedCount: Number(row.GradedCount),
+      ungradedCount: Number(row.UngradedCount),
+      progress:
+        row.TotalLearners > 0
+          ? Math.round((row.GradedCount / row.TotalLearners) * 100)
+          : 0,
+      status: row.UngradedCount === 0 ? "Đã chấm" : "Chưa chấm",
     }));
   }
 
@@ -203,7 +215,7 @@ class InstructorDashboardRepository {
         FROM submission s
         JOIN exam e ON s.ExamID = e.ExamID
         WHERE e.InstructorID = ?
-        ORDER BY s.SubmissionDate DESC`; // Mới nhất lên đầu
+        ORDER BY s.SubmissionDate DESC`;
 
     const params = [instructorId];
 
@@ -226,7 +238,6 @@ class InstructorDashboardRepository {
   // 9. GET EXAM RESULTS (Thống kê điểm trung bình của các bài thi do Instructor tạo)
   async getExamResultsByInstructorId(instructorId) {
     const db = await connectDB();
-
     const [rows] = await db.query(
       `SELECT 
           s.ExamID,
@@ -275,22 +286,25 @@ class InstructorDashboardRepository {
   }
 
   // 11. GET SESSION CHANGE REQUESTS (Yêu cầu đổi lịch dạy của Instructor)
-  async getSessionChangeRequestsByInstructorId(instructorId) {
+  async getSessionChangeRequestsByInstructorId(instructorId, limit) {
     const db = await connectDB();
 
-    const [rows] = await db.query(
-      `SELECT 
-          scr.RequestID,
-          c.Name as ClassName,
-          scr.NewDate,
-          scr.Reason,
-          scr.Status
-       FROM session_change_request scr
-       JOIN session s ON scr.SessionID = s.SessionID
-       JOIN class c ON s.ClassID = c.ClassID
-       WHERE scr.InstructorID = ?`,
-      [instructorId]
-    );
+    let sql = `
+    SELECT 
+      scr.RequestID,
+      c.Name AS ClassName,
+      scr.NewDate,
+      scr.Reason,
+      scr.Status
+    FROM session_change_request scr
+    JOIN session s ON scr.SessionID = s.SessionID
+    JOIN class c ON s.ClassID = c.ClassID
+    WHERE scr.InstructorID = ?
+    ORDER BY scr.RequestID DESC
+    LIMIT ?
+  `;
+
+    const [rows] = await db.query(sql, [instructorId, limit]);
 
     return rows.map((row) => ({
       requestId: row.RequestID,
