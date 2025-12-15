@@ -82,6 +82,7 @@ const slotReservationRoutes = require("./routes/slotReservationRoutes");
 const learnerExamRoutes = require("./routes/learnerExamRoutes");
 const payrollRoutes = require("./routes/payrollRoutes");
 const newsRoutes = require("./routes/newsRoutes");
+const instructorDashboardRouter = require("./routes/instructorDashboardRouter");
 dotenv.config();
 const app = express();
 
@@ -150,6 +151,7 @@ app.use("/api/instructors", instructorRouter);
 app.use("/api/instructor", instructorClassRoutes);
 app.use("/api/instructor", assignmentRoutes);
 app.use("/api/instructor", instructorExamRoutes);
+app.use("/api/instructors", instructorDashboardRouter);
 
 // Certificate routes
 app.use("/api/certificates", certificateRouter);
