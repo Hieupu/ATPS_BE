@@ -151,12 +151,6 @@ const determineUserRole = async (accountId) => {
     accountId,
   ]);
   if (admins.length > 0) return "admin";
-  const [parents] = await db.query(
-    "SELECT ParentID FROM parent WHERE AccID = ?",
-    [accountId]
-  );
-  if (parents.length > 0) return "parent";
-
   return "unknown";
 };
 
