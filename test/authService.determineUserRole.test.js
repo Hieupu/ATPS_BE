@@ -51,7 +51,6 @@ describe("authService - determineUserRole", () => {
       .fn()
       .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([[]])
-      .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([[]]);
 
     connectDB.mockResolvedValue({ query: mockQuery });
