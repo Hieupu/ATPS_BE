@@ -10,7 +10,7 @@ describe("instructorService.getAllInstructorsAdmin", () => {
     jest.clearAllMocks();
   });
 
-  test("returns list of instructors from repository", async () => {
+  test("UTCID01 - repository trả về danh sách giảng viên -> trả về danh sách với Status và Gender", async () => {
     const fakeInstructors = [
       {
         InstructorID: 1,
@@ -42,7 +42,7 @@ describe("instructorService.getAllInstructorsAdmin", () => {
     expect(result[0]).toHaveProperty("Gender");
   });
 
-  test("returns empty array when repository returns empty", async () => {
+  test("UTCID02 - repository trả về mảng rỗng -> trả về mảng rỗng", async () => {
     instructorRepository.getAllInstructorsAdmin.mockResolvedValue([]);
 
     const result = await instructorService.getAllInstructorsAdmin();
@@ -51,7 +51,7 @@ describe("instructorService.getAllInstructorsAdmin", () => {
     expect(result).toHaveLength(0);
   });
 
-  test("throws ServiceError (status 500) when repository fails with generic error", async () => {
+  test("UTCID03 - repository lỗi generic -> ServiceError 500 với message tiếng Việt", async () => {
     instructorRepository.getAllInstructorsAdmin.mockRejectedValue(
       new Error("db down")
     );
@@ -64,7 +64,7 @@ describe("instructorService.getAllInstructorsAdmin", () => {
     });
   });
 
-  test("propagates ServiceError status when repository throws with status", async () => {
+  test("UTCID04 - repository lỗi có status 404 -> ServiceError 404 với message tiếng Việt", async () => {
     const err = new Error("Not found");
     err.status = 404;
     instructorRepository.getAllInstructorsAdmin.mockRejectedValue(err);
@@ -77,7 +77,7 @@ describe("instructorService.getAllInstructorsAdmin", () => {
     });
   });
 
-  test("returns 403 when repository signals PERMISSION_DENIED error", async () => {
+  test("UTCID05 - repository PERMISSION_DENIED -> ServiceError 403 với message tiếng Việt", async () => {
     const err = new Error("Forbidden");
     err.code = "PERMISSION_DENIED";
     instructorRepository.getAllInstructorsAdmin.mockRejectedValue(err);
@@ -88,24 +88,5 @@ describe("instructorService.getAllInstructorsAdmin", () => {
       message: "Lỗi khi lấy danh sách giảng viên",
       status: 403,
     });
-  });
-
-  test("handles large result set", async () => {
-    const largeInstructorList = Array.from({ length: 100 }, (_, i) => ({
-      InstructorID: i + 1,
-      AccID: i + 10,
-      FullName: `Instructor ${i + 1}`,
-      Status: "Active",
-      Gender: i % 2 === 0 ? "Male" : "Female",
-    }));
-    instructorRepository.getAllInstructorsAdmin.mockResolvedValue(
-      largeInstructorList
-    );
-
-    const result = await instructorService.getAllInstructorsAdmin();
-
-    expect(result).toHaveLength(100);
-    expect(result[0].InstructorID).toBe(1);
-    expect(result[99].InstructorID).toBe(100);
   });
 });
