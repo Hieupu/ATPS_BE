@@ -1175,28 +1175,25 @@ class CourseRepository {
     }
   }
 
-  //   /**
-  //    * Lấy LearnerID từ AccountID (có thể đã có, nhưng thêm cho chắc)
-  //    */
-  //   async getLearnerIdByAccountId(accountId) {
-  //     try {
-  //       const db = await connectDB();
+    async getLearnerIdByAccountId(accountId) {
+      try {
+        const db = await connectDB();
 
-  //       const [rows] = await db.query(
-  //         `SELECT LearnerID FROM learner WHERE AccID = ?`,
-  //         [accountId]
-  //       );
+        const [rows] = await db.query(
+          `SELECT LearnerID FROM learner WHERE AccID = ?`,
+          [accountId]
+        );
 
-  //       if (!rows.length) {
-  //         throw new Error("Learner profile not found");
-  //       }
+        if (!rows.length) {
+          throw new Error("Learner profile not found");
+        }
 
-  //       return rows[0].LearnerID;
-  //     } catch (error) {
-  //       console.error("Database error in getLearnerIdByAccountId:", error);
-  //       throw error;
-  //     }
-  //   }
+        return rows[0].LearnerID;
+      } catch (error) {
+        console.error("Database error in getLearnerIdByAccountId:", error);
+        throw error;
+      }
+    }
 }
 
 module.exports = new CourseRepository();
