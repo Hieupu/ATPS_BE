@@ -327,7 +327,7 @@ class InstructorRepository {
     `SELECT CertificateID, Title, FileURL
     FROM certificate
     WHERE InstructorID = ? 
-    AND LOWER(Status) = 'published'
+    AND LOWER(Status) = 'approved'
     ORDER BY CertificateID DESC`,
     [instructorId]
 );
