@@ -1,7 +1,7 @@
 const classScheduleService = require("../services/classScheduleService");
 const classCreationWizardService = require("../services/classCreationWizardService");
 const instructorLeaveService = require("../services/instructorLeaveService");
-const classService = require("../services/classService");
+const classService = require("../services/ClassService");
 
 const classScheduleController = {
   // Tạo lịch hàng loạt
@@ -351,14 +351,6 @@ const classScheduleController = {
         TimeslotsByDay,
       } = req.body;
 
-      console.log("[analyzeBlockedDays] START", {
-        InstructorID,
-        OpendatePlan,
-        Numofsession,
-        daysOfWeekCount: Array.isArray(DaysOfWeek) ? DaysOfWeek.length : 0,
-        hasTimeslotsByDay: !!TimeslotsByDay,
-      });
-
       if (!InstructorID || !OpendatePlan || !Numofsession) {
         return res.status(400).json({
           success: false,
@@ -377,16 +369,6 @@ const classScheduleController = {
 
       const durationMs = Date.now() - startTime;
       const blockedDaysKeys = Object.keys(result?.blockedDays || {});
-      console.log("[analyzeBlockedDays] DONE", {
-        InstructorID,
-        OpendatePlan,
-        Numofsession,
-        daysOfWeek: DaysOfWeek,
-        blockedDaysCount: blockedDaysKeys.length,
-        totalManualConflicts: result?.summary?.totalManualConflicts ?? 0,
-        totalSessionConflicts: result?.summary?.totalSessionConflicts ?? 0,
-        durationMs,
-      });
 
       res.json({
         success: true,
@@ -420,6 +402,7 @@ const classScheduleController = {
         numSuggestions,
         startDate,
         excludeClassId,
+        ClassID,
       } = req.query;
 
       if (!InstructorID || !TimeslotID || !Day) {
@@ -439,6 +422,7 @@ const classScheduleController = {
         numSuggestions: numSuggestions ? parseInt(numSuggestions) : 5,
         startDate,
         excludeClassId: excludeClassId ? parseInt(excludeClassId) : null,
+        ClassID: ClassID ? parseInt(ClassID) : null,
       });
 
       const suggestions =
@@ -449,6 +433,7 @@ const classScheduleController = {
           numSuggestions: numSuggestions ? parseInt(numSuggestions) : 5,
           startDate,
           excludeClassId: excludeClassId ? parseInt(excludeClassId) : null,
+          ClassID: ClassID ? parseInt(ClassID) : null,
         });
 
       console.log(
@@ -718,6 +703,7 @@ const classScheduleController = {
         sessionsPerWeek,
         requiredSlotsPerWeek,
         currentStartDate,
+        ClassID,
       } = req.body;
 
       console.log("[searchTimeslots] START", {
@@ -751,6 +737,7 @@ const classScheduleController = {
           ? parseInt(sessionsPerWeek)
           : 0,
         currentStartDate: currentStartDate || null,
+        ClassID: ClassID ? parseInt(ClassID) : null,
       });
 
       const durationMs = Date.now() - startTime;

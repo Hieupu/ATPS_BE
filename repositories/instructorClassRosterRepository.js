@@ -127,13 +127,12 @@ class InstructorClassRosterRepository {
   }
 
   //Lịch buổi học theo classid va instructorid
-
   async getSessions(classId, instructorId) {
     const db = await connectDB();
     const [rows] = await db.query(
       `SELECT
         s.SessionID,
-        s.Title,
+        c.Name,  -- Lấy tên lớp (Class Name) thay vì Session Title
         s.Date,
         s.ZoomUUID,
         t.StartTime,
@@ -142,7 +141,7 @@ class InstructorClassRosterRepository {
         scr.Status AS ChangeReqStatus 
       FROM session s
       JOIN timeslot t ON s.TimeslotID = t.TimeslotID
-      
+      JOIN class c ON s.ClassID = c.ClassID -- Thêm JOIN bảng class để lấy tên lớp
       
       LEFT JOIN session_change_request scr 
         ON s.SessionID = scr.SessionID 
@@ -156,30 +155,29 @@ class InstructorClassRosterRepository {
 
     return rows.map((row) => ({
       sessionId: row.SessionID,
-      title: row.Title,
+      title: row.Name, // Map Name của Class vào field title
       date: row.Date,
       zoomLink: row.ZoomUUID || null,
       startTime: row.StartTime,
       endTime: row.EndTime,
       dayOfWeek: row.Day,
-
       changeReqStatus: row.ChangeReqStatus || null,
     }));
   }
 
-  //lấy buổi học theo instructor
+  // 2. Lấy danh sách buổi học theo InstructorID (Lịch dạy)
   async getSessionsByInstructor(instructorId) {
     const db = await connectDB();
     const [rows] = await db.query(
       `SELECT
         s.SessionID,
-        s.Title,
+     
         s.Date,
         t.StartTime,
         t.EndTime,
         t.Day,
         c.ClassID,
-        c.Name,
+        c.Name, 
         c.CourseID,
         c.ZoomID, 
         c.Zoompass,
@@ -188,7 +186,6 @@ class InstructorClassRosterRepository {
       JOIN timeslot t ON s.TimeslotID = t.TimeslotID
       JOIN class c ON s.ClassID = c.ClassID
       
-   
       LEFT JOIN session_change_request scr 
         ON s.SessionID = scr.SessionID 
         AND scr.Status = 'PENDING'
@@ -200,7 +197,7 @@ class InstructorClassRosterRepository {
 
     return rows.map((row) => ({
       sessionId: row.SessionID,
-      title: row.Title,
+      title: row.Name,
       date: row.Date,
       startTime: row.StartTime,
       endTime: row.EndTime,
@@ -210,7 +207,6 @@ class InstructorClassRosterRepository {
       courseId: row.CourseID,
       ZoomID: row.ZoomID,
       ZoomPass: row.Zoompass,
-
       changeReqStatus: row.ChangeReqStatus || null,
     }));
   }
@@ -675,6 +671,30 @@ class InstructorClassRosterRepository {
     } finally {
       connection.release();
     }
+  }
+
+  // Lấy danh sách tất cả yêu cầu đổi lịch (cho admin)
+  async getAllSessionChangeRequests() {
+    const db = await connectDB();
+    const [rows] = await db.query(
+      `SELECT 
+        scr.RequestID,
+        scr.SessionID,
+        scr.InstructorID,
+        scr.NewDate,
+        scr.NewTimeslotID,
+        scr.Reason,
+        scr.Status,
+        scr.CreatedDate,
+        s.Date AS OldDate,
+        s.TimeslotID AS OldTimeslotID,
+        i.FullName AS InstructorName
+      FROM session_change_request scr
+      LEFT JOIN session s ON scr.SessionID = s.SessionID
+      LEFT JOIN instructor i ON scr.InstructorID = i.InstructorID
+      ORDER BY scr.CreatedDate DESC`
+    );
+    return rows;
   }
 }
 

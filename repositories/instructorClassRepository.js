@@ -90,76 +90,72 @@ class InstructorClassRepository {
 
     const [rows] = await db.query(
       `SELECT 
-      c.ClassID,
-      c.Name AS ClassName,
-      c.Status AS ClassStatus,
-      c.Fee,
-      c.Maxstudent AS MaxStudents,
-      c.OpendatePlan,
-      c.Opendate,
-      c.EnddatePlan,
-      c.Enddate,
-      c.Numofsession AS PlanSessions,
-      
-      -- TotalSessions logic
-      CASE 
-        WHEN (SELECT COUNT(*) FROM session s WHERE s.ClassID = c.ClassID AND s.InstructorID = c.InstructorID) > 0 
-        THEN (SELECT COUNT(DISTINCT s.Date, s.TimeslotID) FROM session s WHERE s.ClassID = c.ClassID AND s.InstructorID = c.InstructorID)
-        ELSE c.Numofsession 
-      END AS TotalSessions,
+        c.ClassID,
+        c.Name AS ClassName,
+        c.Status AS ClassStatus,
+        c.Fee,
+        c.Maxstudent AS MaxStudents,
+        c.OpendatePlan,
+        c.Opendate,
+        c.EnddatePlan,
+        c.Enddate,
+        c.Numofsession AS PlanSessions,
+        
+        CASE 
+          WHEN (SELECT COUNT(*) FROM session s WHERE s.ClassID = c.ClassID AND s.InstructorID = c.InstructorID) > 0 
+          THEN (SELECT COUNT(DISTINCT s.Date, s.TimeslotID) FROM session s WHERE s.ClassID = c.ClassID AND s.InstructorID = c.InstructorID)
+          ELSE c.Numofsession 
+        END AS TotalSessions,
 
-      -- FinishedSessions logic
-      (SELECT COUNT(DISTINCT s.Date, s.TimeslotID) 
-       FROM session s 
-       WHERE s.ClassID = c.ClassID 
-         AND s.InstructorID = c.InstructorID 
-         AND s.Date <= CURDATE()) AS FinishedSessions,
+        (SELECT COUNT(DISTINCT s.Date, s.TimeslotID) 
+          FROM session s 
+          WHERE s.ClassID = c.ClassID 
+            AND s.InstructorID = c.InstructorID 
+            AND s.Date <= CURDATE()) AS FinishedSessions,
 
-      co.CourseID,
-      COALESCE(co.Title, 'Lớp học tự do') AS CourseTitle,
-      COALESCE(co.Image, '/images/default-course.jpg') AS CourseImage,
-      co.Level AS CourseLevel,
-      (SELECT COUNT(*) FROM enrollment e WHERE e.ClassID = c.ClassID AND e.Status = 'Enrolled') AS CurrentStudents,
-      EXISTS(SELECT 1 FROM session s WHERE s.ClassID = c.ClassID AND s.InstructorID = c.InstructorID AND s.Date = CURDATE()) AS HasSessionToday,
-      (SELECT MIN(Date) FROM session s WHERE s.ClassID = c.ClassID AND s.InstructorID = c.InstructorID AND s.Date >= CURDATE()) AS NextSessionDate,
+        co.CourseID,
+        COALESCE(co.Title, 'Lớp học tự do') AS CourseTitle,
+        COALESCE(co.Image, '/images/default-course.jpg') AS CourseImage,
+        co.Level AS CourseLevel,
+        (SELECT COUNT(*) FROM enrollment e WHERE e.ClassID = c.ClassID AND e.Status = 'Enrolled') AS CurrentStudents,
+        EXISTS(SELECT 1 FROM session s WHERE s.ClassID = c.ClassID AND s.InstructorID = c.InstructorID AND s.Date = CURDATE()) AS HasSessionToday,
+        (SELECT MIN(Date) FROM session s WHERE s.ClassID = c.ClassID AND s.InstructorID = c.InstructorID AND s.Date >= CURDATE()) AS NextSessionDate,
 
-      -- 7. FIX ScheduleSummary: Dùng Subquery DISTINCT trước khi GROUP_CONCAT
-      (
-        SELECT GROUP_CONCAT(CONCAT(days, ': ', time_range) SEPARATOR ' | ')
-        FROM (
-            SELECT 
-                GROUP_CONCAT(day_label ORDER BY day_idx SEPARATOR ',') AS days,
-                CONCAT(TIME_FORMAT(StartTime, '%H:%i'), '-', TIME_FORMAT(EndTime, '%H:%i')) AS time_range
-            FROM (
-                -- Subquery con: Lấy danh sách DISTINCT các khung giờ (tránh lặp T2, T2...)
-                SELECT DISTINCT
-                    ts.Day,
-                    ts.StartTime,
-                    ts.EndTime,
-                    CASE ts.Day 
-                        WHEN 'Monday' THEN 'T2' 
-                        WHEN 'Tuesday' THEN 'T3' 
-                        WHEN 'Wednesday' THEN 'T4' 
-                        WHEN 'Thursday' THEN 'T5' 
-                        WHEN 'Friday' THEN 'T6' 
-                        WHEN 'Saturday' THEN 'T7' 
-                        WHEN 'Sunday' THEN 'CN' 
-                        ELSE LEFT(ts.Day, 3) 
-                    END AS day_label,
-                    FIELD(ts.Day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday') AS day_idx
-                FROM session s2
-                JOIN timeslot ts ON s2.TimeslotID = ts.TimeslotID
-                WHERE s2.ClassID = c.ClassID AND s2.InstructorID = c.InstructorID
-            ) AS unique_slots
-            GROUP BY StartTime, EndTime
-            ORDER BY StartTime
-        ) AS final_schedule
-      ) AS ScheduleSummary
+        (
+          SELECT GROUP_CONCAT(CONCAT(days, ': ', time_range) SEPARATOR ' | ')
+          FROM (
+              SELECT 
+                  GROUP_CONCAT(day_label ORDER BY day_idx SEPARATOR ',') AS days,
+                  CONCAT(TIME_FORMAT(StartTime, '%H:%i'), '-', TIME_FORMAT(EndTime, '%H:%i')) AS time_range
+              FROM (
+                  SELECT DISTINCT
+                      ts.Day,
+                      ts.StartTime,
+                      ts.EndTime,
+                      CASE ts.Day 
+                          WHEN 'Monday' THEN 'T2' 
+                          WHEN 'Tuesday' THEN 'T3' 
+                          WHEN 'Wednesday' THEN 'T4' 
+                          WHEN 'Thursday' THEN 'T5' 
+                          WHEN 'Friday' THEN 'T6' 
+                          WHEN 'Saturday' THEN 'T7' 
+                          WHEN 'Sunday' THEN 'CN' 
+                          ELSE LEFT(ts.Day, 3) 
+                      END AS day_label,
+                      FIELD(ts.Day, 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday') AS day_idx
+                  FROM session s2
+                  JOIN timeslot ts ON s2.TimeslotID = ts.TimeslotID
+                  WHERE s2.ClassID = c.ClassID AND s2.InstructorID = c.InstructorID
+              ) AS unique_slots
+              GROUP BY StartTime, EndTime
+              ORDER BY StartTime
+          ) AS final_schedule
+        ) AS ScheduleSummary
 
-    FROM class c
-    LEFT JOIN course co ON c.CourseID = co.CourseID
-    WHERE c.InstructorID = ? AND c.Status != 'DELETED'
-    ORDER BY COALESCE(c.Opendate, c.OpendatePlan) DESC, c.ClassID DESC`,
+      FROM class c
+      LEFT JOIN course co ON c.CourseID = co.CourseID
+      WHERE c.InstructorID = ? AND c.Status != 'DELETED'
+      ORDER BY COALESCE(c.Opendate, c.OpendatePlan) DESC, c.ClassID DESC`,
       [instructorId]
     );
 

@@ -4,13 +4,7 @@ const emailTemplateController = {
   // Lấy danh sách templates
   getAllTemplates: async (req, res) => {
     try {
-      const {
-        page = 1,
-        limit = 10,
-        eventType,
-        isActive,
-        search,
-      } = req.query;
+      const { page = 1, limit = 10, eventType, isActive, search } = req.query;
 
       const filters = {
         page: parseInt(page),
@@ -92,6 +86,7 @@ const emailTemplateController = {
         EventType,
         IsActive,
         Variables: Array.isArray(Variables) ? Variables : [],
+        CreatedBy: req.user?.id || null,
       });
 
       res.status(201).json({
@@ -125,7 +120,13 @@ const emailTemplateController = {
         updateData.Variables = [];
       }
 
-      const template = await emailTemplateService.updateTemplate(id, updateData);
+      // Thêm UpdatedBy từ user hiện tại
+      updateData.UpdatedBy = req.user?.id || null;
+
+      const template = await emailTemplateService.updateTemplate(
+        id,
+        updateData
+      );
 
       res.json({
         success: true,
@@ -259,7 +260,36 @@ const emailTemplateController = {
       });
     }
   },
+
+  // Lấy danh sách biến có thể sử dụng cho EventType
+  getAvailableVariables: async (req, res) => {
+    try {
+      const { eventType } = req.params;
+      if (!eventType) {
+        return res.status(400).json({
+          success: false,
+          message: "Vui lòng cung cấp eventType",
+        });
+      }
+
+      const variables = await emailTemplateService.getAvailableVariables(
+        eventType
+      );
+
+      res.json({
+        success: true,
+        message: "Lấy danh sách biến thành công",
+        data: variables,
+      });
+    } catch (error) {
+      console.error("Error getting available variables:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi lấy danh sách biến",
+        error: error.message,
+      });
+    }
+  },
 };
 
 module.exports = emailTemplateController;
-

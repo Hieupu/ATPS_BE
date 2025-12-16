@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { verifyToken, authorizeFeature } = require("../middlewares/auth");
+const { verifyToken, authorizeFeature } = require("../middlewares/middware");
 const attendanceController = require("../controllers/adminattendanceController");
 
 // Admin APIs
@@ -21,6 +21,12 @@ router.get(
   verifyToken,
   authorizeFeature("admin"),
   attendanceController.getAttendanceByLearner
+);
+router.get(
+  "/instructor/:instructorId",
+  verifyToken,
+  authorizeFeature("admin"),
+  attendanceController.getAttendanceByInstructor
 );
 router.put(
   "/:attendanceId",

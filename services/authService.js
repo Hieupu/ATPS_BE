@@ -41,6 +41,7 @@ const loginService = async (
   provider = "local",
   rememberMe = false
 ) => {
+  
   const user = await accountRepository.findAccountByEmail(email);
 
   if (!user) {
@@ -52,9 +53,7 @@ const loginService = async (
     }
     throw new ServiceError("Email hoặc mật khẩu không chính xác", 401);
   }
-
-  checkAccountStatus(user);
-
+  
   const userProvider = user.Provider.toLowerCase();
   const loginProvider = provider.toLowerCase();
 
@@ -86,6 +85,8 @@ const loginService = async (
       throw new ServiceError("Email hoặc mật khẩu không chính xác", 401);
     }
   }
+
+  checkAccountStatus(user);
 
   const role = await determineUserRole(user.AccID);
 
@@ -145,24 +146,17 @@ const determineUserRole = async (accountId) => {
     [accountId]
   );
   if (learners.length > 0) return "learner";
-
-  const [parents] = await db.query(
-    "SELECT ParentID FROM parent WHERE AccID = ?",
-    [accountId]
-  );
-  if (parents.length > 0) return "parent";
   // Kiểm tra admin
-  const [admins] = await db.query(
-    "SELECT AdminID FROM admin WHERE AccID = ?",
-    [accountId]
-  );
+  const [admins] = await db.query("SELECT AdminID FROM admin WHERE AccID = ?", [
+    accountId,
+  ]);
   if (admins.length > 0) return "admin";
-
   return "unknown";
 };
 
 const checkAccountStatus = (user) => {
-  if (!user.Status || user.Status.toLowerCase() !== "active") {
+  const status = (user.Status || "active").toLowerCase();
+  if (status !== "active") {
     throw new ServiceError(
       "Tài khoản của bạn đã bị khóa hoặc chưa kích hoạt",
       403
@@ -222,4 +216,5 @@ const registerService = async ({
 module.exports = {
   loginService,
   registerService,
+  determineUserRole,
 };

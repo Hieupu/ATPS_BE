@@ -207,7 +207,7 @@ const saveAttendanceService = async (
   const classObj = await instructorClassRepository.findById(classId);
   if (!classObj) throw new ServiceError("Lớp học không tồn tại", 404);
   if (classObj.InstructorID !== instructorId)
-    throw new ServiceError("Bạn không có quyền điểm danh lớp này", 403);
+    throw new ServiceError("Không có quyền", 403);
 
   const sessions = await instructorClassRosterRepository.getSessions(
     classId,
@@ -220,9 +220,10 @@ const saveAttendanceService = async (
     throw new ServiceError("Buổi học không thuộc lớp này", 400);
 
   const students = await instructorClassRosterRepository.getStudents(classId);
-  const validLearnerIds = students.map((s) => s.LearnerID);
+  const validLearnerIds = new Set(students.map((s) => s.LearnerID));
+
   const invalidIds = attendanceData
-    .filter((r) => !validLearnerIds.includes(r.LearnerID))
+    .filter((r) => !validLearnerIds.has(r.LearnerID))
     .map((r) => r.LearnerID);
 
   if (invalidIds.length > 0)
@@ -235,7 +236,6 @@ const saveAttendanceService = async (
     sessionId,
     attendanceData
   );
-
   return { success: true, message: "Điểm danh đã được lưu thành công" };
 };
 
@@ -509,6 +509,16 @@ const rejectRequestService = async (adminId, payload) => {
   };
 };
 
+// Service: Lấy danh sách tất cả yêu cầu đổi lịch (cho admin)
+const getAllSessionChangeRequestsService = async () => {
+  const requests =
+    await instructorClassRosterRepository.getAllSessionChangeRequests();
+  return {
+    success: true,
+    data: requests,
+  };
+};
+
 module.exports = {
   listInstructorClassesService,
   getInstructorClassDetailService,
@@ -523,4 +533,5 @@ module.exports = {
   requestSessionChangeService,
   approveRequestService,
   rejectRequestService,
+  getAllSessionChangeRequestsService,
 };

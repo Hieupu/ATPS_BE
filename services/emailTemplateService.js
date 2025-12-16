@@ -1,5 +1,14 @@
 const emailTemplateRepository = require("../repositories/emailTemplateRepository");
 const { sendEmail } = require("../utils/emailUtils");
+const emailLogService = require("./emailLogService");
+const accountRepository = require("../repositories/accountRepository");
+
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
 
 const emailTemplateService = {
   // Lấy danh sách templates với pagination
@@ -36,7 +45,7 @@ const emailTemplateService = {
     try {
       const template = await emailTemplateRepository.findById(templateId);
       if (!template) {
-        throw new Error("Không tìm thấy mẫu email");
+        throw new ServiceError("Không tìm thấy mẫu email", 404);
       }
 
       // Parse Variables nếu có
@@ -57,12 +66,28 @@ const emailTemplateService = {
     }
   },
 
+  // Lấy danh sách biến có thể sử dụng cho EventType
+  getAvailableVariables: async (eventType) => {
+    try {
+      const variables = await emailTemplateRepository.getAvailableVariables(
+        eventType
+      );
+      return variables;
+    } catch (error) {
+      console.error("Error getting available variables:", error);
+      throw error;
+    }
+  },
+
   // Lấy template theo Code
   getTemplateByCode: async (templateCode) => {
     try {
       const template = await emailTemplateRepository.findByCode(templateCode);
       if (!template) {
-        throw new Error(`Không tìm thấy mẫu email với mã: ${templateCode}`);
+        throw new ServiceError(
+          `Không tìm thấy mẫu email với mã: ${templateCode}`,
+          404
+        );
       }
 
       // Parse Variables nếu có
@@ -91,7 +116,7 @@ const emailTemplateService = {
         templateData.TemplateCode
       );
       if (existing) {
-        throw new Error("Mã mẫu email đã tồn tại");
+        throw new ServiceError("Mã mẫu email đã tồn tại", 409);
       }
 
       const template = await emailTemplateRepository.create(templateData);
@@ -119,7 +144,7 @@ const emailTemplateService = {
     try {
       const existing = await emailTemplateRepository.findById(templateId);
       if (!existing) {
-        throw new Error("Không tìm thấy mẫu email");
+        throw new ServiceError("Không tìm thấy mẫu email", 404);
       }
 
       // Nếu đổi TemplateCode, kiểm tra trùng
@@ -131,7 +156,7 @@ const emailTemplateService = {
           templateData.TemplateCode
         );
         if (codeExists) {
-          throw new Error("Mã mẫu email đã tồn tại");
+          throw new ServiceError("Mã mẫu email đã tồn tại", 409);
         }
       }
 
@@ -163,7 +188,7 @@ const emailTemplateService = {
     try {
       const template = await emailTemplateRepository.findById(templateId);
       if (!template) {
-        throw new Error("Không tìm thấy mẫu email");
+        throw new ServiceError("Không tìm thấy mẫu email", 404);
       }
 
       await emailTemplateRepository.delete(templateId);
@@ -191,16 +216,66 @@ const emailTemplateService = {
   },
 
   // Gửi email sử dụng template
-  sendEmailWithTemplate: async (templateCode, recipientEmail, variables = {}) => {
+  sendEmailWithTemplate: async (
+    templateCode,
+    recipientEmail,
+    variables = {}
+  ) => {
+    let emailLogId = null;
     try {
       // Lấy template
-      const template = await emailTemplateService.getTemplateByCode(templateCode);
+      const template = await emailTemplateService.getTemplateByCode(
+        templateCode
+      );
 
       // Thay thế biến
       const { subject, body } = emailTemplateService.replaceVariables(
         template,
         variables
       );
+
+      // Tìm RecipientAccID từ email
+      let recipientAccID = null;
+      try {
+        const account = await accountRepository.findAccountByEmail(
+          recipientEmail
+        );
+        if (account && account.AccID) {
+          recipientAccID = account.AccID;
+        }
+      } catch (e) {
+        // Không tìm thấy account, tiếp tục với recipientAccID = null
+        console.warn(
+          `[sendEmailWithTemplate] Không tìm thấy account cho email ${recipientEmail}:`,
+          e.message
+        );
+      }
+
+      // Tạo log trước khi gửi (status: PENDING)
+      try {
+        const logData = {
+          TemplateID: template.TemplateID || null,
+          TemplateCode: templateCode,
+          RecipientEmail: recipientEmail,
+          RecipientAccID: recipientAccID,
+          Subject: subject,
+          Body: body,
+          Variables: variables, // emailLogRepository sẽ tự động stringify
+          Status: "PENDING",
+        };
+        const logResult = await emailLogService.createEmailLog(logData);
+        // logResult có format: { success: true, data: { EmailLogID: ... } }
+        emailLogId = logResult.data?.EmailLogID || logResult.data || logResult;
+        console.log(
+          `[sendEmailWithTemplate] Đã tạo email log với ID: ${emailLogId}`
+        );
+      } catch (logError) {
+        console.error(
+          "[sendEmailWithTemplate] Lỗi khi tạo email log:",
+          logError
+        );
+        // Tiếp tục gửi email dù có lỗi log
+      }
 
       // Gửi email
       const result = await sendEmail({
@@ -210,15 +285,92 @@ const emailTemplateService = {
         html: body.replace(/\n/g, "<br>"), // Convert newlines to HTML breaks
       });
 
+      // Cập nhật log thành công (status: SENT)
+      if (emailLogId) {
+        try {
+          await emailLogService.updateEmailLogStatus(emailLogId, "SENT");
+          console.log(
+            `[sendEmailWithTemplate] Đã cập nhật email log ${emailLogId} thành SENT`
+          );
+        } catch (logError) {
+          console.error(
+            "[sendEmailWithTemplate] Lỗi khi cập nhật email log thành SENT:",
+            logError
+          );
+        }
+      }
+
       return {
         success: true,
         message: "Email đã được gửi thành công",
         templateCode,
         recipientEmail,
+        emailLogId,
         result,
       };
     } catch (error) {
       console.error("Error sending email with template:", error);
+
+      // Cập nhật log thất bại (status: FAILED)
+      if (emailLogId) {
+        try {
+          await emailLogService.updateEmailLogStatus(
+            emailLogId,
+            "FAILED",
+            error.message || "Lỗi không xác định khi gửi email"
+          );
+          console.log(
+            `[sendEmailWithTemplate] Đã cập nhật email log ${emailLogId} thành FAILED`
+          );
+        } catch (logError) {
+          console.error(
+            "[sendEmailWithTemplate] Lỗi khi cập nhật email log thành FAILED:",
+            logError
+          );
+        }
+      } else {
+        // Nếu chưa có log, tạo log với status FAILED
+        try {
+          const template = await emailTemplateService
+            .getTemplateByCode(templateCode)
+            .catch(() => null);
+          const { subject, body } = template
+            ? emailTemplateService.replaceVariables(template, variables)
+            : { subject: "N/A", body: "N/A" };
+
+          let recipientAccID = null;
+          try {
+            const account = await accountRepository.findAccountByEmail(
+              recipientEmail
+            );
+            if (account && account.AccID) {
+              recipientAccID = account.AccID;
+            }
+          } catch (e) {
+            // Ignore
+          }
+
+          const logData = {
+            TemplateID: template?.TemplateID || null,
+            TemplateCode: templateCode,
+            RecipientEmail: recipientEmail,
+            RecipientAccID: recipientAccID,
+            Subject: subject,
+            Body: body,
+            Variables: variables, // emailLogRepository sẽ tự động stringify
+            Status: "FAILED",
+            ErrorMessage: error.message || "Lỗi không xác định khi gửi email",
+          };
+          await emailLogService.createEmailLog(logData);
+          console.log(`[sendEmailWithTemplate] Đã tạo email log FAILED`);
+        } catch (logError) {
+          console.error(
+            "[sendEmailWithTemplate] Lỗi khi tạo email log FAILED:",
+            logError
+          );
+        }
+      }
+
       throw error;
     }
   },
@@ -279,4 +431,3 @@ const emailTemplateService = {
 };
 
 module.exports = emailTemplateService;
-

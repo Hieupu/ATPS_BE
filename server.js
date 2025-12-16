@@ -20,6 +20,11 @@ const instructorRoutes = require("./routes/instructorRoutes");
 const instructorRouter = require("./routes/instructorRouter");
 const instructorCourseRoutes = require("./routes/instructorCourseRouter");
 const instructorExamRoutes = require("./routes/instructorExamRoutes");
+
+// Certificate routes
+const certificateRouter = require("./routes/certificateRouter");
+
+// Learner routes
 const learnerRouter = require("./routes/learnerRouter");
 const learnerassignmentRoutes = require("./routes/learnerassignmentRoutes");
 const sessionRouter = require("./routes/sessionRouter");
@@ -41,13 +46,17 @@ const refundRouter = require("./routes/refundRouter");
 const promotionRouter = require("./routes/promotionRouter");
 const dashboardRouter = require("./routes/dashboardRouter");
 const emailTemplateRouter = require("./routes/emailTemplateRouter");
+const emailLogRouter = require("./routes/emailLogRouter");
 const notificationRoutes = require("./routes/notificationRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const zoomRoutes = require("./routes/zoomRoutes");
 const commonRouter = require("./routes/commonRouter");
 const slotReservationRoutes = require("./routes/slotReservationRoutes");
 const learnerExamRoutes = require("./routes/learnerExamRoutes");
-const classService = require("./services/classService");
+const payrollRoutes = require("./routes/payrollRoutes");
+const newsRoutes = require("./routes/newsRoutes");
+const instructorDashboardRouter = require("./routes/instructorDashboardRouter");
+const classService = require("./services/ClassService");
 const instructorExamRepository = require("./repositories/instructorExamRepository");
 dotenv.config();
 const app = express();
@@ -105,6 +114,10 @@ app.use("/api/instructors", instructorRouter);
 app.use("/api/instructor", instructorClassRoutes);
 app.use("/api/instructor", assignmentRoutes);
 app.use("/api/instructor", instructorExamRoutes);
+app.use("/api/instructors", instructorDashboardRouter);
+
+// Certificate routes
+app.use("/api/certificates", certificateRouter);
 
 app.use("/api/learners", learnerRouter);
 app.use("/api/learnerassignments", learnerassignmentRoutes);
@@ -112,9 +125,12 @@ app.use("/api/sessions", sessionRouter);
 app.use("/api/timeslots", timeslotRouter);
 app.use("/api/schedule", scheduleRoutes);
 
+// Attendance & Progress routes
 
 // app.use("/api/attendances", attendanceRouter);
 app.use("/api/attendance", attendanceRoutes);
+app.use("/api/attendances", attendanceRouter);
+
 app.use("/api/progress", progressRoutes);
 
 
@@ -132,18 +148,22 @@ app.use("/api/refunds", refundRouter);
 app.use("/api/promotions", promotionRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/email-templates", emailTemplateRouter);
+app.use("/api/email-logs", emailLogRouter);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/payment", paymentRoutes);
+app.use("/api/payroll", payrollRoutes);
 app.use("/api/zoom", zoomRoutes);
 app.use("/api/learnerassignments", learnerassignmentRoutes);
 app.use("/api/slot-reservation", slotReservationRoutes);
 app.use("/api/exams", learnerExamRoutes);
 app.use("/api/common", commonRouter);
+app.use("/api/new", newsRoutes);
+// Legacy API routes (for compatibility)
 
 app.use("/api/admin/classes", classRouter);
 app.use("/api/admin/courses", courseRouter);
 app.use("/api/admin/timeslots", timeslotRouter);
-app.use("/api/admin/sessions", sessionRouter);
+// app.use("/api/admin/sessions", sessionRouter);
 app.use("/api/instructor/classes", classRouter);
 app.use("/api/instructor/courses", courseRouter);
 app.use("/api/learner/classes", classRouter);
@@ -204,18 +224,7 @@ cron.schedule(
   "0 0 * * *",
   async () => {
     try {
-      console.log("[Cron Job] Bắt đầu tự động cập nhật status lớp học...");
       const result = await classService.autoUpdateClassStatus();
-      console.log("[Cron Job] Kết quả:", result.message);
-      console.log(
-        "[Cron Job] - Kích hoạt từ APPROVED:",
-        result.activatedClasses?.length || 0
-      );
-      console.log(
-        "[Cron Job] - Chuyển sang ONGOING:",
-        result.startedClasses?.length || 0
-      );
-      console.log("[Cron Job] - Đóng lớp:", result.closedClasses?.length || 0);
     } catch (error) {
       console.error("[Cron Job] Lỗi khi tự động cập nhật status:", error);
     }

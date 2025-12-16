@@ -1,5 +1,12 @@
 const paymentRepository = require("../repositories/paymentRepository");
 
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 class PaymentService {
   async getPaymentHistory(learnerId) {
     try {
@@ -17,13 +24,13 @@ class PaymentService {
       const enrollment = await paymentRepository.getEnrollmentDetails(enrollmentId);
       
       if (!enrollment) {
-        throw new Error("Không tìm thấy thông tin đăng ký học");
+        throw new ServiceError("Không tìm thấy thông tin đăng ký học", 404);
       }
 
       console.log("Enrollment details:", enrollment);
 
       if (!enrollment.ClassID || !enrollment.ClassName) {
-        throw new Error("Không tìm thấy thông tin lớp học");
+        throw new ServiceError("Không tìm thấy thông tin lớp học", 404);
       }
 
       const currentDate = new Date();
@@ -33,17 +40,20 @@ class PaymentService {
       console.log("Class start date:", startDate);
 
       if (startDate <= currentDate) {
-        throw new Error("Không thể hoàn tiền cho lớp học đã bắt đầu");
+        throw new ServiceError("Không thể hoàn tiền cho lớp học đã bắt đầu", 400);
       }
 
       const existingRefund = await paymentRepository.getExistingRefund(enrollmentId);
       if (existingRefund) {
-        throw new Error("Đã có yêu cầu hoàn tiền cho khóa học này");
+        throw new ServiceError("Đã có yêu cầu hoàn tiền cho khóa học này", 409);
       }
 
       const payment = await paymentRepository.getPaymentByEnrollment(enrollmentId);
-      if (!payment || payment.Status !== 'success') {
-        throw new Error("Chỉ có thể yêu cầu hoàn tiền cho các giao dịch đã thanh toán thành công");
+      if (!payment || payment.Status !== "success") {
+        throw new ServiceError(
+          "Chỉ có thể yêu cầu hoàn tiền cho các giao dịch đã thanh toán thành công",
+          400
+        );
       }
 
       const refundRequest = await paymentRepository.createRefundRequest(
@@ -70,11 +80,11 @@ class PaymentService {
       const refundRequest = await paymentRepository.getRefundRequestById(refundId);
       
       if (!refundRequest) {
-        throw new Error("Không tìm thấy yêu cầu hoàn tiền");
+        throw new ServiceError("Không tìm thấy yêu cầu hoàn tiền", 404);
       }
 
-      if (refundRequest.Status !== 'pending') {
-        throw new Error("Chỉ có thể hủy yêu cầu hoàn tiền đang chờ xử lý");
+      if (refundRequest.Status !== "pending") {
+        throw new ServiceError("Chỉ có thể hủy yêu cầu hoàn tiền đang chờ xử lý", 400);
       }
 
       // Cập nhật status thành cancelled
@@ -90,6 +100,15 @@ class PaymentService {
       };
     } catch (error) {
       console.error("Error in cancelRefundRequest service:", error);
+      throw error;
+    }
+  }
+
+  async getAdminPaymentHistory(search) {
+    try {
+      return await paymentRepository.getAdminPaymentHistory(search);
+    } catch (error) {
+      console.error("Error in getAdminPaymentHistory service:", error);
       throw error;
     }
   }

@@ -1,9 +1,10 @@
-const pool = require("../config/db");
+const connectDB = require("../config/db");
 
 const emailTemplateRepository = {
   // Lấy tất cả templates
   findAll: async (filters = {}) => {
     try {
+      const db = await connectDB();
       let query = "SELECT * FROM email_template WHERE 1=1";
       const params = [];
 
@@ -18,7 +19,8 @@ const emailTemplateRepository = {
       }
 
       if (filters.search) {
-        query += " AND (TemplateName LIKE ? OR TemplateCode LIKE ? OR Description LIKE ?)";
+        query +=
+          " AND (TemplateName LIKE ? OR TemplateCode LIKE ? OR Description LIKE ?)";
         const searchTerm = `%${filters.search}%`;
         params.push(searchTerm, searchTerm, searchTerm);
       }
@@ -35,7 +37,7 @@ const emailTemplateRepository = {
         params.push(parseInt(filters.offset));
       }
 
-      const [rows] = await pool.query(query, params);
+      const [rows] = await db.query(query, params);
       return rows;
     } catch (error) {
       console.error("Error finding email templates:", error);
@@ -46,6 +48,7 @@ const emailTemplateRepository = {
   // Đếm tổng số templates
   count: async (filters = {}) => {
     try {
+      const db = await connectDB();
       let query = "SELECT COUNT(*) as total FROM email_template WHERE 1=1";
       const params = [];
 
@@ -60,12 +63,13 @@ const emailTemplateRepository = {
       }
 
       if (filters.search) {
-        query += " AND (TemplateName LIKE ? OR TemplateCode LIKE ? OR Description LIKE ?)";
+        query +=
+          " AND (TemplateName LIKE ? OR TemplateCode LIKE ? OR Description LIKE ?)";
         const searchTerm = `%${filters.search}%`;
         params.push(searchTerm, searchTerm, searchTerm);
       }
 
-      const [rows] = await pool.query(query, params);
+      const [rows] = await db.query(query, params);
       return rows[0]?.total || 0;
     } catch (error) {
       console.error("Error counting email templates:", error);
@@ -76,7 +80,8 @@ const emailTemplateRepository = {
   // Lấy template theo ID
   findById: async (templateId) => {
     try {
-      const [rows] = await pool.query(
+      const db = await connectDB();
+      const [rows] = await db.query(
         "SELECT * FROM email_template WHERE TemplateID = ?",
         [templateId]
       );
@@ -90,7 +95,8 @@ const emailTemplateRepository = {
   // Lấy template theo Code
   findByCode: async (templateCode) => {
     try {
-      const [rows] = await pool.query(
+      const db = await connectDB();
+      const [rows] = await db.query(
         "SELECT * FROM email_template WHERE TemplateCode = ? AND IsActive = 1",
         [templateCode]
       );
@@ -101,10 +107,92 @@ const emailTemplateRepository = {
     }
   },
 
+  // Lấy danh sách biến có thể sử dụng cho từng EventType (từ template hiện có hoặc mặc định)
+  getAvailableVariables: async (eventType) => {
+    try {
+      const db = await connectDB();
+      // Lấy template theo EventType để xem Variables đã được định nghĩa
+      const [rows] = await db.query(
+        "SELECT Variables FROM email_template WHERE EventType = ? AND IsActive = 1 ORDER BY CreatedAt DESC LIMIT 1",
+        [eventType]
+      );
+
+      if (rows.length > 0 && rows[0].Variables) {
+        try {
+          const variables = JSON.parse(rows[0].Variables);
+          if (Array.isArray(variables) && variables.length > 0) {
+            return variables;
+          }
+        } catch (e) {
+        }
+      }
+
+      
+      const defaultVariables = {
+        ACCOUNT_STATUS_CHANGED: ["userName", "oldStatus", "newStatus"],
+        CLASS_CANCELLED_TO_LEARNER: [
+          "userName",
+          "className",
+          "classCode",
+          "reason",
+        ],
+        CLASS_CANCELLED_TO_INSTRUCTOR: [
+          "userName",
+          "className",
+          "classCode",
+          "reason",
+        ],
+        REFUND_CREATED: [
+          "userName",
+          "className",
+          "refundCode",
+          "refundAmount",
+          "reason",
+        ],
+        REFUND_APPROVED: [
+          "userName",
+          "refundCode",
+          "refundAmount",
+          "className",       
+          "transferDate",
+          "transferRef",
+        ],
+        REFUND_REJECTED: ["userName", "refundCode", "rejectionReason"],
+        // REFUND_COMPLETED: [
+        //   "userName",
+        //   "refundCode",
+        //   "refundAmount",
+        //   "className",
+        //   "completedDate",
+        // ],
+        REFUND_ACCOUNT_INFO_REQUEST: [
+          "userName",
+          "refundCode",
+          "refundAmount",
+          "className",
+        ],
+        // REFUND_ACCOUNT_SUCCESS: [
+        //   "userName",
+        //   "refundCode",
+        //   "refundAmount",
+        //   "className",
+        //   "transferDate",
+        //   "transferRef",
+        // ],
+      };
+
+      return defaultVariables[eventType] || [];
+    } catch (error) {
+      console.error("Error getting available variables:", error);
+      throw error;
+    }
+  },
+
   // Lấy templates theo EventType
   findByEventType: async (eventType, isActive = true) => {
     try {
-      const [rows] = await pool.query(
+      const db = await connectDB();
+      const [rows] = await db.query(
         "SELECT * FROM email_template WHERE EventType = ? AND IsActive = ? ORDER BY CreatedAt DESC",
         [eventType, isActive ? 1 : 0]
       );
@@ -118,6 +206,7 @@ const emailTemplateRepository = {
   // Tạo template mới
   create: async (templateData) => {
     try {
+      const db = await connectDB();
       const {
         TemplateCode,
         TemplateName,
@@ -129,10 +218,10 @@ const emailTemplateRepository = {
         Variables,
       } = templateData;
 
-      const [result] = await pool.query(
+      const [result] = await db.query(
         `INSERT INTO email_template 
-        (TemplateCode, TemplateName, Subject, Body, Description, EventType, IsActive, Variables)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        (TemplateCode, TemplateName, Subject, Body, Description, EventType, IsActive, Variables, CreatedBy)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           TemplateCode,
           TemplateName,
@@ -142,6 +231,7 @@ const emailTemplateRepository = {
           EventType,
           IsActive ? 1 : 0,
           Variables ? JSON.stringify(Variables) : null,
+          templateData.CreatedBy || null,
         ]
       );
 
@@ -207,9 +297,12 @@ const emailTemplateRepository = {
       }
 
       params.push(templateId);
+      const db = await connectDB();
 
-      await pool.query(
-        `UPDATE email_template SET ${updateFields.join(", ")} WHERE TemplateID = ?`,
+      await db.query(
+        `UPDATE email_template SET ${updateFields.join(
+          ", "
+        )} WHERE TemplateID = ?`,
         params
       );
 
@@ -223,7 +316,8 @@ const emailTemplateRepository = {
   // Xóa template (soft delete bằng cách set IsActive = 0)
   delete: async (templateId) => {
     try {
-      await pool.query(
+      const db = await connectDB();
+      await db.query(
         "UPDATE email_template SET IsActive = 0 WHERE TemplateID = ?",
         [templateId]
       );
@@ -237,7 +331,8 @@ const emailTemplateRepository = {
   // Xóa vĩnh viễn template
   hardDelete: async (templateId) => {
     try {
-      await pool.query("DELETE FROM email_template WHERE TemplateID = ?", [
+      const db = await connectDB();
+      await db.query("DELETE FROM email_template WHERE TemplateID = ?", [
         templateId,
       ]);
       return true;
@@ -249,4 +344,3 @@ const emailTemplateRepository = {
 };
 
 module.exports = emailTemplateRepository;
-

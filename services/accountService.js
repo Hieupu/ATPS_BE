@@ -1,12 +1,19 @@
 const accountRepository = require("../repositories/accountRepository");
 const bcrypt = require("bcryptjs");
 
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 class AccountService {
   async getAccountById(accountId) {
     try {
       const account = await accountRepository.findById(accountId);
       if (!account) {
-        throw new Error("Account not found");
+        throw new ServiceError("Tài khoản không tồn tại", 404);
       }
       // Không trả về password
       const { Password, ...accountWithoutPassword } = account;
@@ -21,7 +28,7 @@ class AccountService {
       // Kiểm tra account có tồn tại không
       const existingAccount = await accountRepository.findById(accountId);
       if (!existingAccount) {
-        throw new Error("Account not found");
+        throw new ServiceError("Tài khoản không tồn tại", 404);
       }
 
       // Chuẩn bị dữ liệu update
@@ -30,13 +37,15 @@ class AccountService {
       // Xử lý Email
       if (updateData.Email !== undefined) {
         const normalizedEmail = updateData.Email.trim().toLowerCase();
-        
+
         // Kiểm tra email trùng với account khác
-        const existingEmailAccount = await accountRepository.findAccountByEmail(normalizedEmail);
+        const existingEmailAccount = await accountRepository.findAccountByEmail(
+          normalizedEmail
+        );
         if (existingEmailAccount && existingEmailAccount.AccID !== accountId) {
-          throw new Error("Email đã tồn tại");
+          throw new ServiceError("Email đã tồn tại", 409);
         }
-        
+
         updateFields.Email = normalizedEmail;
       }
 
@@ -51,8 +60,9 @@ class AccountService {
         // DB chỉ chấp nhận: active, inactive, banned
         const validStatuses = ["active", "inactive", "banned"];
         if (!validStatuses.includes(normalizedStatus)) {
-          throw new Error(
-            `Status phải là một trong: ${validStatuses.join(", ")}`
+          throw new ServiceError(
+            `Status phải là một trong: ${validStatuses.join(", ")}`,
+            400
           );
         }
         updateFields.Status = normalizedStatus;
@@ -62,12 +72,26 @@ class AccountService {
       if (updateData.Password !== undefined) {
         // Validate password
         if (updateData.Password.length < 6) {
-          throw new Error("Mật khẩu phải có ít nhất 6 ký tự");
+          throw new ServiceError("Mật khẩu phải có ít nhất 6 ký tự", 400);
         }
-        
+
         // Hash password
         const hashedPassword = await bcrypt.hash(updateData.Password, 10);
         updateFields.Password = hashedPassword;
+      }
+
+      // Xử lý Gender
+      if (updateData.Gender !== undefined) {
+        const normalizedGender = updateData.Gender.toLowerCase();
+        // DB chỉ chấp nhận: male, female, other
+        const validGenders = ["male", "female", "other"];
+        if (!validGenders.includes(normalizedGender)) {
+          throw new ServiceError(
+            `Gender phải là một trong: ${validGenders.join(", ")}`,
+            400
+          );
+        }
+        updateFields.Gender = normalizedGender;
       }
 
       // Nếu không có trường nào để update
@@ -84,10 +108,19 @@ class AccountService {
       // Gửi email thông báo nếu status thay đổi (không block nếu lỗi)
       if (updateFields.Status && updateFields.Status !== oldStatus) {
         try {
-          const { notifyAccountStatusChange } = require("../utils/emailNotificationHelper");
-          await notifyAccountStatusChange(accountId, oldStatus, updateFields.Status);
+          const {
+            notifyAccountStatusChange,
+          } = require("../utils/emailNotificationHelper");
+          await notifyAccountStatusChange(
+            accountId,
+            oldStatus,
+            updateFields.Status
+          );
         } catch (emailError) {
-          console.error("[updateAccount] Error sending email notification:", emailError);
+          console.error(
+            "[updateAccount] Error sending email notification:",
+            emailError
+          );
         }
       }
 
@@ -100,4 +133,3 @@ class AccountService {
 }
 
 module.exports = new AccountService();
-

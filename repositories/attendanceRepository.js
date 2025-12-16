@@ -51,7 +51,7 @@ async getLearnerAttendance(learnerId) {
     }
   }
 
-  async getAttendanceStats(learnerId, sessionId = null) {
+  async getAttendanceStats(learnerId) {
     try {
       const db = await connectDB();
       let query = `
@@ -59,7 +59,6 @@ async getLearnerAttendance(learnerId) {
           COUNT(*) as TotalSessions,
           SUM(CASE WHEN a.Status = 'Present' THEN 1 ELSE 0 END) as PresentCount,
           SUM(CASE WHEN a.Status = 'Absent' THEN 1 ELSE 0 END) as AbsentCount,
-          SUM(CASE WHEN a.Status = 'Late' THEN 1 ELSE 0 END) as LateCount,
           ROUND((SUM(CASE WHEN a.Status = 'Present' THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0)), 2) as AttendanceRate
         FROM attendance a
         INNER JOIN session s ON a.SessionID = s.SessionID
@@ -67,11 +66,6 @@ async getLearnerAttendance(learnerId) {
       `;
 
       const params = [learnerId];
-
-      if (sessionId) {
-        query += ` AND a.SessionID = ?`;
-        params.push(sessionId);
-      }
 
       const [rows] = await db.query(query, params);
       return rows[0];
@@ -234,6 +228,63 @@ async getLearnerAttendance(learnerId) {
     } catch (error) {
       console.error("Attendance updating error:", error);
       return { success: false, message: "Failed to update attendance" };
+    }
+  }
+
+  async deleteBySessionId(sessionId) {
+    try {
+      const db = await connectDB();
+      const [result] = await db.query(
+        `DELETE FROM attendance WHERE SessionID = ?`,
+        [sessionId]
+      );
+      return result.affectedRows > 0;
+    } catch (error) {
+      console.error("Database error in deleteBySessionId:", error);
+      throw error;
+    }
+  }
+
+  async getAttendanceByInstructor(instructorId) {
+    try {
+      const db = await connectDB();
+      const [rows] = await db.query(
+        `SELECT 
+          a.AttendanceID,
+          a.Status,
+          a.Date as AttendanceDate,
+          a.note,
+          l.LearnerID,
+          l.FullName as LearnerName,
+          l.ProfilePicture as LearnerAvatar,
+          s.SessionID,
+          s.Title as SessionTitle,
+          s.Description as SessionDescription,
+          s.Date as SessionDate,
+          ts.StartTime,
+          ts.EndTime,
+          ts.Day as DayOfWeek,
+          c.ClassID,
+          c.Name as ClassName,
+          cr.CourseID,
+          cr.Title as CourseTitle,
+          i.InstructorID,
+          i.FullName as InstructorName
+        FROM attendance a
+        INNER JOIN session s ON a.SessionID = s.SessionID
+        INNER JOIN class c ON s.ClassID = c.ClassID
+        INNER JOIN course cr ON c.CourseID = cr.CourseID
+        INNER JOIN learner l ON a.LearnerID = l.LearnerID
+        INNER JOIN instructor i ON s.InstructorID = i.InstructorID
+        LEFT JOIN timeslot ts ON s.TimeslotID = ts.TimeslotID
+        WHERE i.InstructorID = ?
+        ORDER BY s.Date DESC, ts.StartTime DESC, l.FullName ASC`,
+        [instructorId]
+      );
+      return rows;
+    } catch (error) {
+      console.error("Database error in getAttendanceByInstructor:", error);
+      throw error;
     }
   }
 

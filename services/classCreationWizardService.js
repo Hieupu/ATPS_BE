@@ -1,9 +1,9 @@
 const sessionService = require("./sessionService");
-const classService = require("./classService");
+const classService = require("./ClassService");
 const classRepository = require("../repositories/classRepository");
 const sessionRepository = require("../repositories/sessionRepository");
 const timeslotRepository = require("../repositories/timeslotRepository");
-const instructorTimeslotRepository = require("../repositories/instructorTimeslotRepository");
+const instructorTimeslotRepository = require("../repositories/InstructorTimeslotRepository");
 const enrollmentRepository = require("../repositories/enrollmentRepository");
 const {
   validateDateDayConsistency,
@@ -11,6 +11,13 @@ const {
   getDayOfWeek,
 } = require("../utils/sessionValidation");
 const { CLASS_STATUS } = require("../constants/classStatus");
+
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
 
 /**
  * Logic "Tạo Lớp" (Class Creation Wizard)
@@ -45,13 +52,13 @@ async function createClassWizard(params) {
     !SelectedTimeslotIDs ||
     SelectedTimeslotIDs.length === 0
   ) {
-    throw new Error("Thiếu tham số bắt buộc");
+    throw new ServiceError("Thiếu tham số bắt buộc để tạo lịch lớp", 400);
   }
 
   // Lấy thông tin lớp
   const classData = await classRepository.findById(ClassID);
   if (!classData || classData.length === 0) {
-    throw new Error("Lớp học không tồn tại");
+    throw new ServiceError("Lớp học không tồn tại", 404);
   }
   const className =
     classData[0].Name || classData[0].ClassName || `Class ${ClassID}`;
@@ -60,7 +67,7 @@ async function createClassWizard(params) {
   const instructorRepository = require("../repositories/instructorRepository");
   const instructor = await instructorRepository.findById(InstructorID);
   if (!instructor) {
-    throw new Error("Giảng viên không tồn tại");
+    throw new ServiceError("Giảng viên không tồn tại", 404);
   }
   const instructorType = instructor.Type || "parttime";
 
@@ -87,8 +94,9 @@ async function createClassWizard(params) {
         instructor.FullName ||
         instructor.fullName ||
         `Giảng viên ${InstructorID}`;
-      throw new Error(
-        `Giảng viên ${instructorName} chưa tạo đủ số buổi cho ${Numofsession} của lớp ${className}`
+      throw new ServiceError(
+        `Giảng viên ${instructorName} chưa có đủ số buổi AVAILABLE cho ${Numofsession} buổi của lớp ${className}`,
+        400
       );
     }
   }
@@ -213,8 +221,9 @@ async function createClassWizard(params) {
   }
 
   if (validSessions.length < Numofsession) {
-    throw new Error(
-      `Không thể tạo đủ ${Numofsession} buổi học. Chỉ tạo được ${validSessions.length} buổi.`
+    throw new ServiceError(
+      `Không thể tạo đủ ${Numofsession} buổi học. Chỉ tạo được ${validSessions.length} buổi.`,
+      400
     );
   }
 
@@ -244,7 +253,7 @@ async function delayClassStart(classId) {
     // Lấy tất cả sessions của lớp, sắp xếp theo Date
     const sessions = await sessionRepository.findByClassId(classId);
     if (!sessions || sessions.length === 0) {
-      throw new Error("Lớp học chưa có buổi học nào");
+      throw new ServiceError("Lớp học chưa có buổi học nào", 404);
     }
 
     // Tìm buổi học đầu tiên (ngày sớm nhất)
@@ -296,7 +305,10 @@ async function delayClassStart(classId) {
       };
     }
   } catch (error) {
-    throw new Error(`Lỗi khi dời buổi học đầu: ${error.message}`);
+    throw new ServiceError(
+      `Lỗi khi dời buổi học đầu: ${error.message}`,
+      error.status || 500
+    );
   }
 }
 
@@ -319,17 +331,17 @@ async function updateClassSchedule(params) {
   const { ClassID, sessions, startDate, endDate, scheduleDetail } = params;
 
   if (!ClassID) {
-    throw new Error("ClassID là bắt buộc khi cập nhật schedule");
+    throw new ServiceError("Thiếu ClassID khi cập nhật lịch", 400);
   }
 
   if (!Array.isArray(sessions) || sessions.length === 0) {
-    throw new Error("Danh sách sessions mới không được rỗng");
+    throw new ServiceError("Danh sách buổi học mới không được rỗng", 400);
   }
 
   // Lấy thông tin lớp để dùng Name khi cần
   const classData = await classService.getClassById(ClassID);
   if (!classData) {
-    throw new Error("Lớp học không tồn tại");
+    throw new ServiceError("Lớp học không tồn tại", 404);
   }
 
   // Logic mới: Validate single timeslot pattern cho lớp DRAFT
@@ -396,8 +408,9 @@ async function updateClassSchedule(params) {
       const sortedDates = Object.keys(sessionsByDate).sort();
 
       if (sortedDates.length === 0) {
-        throw new Error(
-          "Lớp học có Status = DRAFT nhưng không có sessions hợp lệ"
+        throw new ServiceError(
+          "Lớp trạng thái DRAFT nhưng không có buổi hợp lệ",
+          400
         );
       }
 
@@ -418,14 +431,13 @@ async function updateClassSchedule(params) {
             firstDateTimeslots.size !== dateTimeslots.size ||
             ![...firstDateTimeslots].every((key) => dateTimeslots.has(key))
           ) {
-            throw new Error(
-              `Lớp học có Status = DRAFT: Các ca học trong ngày phải giống nhau cho tất cả các ngày. ` +
-                `Ngày ${datesToCheck[0]} có ca học [${[
-                  ...firstDateTimeslots,
-                ].join(", ")}] ` +
-                `nhưng ngày ${date} có ca học [${[...dateTimeslots].join(
+            throw new ServiceError(
+              `Lớp DRAFT: Các ca học trong ngày phải giống nhau. ` +
+                `Ngày ${datesToCheck[0]} có ca [${[...firstDateTimeslots].join(
                   ", "
-                )}]`
+                )}], ` +
+                `ngày ${date} có ca [${[...dateTimeslots].join(", ")}]`,
+              400
             );
           }
         }
@@ -440,13 +452,13 @@ async function updateClassSchedule(params) {
         );
 
         if (!isSubset) {
-          throw new Error(
-            `Lớp học có Status = DRAFT: Ngày cuối cùng (${lastDate}) có ca học [${[
+          throw new ServiceError(
+            `Lớp DRAFT: Ngày cuối (${lastDate}) có ca [${[
               ...lastDateTimeslots,
-            ].join(", ")}] ` +
-              `không khớp với các ca học chung [${[...firstDateTimeslots].join(
-                ", "
-              )}]`
+            ].join(", ")}] không khớp ca chung [${[...firstDateTimeslots].join(
+              ", "
+            )}]`,
+            400
           );
         }
       }
@@ -557,7 +569,7 @@ async function addMakeupSessionAtEnd(classId, makeupParams) {
     // Tìm ngày học cuối cùng
     const sessions = await sessionRepository.findByClassId(classId);
     if (!sessions || sessions.length === 0) {
-      throw new Error("Lớp học chưa có buổi học nào");
+      throw new ServiceError("Lớp học chưa có buổi học nào", 404);
     }
 
     const lastSession = sessions.reduce((latest, session) => {
@@ -612,8 +624,9 @@ async function addMakeupSessionAtEnd(classId, makeupParams) {
         });
 
         if (result.conflict) {
-          throw new Error(
-            `Không thể tạo buổi học bù: ${result.conflict.conflictInfo.message}`
+          throw new ServiceError(
+            `Không thể tạo buổi học bù: ${result.conflict.conflictInfo.message}`,
+            409
           );
         }
 
@@ -628,17 +641,21 @@ async function addMakeupSessionAtEnd(classId, makeupParams) {
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    throw new Error(
-      "Không tìm thấy ngày hợp lệ để thêm buổi học bù trong vòng 100 ngày"
+    throw new ServiceError(
+      "Không tìm thấy ngày hợp lệ để thêm buổi học bù trong vòng 100 ngày",
+      400
     );
   } catch (error) {
-    throw new Error(`Lỗi khi thêm buổi học bù: ${error.message}`);
+    throw new ServiceError(
+      `Lỗi khi thêm buổi học bù: ${error.message}`,
+      error.status || 500
+    );
   }
 }
 
 /**
  * Hàm tìm các ca rảnh của Giảng viên trong 1 tuần tới (Bước 1)
- * Chỉ kiểm tra lịch của GV, không kiểm tra HV
+ * Kiểm tra lịch của GV và (nếu có ClassID) kiểm tra trùng lịch học viên
  * @param {Object} params
  * @param {number} params.InstructorID
  * @param {number} params.TimeslotID
@@ -646,6 +663,7 @@ async function addMakeupSessionAtEnd(classId, makeupParams) {
  * @param {number} params.numSuggestions - Số gợi ý (mặc định 5)
  * @param {string} params.startDate - Ngày bắt đầu tìm (YYYY-MM-DD)
  * @param {number} params.excludeClassId - ClassID cần loại trừ (để tránh conflict với sessions đã tạo của class này)
+ * @param {number} [params.ClassID] - ClassID lớp hiện tại để check learner conflicts (tùy chọn)
  * @returns {Array} Danh sách các ca rảnh [{ date, timeslot, available: true, reason: null }]
  */
 async function findAvailableInstructorSlots(params) {
@@ -656,6 +674,7 @@ async function findAvailableInstructorSlots(params) {
     numSuggestions = 5,
     startDate,
     excludeClassId,
+    ClassID,
   } = params;
 
   const suggestionsLimit = Math.max(1, Math.min(numSuggestions, 20)); // giới hạn an toàn
@@ -730,16 +749,34 @@ async function findAvailableInstructorSlots(params) {
         hasTeachingConflict ? teachingConflict.conflictInfo : {}
       );
 
-      if (!hasLeaveConflict && !hasTeachingConflict) {
-        console.log(
-          `[findAvailableInstructorSlots] ✅ Ngày ${dateString} RẢNH - thêm vào availableSlots`
-        );
+      let learnerConflictResult = null;
+      let hasLearnerConflict = false;
+
+      if (ClassID) {
+        try {
+          learnerConflictResult = await checkLearnerConflicts({
+            ClassID,
+            Date: dateString,
+            TimeslotID,
+          });
+          hasLearnerConflict = learnerConflictResult?.isValid === false;
+        } catch (err) {
+          console.warn(
+            `[findAvailableInstructorSlots] Warning: checkLearnerConflicts failed for ${dateString} - ${TimeslotID}`,
+            err?.message
+          );
+          hasLearnerConflict = false; // fallback: không block nếu check lỗi
+        }
+      }
+
+      if (!hasLeaveConflict && !hasTeachingConflict && !hasLearnerConflict) {
         availableSlots.push({
           date: dateString,
           dayOfWeek: dayOfWeek,
           timeslotId: TimeslotID,
           available: true,
           reason: null,
+          learnerConflicts: learnerConflictResult?.conflicts || [],
         });
       } else {
         let reason = "";
@@ -755,6 +792,13 @@ async function findAvailableInstructorSlots(params) {
               }`
             : `GV dạy lớp: ${teachingConflict.conflictInfo.className || "N/A"}`;
         }
+        if (hasLearnerConflict) {
+          const learnerMsg =
+            learnerConflictResult?.summary?.conflictedLearners > 0
+              ? `${learnerConflictResult.summary.conflictedLearners} học viên trùng lịch`
+              : "Học viên trùng lịch";
+          reason += reason ? `; ${learnerMsg}` : learnerMsg;
+        }
 
         console.log(
           `[findAvailableInstructorSlots] ⛔ Ngày ${dateString} BẬN - ${reason}`
@@ -765,6 +809,7 @@ async function findAvailableInstructorSlots(params) {
           timeslotId: TimeslotID,
           available: false,
           reason: reason,
+          learnerConflicts: learnerConflictResult?.conflicts || [],
         });
       }
     } else {
@@ -911,7 +956,10 @@ async function checkLearnerConflicts(params) {
       },
     };
   } catch (error) {
-    throw new Error(`Lỗi khi kiểm tra xung đột học viên: ${error.message}`);
+    throw new ServiceError(
+      `Lỗi khi kiểm tra xung đột học viên: ${error.message}`,
+      error.status || 500
+    );
   }
 }
 
@@ -968,8 +1016,9 @@ async function analyzeBlockedDays(params) {
   } = params;
 
   if (!InstructorID || !OpendatePlan || !Numofsession) {
-    throw new Error(
-      "Thiếu tham số bắt buộc: InstructorID, OpendatePlan, Numofsession"
+    throw new ServiceError(
+      "Thiếu tham số: InstructorID, OpendatePlan, Numofsession",
+      400
     );
   }
 
@@ -1192,6 +1241,7 @@ async function searchTimeslots(params) {
     sessionsPerWeek = 0,
     requiredSlotsPerWeek = 0,
     currentStartDate = null,
+    ClassID = null,
   } = params;
 
   // Validate input cơ bản để tránh chạy thuật toán nặng không cần thiết
@@ -1301,11 +1351,45 @@ async function searchTimeslots(params) {
           totalSlots >= minRequiredSlots &&
           totalSlots > 0
         ) {
+          // ✅ Thêm check learner conflicts nếu có ClassID
+          let learnerConflictCount = 0;
+          let learnerConflicts = [];
+          if (ClassID) {
+            try {
+              for (const dow of normalizedDaysOfWeek) {
+                const timeslotsForDay = TimeslotsByDay[dow] || [];
+                for (const timeslotId of timeslotsForDay) {
+                  const conflictResult = await checkLearnerConflicts({
+                    ClassID,
+                    Date: dateString,
+                    TimeslotID: timeslotId,
+                  });
+                  if (conflictResult?.isValid === false) {
+                    learnerConflictCount +=
+                      conflictResult.summary?.conflictedLearners || 0;
+                    learnerConflicts.push(...(conflictResult.conflicts || []));
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn(
+                `[searchTimeslots] Warning: checkLearnerConflicts fail at ${dateString}`,
+                err?.message
+              );
+            }
+          }
+
+          const hasLearnerConflicts = learnerConflictCount > 0;
+
           suggestions.push({
             date: dateString,
             availableSlots,
             totalSlots,
-            reason: `Đủ ${availableSlots} ca/tuần (tất cả ca đều hợp lệ)`,
+            reason: hasLearnerConflicts
+              ? `Đủ ${availableSlots} ca/tuần (có ${learnerConflictCount} học viên trùng lịch)`
+              : `Đủ ${availableSlots} ca/tuần (tất cả ca đều hợp lệ)`,
+            hasLearnerConflicts,
+            learnerConflicts,
           });
 
           // Nếu đã tìm được ngày có tất cả ca hợp lệ, ưu tiên dừng sớm
@@ -1353,29 +1437,13 @@ async function getTimeslotLockReasons(params, depth = 0) {
   } = params;
 
   if (depth > 50) {
-    throw new Error("Không thể tìm đủ số buổi trong thời gian hợp lý");
-  }
-
-  if (
-    !InstructorID ||
-    dayOfWeek === undefined ||
-    !timeslotId ||
-    !startDate ||
-    !endDatePlan ||
-    !numofsession
-  ) {
-    throw new Error(
-      "Thiếu tham số bắt buộc: InstructorID, dayOfWeek, timeslotId, startDate, endDatePlan, numofsession"
+    throw new ServiceError(
+      "Không thể tìm đủ số buổi trong thời gian hợp lý (quá 50 lần đệ quy)",
+      400
     );
   }
 
-  const reasons = [];
-  let isLocked = false;
-
   try {
-    // ======================
-    // 1️⃣ LẤY BLOCK & HOLIDAY
-    // ======================
     const blocks = await instructorTimeslotRepository.findByDateRange(
       startDate,
       endDatePlan,
@@ -1383,45 +1451,22 @@ async function getTimeslotLockReasons(params, depth = 0) {
     );
 
     const holidayMap = new Map();
-    const invalidDates = new Map();
+    const blockMap = new Map();
 
-    blocks
-      .filter((b) => b.TimeslotID === timeslotId)
-      .forEach((b) => {
-        console.log("b", b);
-        const dateStr = b.Date;
-        if (b.Status === "Holiday") {
-          holidayMap.set(dateStr, true);
-        } else if (b.Status !== "Available") {
-          // ➤ BUỔI KHÔNG HỢP LỆ
-          invalidDates.set(dateStr, b.Status);
-        } else if (b.size() === 0) {
-          invalidDates.set("SUNDAY", "Default");
-        }
-      });
+    const slotBlocks = blocks.filter((b) => b.TimeslotID === timeslotId);
 
-    // Nếu có ngày invalid → dừng ngay, không duyệt tiếp
-    if (invalidDates.size > 0) {
-      return {
-        isLocked: true,
-        reasons: [
-          {
-            type: "invalid_timeslot",
-            message: `Có ${invalidDates.size} buổi không hợp lệ`,
-            invalidDates: [...invalidDates.entries()],
-          },
-        ],
-        summary: {
-          totalValidSessions: 0,
-          holidaysSkipped: holidayMap.size,
-          invalidCount: invalidDates.size,
-        },
-      };
-    }
+    console.log(slotBlocks);
 
-    // ======================
-    // 2️⃣ CHECK SESSION CONFLICT
-    // ======================
+    slotBlocks.forEach((b) => {
+      const dateStr = new Date(b.Date).toISOString().slice(0, 10);
+
+      blockMap.set(dateStr, b.Status);
+
+      if (b.Status === "Holiday") {
+        holidayMap.set(dateStr, true);
+      }
+    });
+
     const sessions = await sessionRepository.findByInstructorAndDateRange(
       InstructorID,
       startDate,
@@ -1433,7 +1478,6 @@ async function getTimeslotLockReasons(params, depth = 0) {
     );
 
     if (conflictSessions.length > 0) {
-      // ➤ GẶP SESSION TRÙNG → LOCK NGAY
       return {
         isLocked: true,
         reasons: [
@@ -1443,49 +1487,81 @@ async function getTimeslotLockReasons(params, depth = 0) {
             sessions: conflictSessions.slice(0, 5),
           },
         ],
-        summary: {
-          totalValidSessions: 0,
-          holidaysSkipped: holidayMap.size,
-          conflictCount: conflictSessions.length,
-        },
       };
     }
 
-    // ======================
-    // 3️⃣ ĐẾM BUỔI HỢP LỆ
-    // ======================
     let validCount = 0;
     let holidaysSkipped = 0;
-    const start = new Date(startDate);
+
+    let current = new Date(startDate);
     const end = new Date(endDatePlan);
 
-    let current = new Date(start);
     while (current <= end) {
       if (current.getDay() === dayOfWeek) {
         const dateStr = current.toISOString().slice(0, 10);
-        if (holidayMap.has(dateStr)) {
-          holidaysSkipped++; // holiday bỏ qua
-        } else {
-          validCount++;
-          if (validCount >= numofsession) {
+        const weekday = current.getDay(); // 0 = Sunday
+
+        const status = blockMap.get(dateStr);
+        const isHoliday = holidayMap.has(dateStr);
+
+        if (isHoliday) {
+          holidaysSkipped++;
+        } else if (weekday === 0) {
+          if (!status) {
             return {
-              isLocked: false,
-              reasons: [],
-              summary: {
-                totalValidSessions: validCount,
-                holidaysSkipped,
-                enoughSessions: true,
-              },
+              isLocked: true,
+              reasons: [
+                {
+                  type: "sunday_missing_block",
+                  message: `Chủ nhật ${dateStr} không có block → bị chặn`,
+                },
+              ],
+            };
+          }
+
+          if (status !== "Available" && status !== "AVAILABLE") {
+            return {
+              isLocked: true,
+              reasons: [
+                {
+                  type: "sunday_blocked",
+                  message: `Chủ nhật ${dateStr} bị block với trạng thái ${status}`,
+                },
+              ],
+            };
+          }
+
+          validCount++;
+        } else {
+          if (!status || status === "Available" || status === "AVAILABLE") {
+            validCount++;
+          } else {
+            return {
+              isLocked: true,
+              reasons: [
+                {
+                  type: "weekday_blocked",
+                  message: `Ngày ${dateStr} bị block (${status})`,
+                },
+              ],
             };
           }
         }
+
+        if (validCount >= numofsession) {
+          return {
+            isLocked: false,
+            summary: {
+              totalValidSessions: validCount,
+              holidaysSkipped,
+            },
+          };
+        }
       }
+
       current.setDate(current.getDate() + 1);
     }
 
-    // ======================
-    // 4️⃣ CHƯA ĐỦ BUỔI → MỞ RỘNG 1 TUẦN RỒI LÀM TIẾP
-    // ======================
     const newEndDatePlan = new Date(endDatePlan);
     newEndDatePlan.setDate(newEndDatePlan.getDate() + 7);
 
@@ -1497,7 +1573,10 @@ async function getTimeslotLockReasons(params, depth = 0) {
       depth + 1
     );
   } catch (error) {
-    throw new Error(`Lỗi khi lấy lý do chi tiết: ${error.message}`);
+    throw new ServiceError(
+      `Lỗi khi lấy lý do chi tiết: ${error.message}`,
+      error.status || 500
+    );
   }
 }
 
@@ -1538,10 +1617,11 @@ function validateSingleTimeslotPattern(scheduleDetail) {
       firstDayTimeslots.size !== dayTimeslots.size ||
       ![...firstDayTimeslots].every((id) => dayTimeslots.has(id))
     ) {
-      throw new Error(
-        `Lớp học có Status = DRAFT: Các ca học trong ngày phải giống nhau cho tất cả các ngày trong tuần. ` +
-          `Thứ ${firstDay} có ca học [${[...firstDayTimeslots].join(", ")}] ` +
-          `nhưng thứ ${day} có ca học [${[...dayTimeslots].join(", ")}]`
+      throw new ServiceError(
+        `Lớp DRAFT: Các ca học trong tuần phải giống nhau. ` +
+          `Thứ ${firstDay} có ca [${[...firstDayTimeslots].join(", ")}], ` +
+          `nhưng thứ ${day} có ca [${[...dayTimeslots].join(", ")}]`,
+        400
       );
     }
   }

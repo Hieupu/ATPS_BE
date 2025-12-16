@@ -7,6 +7,7 @@ const {
   getPaymentLinkByOrderCode,
   requestRefund,
   getPaymentHistory,
+  getAdminPaymentHistory,
   cancelRefundRequest
 } = require("../controllers/paymentController");
 const { verifyToken } = require("../middlewares/middware");
@@ -24,6 +25,7 @@ router.post("/check-promo", verifyToken, checkPromotionCode);
 router.get("/get-link/:orderCode", verifyToken, getPaymentLinkByOrderCode);
 
 router.get("/learner/:learnerId",verifyToken, getPaymentHistory);
+router.get("/admin/history", verifyToken, getAdminPaymentHistory);
 
 // Request refund
 router.post("/refunds/request", verifyToken, requestRefund);

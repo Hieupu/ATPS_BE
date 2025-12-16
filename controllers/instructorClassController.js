@@ -12,6 +12,7 @@ const {
   requestSessionChangeService,
   approveRequestService,
   rejectRequestService,
+  getAllSessionChangeRequestsService,
 } = require("../services/instructorClassService");
 const courseRepository = require("../repositories/instructorCourseRepository");
 
@@ -282,6 +283,19 @@ const rejectSessionChange = async (req, res) => {
   }
 };
 
+// Controller: Lấy danh sách tất cả yêu cầu đổi lịch (cho admin)
+const getAllSessionChangeRequests = async (req, res) => {
+  try {
+    const result = await getAllSessionChangeRequestsService();
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("getAllSessionChangeRequests error:", error);
+    res.status(error.status || 500).json({
+      message: error.message || "Lỗi khi lấy danh sách yêu cầu đổi lịch",
+    });
+  }
+};
+
 module.exports = {
   listInstructorClasses,
   getInstructorClassDetail,
@@ -296,4 +310,5 @@ module.exports = {
   requestSessionChange,
   approveSessionChange,
   rejectSessionChange,
+  getAllSessionChangeRequests,
 };

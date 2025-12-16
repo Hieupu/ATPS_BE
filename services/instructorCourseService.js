@@ -613,13 +613,13 @@ module.exports = {
   submitCourseService,
   approveCourseService,
   publishCourseService,
-
+  toDecimal2,
   listUnitsByCourseService,
   addUnitService,
   updateUnitService,
   deleteUnitService,
   getAssignmentsByUnitIdService,
-
+  makeCourseCode,
   listLessonsByUnitService,
   addLessonService,
   updateLessonService,
@@ -629,4 +629,8 @@ module.exports = {
   addMaterialService,
   updateMaterialService,
   deleteMaterialService,
+
+  // utils
+  makeCourseCode,
+  toDecimal2,
 };

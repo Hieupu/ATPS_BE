@@ -1,13 +1,6 @@
 const connectDB = require("../config/db");
 
-/**
- * SessionRepository - dbver5
- *
- * Hỗ trợ trường mới:
- * - ZoomUUID: UUID phòng Zoom cho session
- *
- * Tự động tạo ZoomUUID nếu không được cung cấp.
- */
+
 class SessionRepository {
   // Tạo session mới (dbver5 schema)
   async create(sessionData) {
@@ -21,8 +14,6 @@ class SessionRepository {
       ZoomUUID,
     } = sessionData;
 
-    // dbver5: Hỗ trợ ZoomUUID
-    // Nếu không có ZoomUUID, tạo một UUID ngẫu nhiên
     const finalZoomUUID = ZoomUUID || this.generateZoomUUID();
 
     const query = `
@@ -51,7 +42,6 @@ class SessionRepository {
     return `zoom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  // Lấy session theo ID (dbver5 schema - tự động lấy ZoomUUID qua s.*)
   async findById(sessionId) {
     if (!sessionId) {
       throw new Error("SessionID là bắt buộc");
@@ -169,7 +159,7 @@ class SessionRepository {
       session.ClassID,
       session.TimeslotID,
       session.Date,
-      session.ZoomUUID || this.generateZoomUUID(), // dbver5: Tự động tạo nếu không có
+      session.ZoomUUID || this.generateZoomUUID(), 
     ]);
 
     const query = `

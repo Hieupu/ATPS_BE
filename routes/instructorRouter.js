@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
-const { verifyToken, authorizeFeature } = require("../middlewares/auth");
+const { verifyToken, authorizeFeature } = require("../middlewares/middware");
 const instructorController = require("../controllers/admininstructorController");
 const publicInstructorController = require("../controllers/instructorController");
 

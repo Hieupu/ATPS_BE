@@ -14,7 +14,7 @@ class EnrollmentRepository {
       LearnerID,
       ClassID,
       EnrollmentDate,
-      Status || "active",
+      Status || "Enrolled",
     ]);
 
     return { EnrollmentID: result.insertId, ...enrollmentData };

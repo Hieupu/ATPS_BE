@@ -31,7 +31,14 @@ class RefundRepository {
   // Lấy tất cả yêu cầu hoàn tiền
   async findAll(options = {}) {
     try {
-      const { page = 1, limit = 10, status = null, search = "" } = options;
+      const {
+        page = 1,
+        limit = 10,
+        status = null,
+        search = "",
+        dateFrom = null,
+        dateTo = null,
+      } = options;
 
       // Đảm bảo page và limit là số nguyên dương
       const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
@@ -78,6 +85,16 @@ class RefundRepository {
         params.push(searchTerm, searchTerm, searchTerm);
       }
 
+      if (dateFrom) {
+        query += ` AND DATE(r.RequestDate) >= ?`;
+        params.push(dateFrom);
+      }
+
+      if (dateTo) {
+        query += ` AND DATE(r.RequestDate) <= ?`;
+        params.push(dateTo);
+      }
+
       // Sử dụng template string cho LIMIT và OFFSET (giống các repository khác)
       // Đảm bảo limit và offset là số nguyên dương
       const safeLimit = Number(limitNum) || 10;
@@ -98,7 +115,12 @@ class RefundRepository {
   // Đếm tổng số yêu cầu hoàn tiền
   async count(options = {}) {
     try {
-      const { status = null, search = "" } = options;
+      const {
+        status = null,
+        search = "",
+        dateFrom = null,
+        dateTo = null,
+      } = options;
 
       let query = `
         SELECT COUNT(*) as total 
@@ -120,6 +142,16 @@ class RefundRepository {
         query += ` AND (l.FullName LIKE ? OR c.Name LIKE ? OR r.Reason LIKE ?)`;
         const searchTerm = `%${search.trim()}%`;
         params.push(searchTerm, searchTerm, searchTerm);
+      }
+
+      if (dateFrom) {
+        query += ` AND DATE(r.RequestDate) >= ?`;
+        params.push(dateFrom);
+      }
+
+      if (dateTo) {
+        query += ` AND DATE(r.RequestDate) <= ?`;
+        params.push(dateTo);
       }
 
       const db = await connectDB();
@@ -275,6 +307,32 @@ class RefundRepository {
     } catch (error) {
       throw error;
     }
+  }
+
+  /**
+   * Tìm các lớp cùng giảng viên và khóa học (trạng thái ACTIVE) để chuyển lớp
+   * Loại trừ lớp hiện tại của enrollment
+   */
+  async findRelatedClasses(refundId) {
+    const query = `
+      SELECT 
+        c.ClassID,
+        c.Name,
+        c.Status
+      FROM refundrequest r
+      INNER JOIN enrollment e ON r.EnrollmentID = e.EnrollmentID
+      INNER JOIN class c0 ON e.ClassID = c0.ClassID
+      INNER JOIN class c ON c.CourseID = c0.CourseID
+        AND c.InstructorID = c0.InstructorID
+      WHERE r.RefundID = ?
+        AND c.Status = 'ACTIVE'
+        AND c.ClassID <> c0.ClassID
+      ORDER BY c.ClassID DESC
+    `;
+
+    const db = await connectDB();
+    const [rows] = await db.execute(query, [refundId]);
+    return rows;
   }
 }
 

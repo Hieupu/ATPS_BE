@@ -1,52 +1,13 @@
 const express = require("express");
 const router = express.Router();
-const { verifyToken, authorizeFeature } = require("../middlewares/auth");
+const { verifyToken, authorizeFeature } = require("../middlewares/middware");
 const materialController = require("../controllers/adminmaterialController");
 
-// Admin APIs
-router.post(
-  "/",
-  verifyToken,
-  authorizeFeature("admin"),
-  materialController.createMaterial
-);
-router.get(
-  "/",
-  verifyToken,
-  authorizeFeature("admin"),
-  materialController.getAllMaterials
-);
-router.get(
-  "/:id",
-  verifyToken,
-  authorizeFeature("admin"),
-
-  materialController.getMaterialById
-);
-// Get materials by course - Allow all authenticated users (learner, instructor, admin)
 router.get(
   "/course/:courseId",
   verifyToken,
 
   materialController.getMaterialsByCourse
-);
-router.put(
-  "/:id",
-  verifyToken,
-  authorizeFeature("admin"),
-  materialController.updateMaterial
-);
-router.delete(
-  "/:id",
-  verifyToken,
-  authorizeFeature("admin"),
-  materialController.deleteMaterial
-);
-router.get(
-  "/:id/download",
-  verifyToken,
-  authorizeFeature("admin"),
-  materialController.downloadMaterial
 );
 
 // Instructor APIs

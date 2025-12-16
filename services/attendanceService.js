@@ -1,13 +1,24 @@
 const attendanceRepository = require("../repositories/attendanceRepository");
 const profileRepository = require("../repositories/profileRepository");
 
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
+  }
+}
+
 class AttendanceService {
   async getLearnerAttendance(learnerId) {
     try {
-      const attendance = await attendanceRepository.getLearnerAttendance(learnerId);
-      
+      const attendance = await attendanceRepository.getLearnerAttendance(
+        learnerId
+      );
+
       console.log(`Total attendance records found: ${attendance.length}`);
-      console.log('Unique classes:', [...new Set(attendance.map(a => a.ClassName))]);
+      console.log("Unique classes:", [
+        ...new Set(attendance.map((a) => a.ClassName)),
+      ]);
 
       const formattedAttendance = attendance.map((record) => ({
         AttendanceID: record.AttendanceID,
@@ -18,7 +29,9 @@ class AttendanceService {
         SessionID: record.SessionID,
         SessionTitle: record.SessionTitle,
         SessionDescription: record.SessionDescription,
-        Time: `${this.formatTime(record.StartTime)} - ${this.formatTime(record.EndTime)}`,
+        Time: `${this.formatTime(record.StartTime)} - ${this.formatTime(
+          record.EndTime
+        )}`,
         StartTime: record.StartTime,
         EndTime: record.EndTime,
         DayOfWeek: record.DayOfWeek,
@@ -34,9 +47,10 @@ class AttendanceService {
         Zoompass: record.Zoompass,
         TotalPresent: record.TotalPresent,
         TotalLearners: record.TotalLearners,
-        AttendancePercentage: record.TotalLearners > 0 
-          ? Math.round((record.TotalPresent / record.TotalLearners) * 100) 
-          : 0,
+        AttendancePercentage:
+          record.TotalLearners > 0
+            ? Math.round((record.TotalPresent / record.TotalLearners) * 100)
+            : 0,
       }));
 
       return formattedAttendance;
@@ -46,15 +60,14 @@ class AttendanceService {
     }
   }
 
-  async getAttendanceStats(learnerId, sessionId = null) {
+  async getAttendanceStats(learnerId) {
     try {
-      const stats = await attendanceRepository.getAttendanceStats(learnerId, sessionId);
+      const stats = await attendanceRepository.getAttendanceStats(learnerId);
 
       return {
         totalSessions: stats.TotalSessions || 0,
         totalPresent: stats.PresentCount || 0,
         totalAbsent: stats.AbsentCount || 0,
-        totalLate: stats.LateCount || 0,
         attendanceRate: stats.AttendanceRate || 0,
         grade: this.calculateAttendanceGrade(stats.AttendanceRate || 0),
         status: this.getAttendanceStatus(stats.AttendanceRate || 0),
@@ -67,9 +80,11 @@ class AttendanceService {
 
   async getAttendanceByClass(learnerId) {
     try {
-      const classList = await attendanceRepository.getAttendanceByClass(learnerId);
+      const classList = await attendanceRepository.getAttendanceByClass(
+        learnerId
+      );
 
-      return classList.map(cls => ({
+      return classList.map((cls) => ({
         ...cls,
         grade: this.calculateAttendanceGrade(cls.AttendanceRate || 0),
         status: this.getAttendanceStatus(cls.AttendanceRate || 0),
@@ -82,12 +97,18 @@ class AttendanceService {
 
   async getAttendanceCalendar(learnerId, month, year) {
     try {
-      const calendar = await attendanceRepository.getAttendanceCalendar(learnerId, month, year);
+      const calendar = await attendanceRepository.getAttendanceCalendar(
+        learnerId,
+        month,
+        year
+      );
 
-      return calendar.map(item => ({
+      return calendar.map((item) => ({
         ...item,
         StatusText: this.getStatusText(item.Status),
-        Time: `${this.formatTime(item.StartTime)} - ${this.formatTime(item.EndTime)}`,
+        Time: `${this.formatTime(item.StartTime)} - ${this.formatTime(
+          item.EndTime
+        )}`,
       }));
     } catch (error) {
       console.error("Error in getAttendanceCalendar service:", error);
@@ -97,56 +118,56 @@ class AttendanceService {
 
   getStatusText(status) {
     const statusMap = {
-      'Present': 'Có mặt',
-      'Absent': 'Vắng mặt',
-      'Late': 'Đi muộn',
+      Present: "Có mặt",
+      Absent: "Vắng mặt",
+      Late: "Đi muộn",
     };
     return statusMap[status] || status;
   }
 
   getStatusBadge(status) {
     const badgeMap = {
-      'Present': 'success',
-      'Absent': 'error',
-      'Late': 'warning',
+      Present: "success",
+      Absent: "error",
+      Late: "warning",
     };
-    return badgeMap[status] || 'default';
+    return badgeMap[status] || "default";
   }
 
   getStatusColor(status) {
     const colorMap = {
-      'Present': '#4caf50',
-      'Absent': '#f44336',
-      'Late': '#ff9800',
+      Present: "#4caf50",
+      Absent: "#f44336",
+      Late: "#ff9800",
     };
-    return colorMap[status] || '#9e9e9e';
+    return colorMap[status] || "#9e9e9e";
   }
 
   calculateAttendanceGrade(rate) {
-    if (rate >= 90) return 'A';
-    if (rate >= 80) return 'B';
-    if (rate >= 70) return 'C';
-    if (rate >= 60) return 'D';
-    return 'F';
+    if (rate >= 90) return "A";
+    if (rate >= 80) return "B";
+    if (rate >= 70) return "C";
+    if (rate >= 60) return "D";
+    return "F";
   }
 
   getAttendanceStatus(rate) {
-    if (rate >= 80) return 'Tốt';
-    if (rate >= 60) return 'Khá';
-    if (rate >= 40) return 'Trung bình';
-    return 'Cần cải thiện';
+    if (rate >= 80) return "Tốt";
+    if (rate >= 60) return "Khá";
+    if (rate >= 40) return "Trung bình";
+    return "Cần cải thiện";
   }
 
   formatTime(time) {
-    if (!time) return '';
-    const [hours, minutes] = time.split(':');
+    if (!time) return "";
+    const [hours, minutes] = time.split(":");
     return `${hours}:${minutes}`;
   }
 
   async updateAttendance(attendanceId, status) {
     try {
       if (!["Present", "Absent", "Late", "Excused"].includes(status)) {
-        throw new Error("Status không hợp lệ");
+        throw new ServiceError("Status không hợp lệ", 400);
       }
 
       return await attendanceRepository.updateAttendance(attendanceId, status);
@@ -184,7 +205,15 @@ class AttendanceService {
     return "Cần cải thiện";
   }
 
-  async attendanceLogic(accId, startTime, endTime, date, sessionId, timestamp, type) {
+  async attendanceLogic(
+    accId,
+    startTime,
+    endTime,
+    date,
+    sessionId,
+    timestamp,
+    type
+  ) {
     try {
       const learner = await profileRepository.findLearnerByAccountId(accId);
       if (!learner) {
@@ -193,23 +222,23 @@ class AttendanceService {
       }
 
       const sessionStart = new Date(`${date}T${startTime}`);
-      const sessionEnd   = new Date(`${date}T${endTime}`);
-      const actionTime   = new Date(timestamp);
+      const sessionEnd = new Date(`${date}T${endTime}`);
+      const actionTime = new Date(timestamp);
 
       const THIRTY_MIN = 30 * 60 * 1000;
       const sessionDurationMs = sessionEnd - sessionStart;
       const eightyPercentMs = sessionDurationMs * 0.8;
 
       let finalStatus = "ABSENT";
-      let finalNote   = "";
+      let finalNote = "";
 
       if (type === "join") {
         if (actionTime - sessionStart <= THIRTY_MIN) {
           finalStatus = "PRESENT";
-          finalNote   = "Tham gia đúng giờ (auto attendance)";
+          finalNote = "Tham gia đúng giờ (auto attendance)";
         } else {
           finalStatus = "ABSENT";
-          finalNote   = "Đi muộn hơn 30 phút";
+          finalNote = "Đi muộn hơn 30 phút";
         }
 
         await attendanceRepository.recordAttendance(
@@ -219,16 +248,21 @@ class AttendanceService {
           finalNote
         );
 
-        return { learnerId: learner.LearnerID, sessionId, status: finalStatus, note: finalNote };
-      }else if (type === "leave") {
+        return {
+          learnerId: learner.LearnerID,
+          sessionId,
+          status: finalStatus,
+          note: finalNote,
+        };
+      } else if (type === "leave") {
         const attendedMs = actionTime - sessionStart;
 
         if (attendedMs >= eightyPercentMs) {
           finalStatus = "PRESENT";
-          finalNote   = "Tham gia đầy đủ buổi học";
+          finalNote = "Tham gia đầy đủ buổi học";
         } else {
           finalStatus = "ABSENT";
-          finalNote   = `Rời phòng quá sớm ${actionTime}`;
+          finalNote = `Rời phòng quá sớm ${actionTime}`;
         }
 
         await attendanceRepository.recordAttendance(
@@ -238,15 +272,15 @@ class AttendanceService {
           finalNote
         );
 
-        return { 
-          learnerId: learner.LearnerID, 
-          sessionId, 
-          status: finalStatus, 
-          note: finalNote 
+        return {
+          learnerId: learner.LearnerID,
+          sessionId,
+          status: finalStatus,
+          note: finalNote,
         };
-      }else {
+      } else {
         finalStatus = "ABSENT";
-        finalNote   = "Không tham gia buổi học";
+        finalNote = "Không tham gia buổi học";
 
         await attendanceRepository.recordAttendance(
           learner.LearnerID,
@@ -255,10 +289,94 @@ class AttendanceService {
           finalNote
         );
       }
-
     } catch (error) {
       console.error("attendanceLogic error:", error);
       return { error: error.message };
+    }
+  }
+
+  async getAttendanceByInstructor(instructorId) {
+    try {
+      if (!instructorId) {
+        throw new ServiceError("Thiếu InstructorID", 400);
+      }
+
+      const attendanceList =
+        await attendanceRepository.getAttendanceByInstructor(instructorId);
+
+      // Tính tổng hợp thống kê
+      const summary = {
+        total: attendanceList.length,
+        present: attendanceList.filter(
+          (a) => a.Status === "Present" || a.Status === "PRESENT"
+        ).length,
+        absent: attendanceList.filter(
+          (a) => a.Status === "Absent" || a.Status === "ABSENT"
+        ).length,
+        late: attendanceList.filter(
+          (a) => a.Status === "Late" || a.Status === "LATE"
+        ).length,
+        other: attendanceList.filter(
+          (a) =>
+            ![
+              "Present",
+              "PRESENT",
+              "Absent",
+              "ABSENT",
+              "Late",
+              "LATE",
+            ].includes(a.Status)
+        ).length,
+      };
+
+      // Format dữ liệu
+      const formattedAttendance = attendanceList.map((record) => ({
+        AttendanceID: record.AttendanceID,
+        Status: record.Status,
+        StatusText: this.getStatusText(record.Status),
+        AttendanceDate: record.AttendanceDate,
+        Note: record.note || "",
+        Learner: {
+          LearnerID: record.LearnerID,
+          FullName: record.LearnerName,
+          ProfilePicture: record.LearnerAvatar,
+        },
+        Session: {
+          SessionID: record.SessionID,
+          Title: record.SessionTitle,
+          Description: record.SessionDescription,
+          Date: record.SessionDate,
+          StartTime: record.StartTime,
+          EndTime: record.EndTime,
+          DayOfWeek: record.DayOfWeek,
+          Time:
+            record.StartTime && record.EndTime
+              ? `${this.formatTime(record.StartTime)} - ${this.formatTime(
+                  record.EndTime
+                )}`
+              : "",
+        },
+        Class: {
+          ClassID: record.ClassID,
+          Name: record.ClassName,
+        },
+        Course: {
+          CourseID: record.CourseID,
+          Title: record.CourseTitle,
+        },
+        Instructor: {
+          InstructorID: record.InstructorID,
+          FullName: record.InstructorName,
+        },
+      }));
+
+      return {
+        data: formattedAttendance,
+        summary,
+      };
+    } catch (error) {
+      console.error("Error in getAttendanceByInstructor service:", error);
+      throw error;
     }
   }
 }

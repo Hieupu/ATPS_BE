@@ -1,21 +1,13 @@
 const timeslotRepository = require("../repositories/timeslotRepository");
 
-class TimeslotService {
-  async createTimeslot(data) {
-    try {
-      // Validate required fields
-      if (!data.StartTime || !data.EndTime) {
-        throw new Error("StartTime and EndTime are required");
-      }
-
-      // Create timeslot (only StartTime and EndTime, no Date)
-      const newTimeslot = await timeslotRepository.create(data);
-      return newTimeslot;
-    } catch (error) {
-      throw error;
-    }
+class ServiceError extends Error {
+  constructor(message, status = 400) {
+    super(message);
+    this.status = status;
   }
+}
 
+class TimeslotService {
   async getAllTimeslots(options = {}) {
     try {
       const result = await timeslotRepository.findAll(options);
@@ -29,41 +21,9 @@ class TimeslotService {
     try {
       const timeslot = await timeslotRepository.findById(id);
       if (!timeslot) {
-        throw new Error("Timeslot not found");
+        throw new ServiceError("Timeslot không tồn tại", 404);
       }
       return timeslot;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  async updateTimeslot(id, data) {
-    try {
-      // Check if timeslot exists
-      const existingTimeslot = await timeslotRepository.findById(id);
-      if (!existingTimeslot) {
-        throw new Error("Timeslot not found");
-      }
-
-      // Update timeslot
-      const updatedTimeslot = await timeslotRepository.update(id, data);
-      return updatedTimeslot;
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  async deleteTimeslot(id) {
-    try {
-      // Check if timeslot exists
-      const existingTimeslot = await timeslotRepository.findById(id);
-      if (!existingTimeslot) {
-        throw new Error("Timeslot not found");
-      }
-
-      // Delete timeslot
-      const deleted = await timeslotRepository.delete(id);
-      return deleted;
     } catch (error) {
       throw error;
     }
@@ -80,7 +40,6 @@ class TimeslotService {
       throw error;
     }
   }
-
   async getTimeslotsByLocation(location) {
     try {
       const timeslots = await timeslotRepository.findByLocation(location);

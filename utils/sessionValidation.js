@@ -1,5 +1,5 @@
 const pool = require("../config/db");
-const instructorTimeslotRepository = require("../repositories/instructorTimeslotRepository");
+const instructorTimeslotRepository = require("../repositories/InstructorTimeslotRepository");
 const timeslotRepository = require("../repositories/timeslotRepository");
 
 /**

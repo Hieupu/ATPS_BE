@@ -15,7 +15,8 @@ class StaffRepository {
           s.AccID,
           a.Email,
           a.Phone,
-          a.Status as AccountStatus
+          a.Status as AccountStatus,
+          a.Gender
         FROM staff s
         LEFT JOIN account a ON s.AccID = a.AccID
         WHERE s.StaffID = ?
@@ -63,7 +64,8 @@ class StaffRepository {
           s.AccID,
           a.Email,
           a.Phone,
-          a.Status as AccountStatus
+          a.Status as AccountStatus,
+          a.Gender
         FROM staff s
         LEFT JOIN account a ON s.AccID = a.AccID
         WHERE s.AccID = ?
@@ -95,7 +97,8 @@ class StaffRepository {
           s.AccID,
           a.Email,
           a.Phone,
-          a.Status as AccountStatus
+          a.Status as AccountStatus,
+          a.Gender
         FROM staff s
         LEFT JOIN account a ON s.AccID = a.AccID
         WHERE 1=1
@@ -148,13 +151,6 @@ class StaffRepository {
     if (result.affectedRows === 0) return null;
 
     return await this.findById(staffId);
-  }
-
-  async delete(staffId) {
-    const pool = await connectDB();
-    const query = `DELETE FROM staff WHERE StaffID = ?`;
-    const [result] = await pool.execute(query, [staffId]);
-    return result.affectedRows > 0;
   }
 }
 
