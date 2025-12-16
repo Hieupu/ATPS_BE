@@ -741,7 +741,7 @@ class CourseRepository {
       if (filters.levels) {
         const levelsArray = filters.levels.split(",").map((l) => l.trim());
         return classes.filter((classItem) => {
-             return levelsArray.includes(classItem.CourseLevel);
+          return levelsArray.includes(classItem.CourseLevel);
         });
       }
 
@@ -1057,10 +1057,10 @@ class CourseRepository {
   async getCourseAssignments(courseId, learnerId) {
     try {
       const db = await connectDB();
-
-      const [assignments] = await db.query(
+      const [rawRows] = await db.query(
         `SELECT 
         e.ExamID AS AssignmentID,
+        ei.InstanceID,
         e.Title,
         e.Description,
         e.Type,
@@ -1080,11 +1080,8 @@ class CourseRepository {
         s.FileURL as SubmissionFileURL
 
         FROM exam e
-   
         INNER JOIN exam_instances ei ON e.ExamID = ei.ExamId
-  
         INNER JOIN unit u ON ei.UnitId = u.UnitID
-     
         LEFT JOIN submission s ON e.ExamID = s.ExamID AND s.LearnerID = ?
         
         WHERE u.CourseID = ? 
@@ -1092,12 +1089,29 @@ class CourseRepository {
           AND e.Status = 'Published' 
           AND u.Status = 'VISIBLE'
         
-        ORDER BY ei.EndTime ASC, e.ExamID ASC`,
+        ORDER BY ei.EndTime ASC, e.ExamID ASC, s.SubmissionID DESC`,
         [learnerId, courseId]
       );
 
-      return assignments.map((assignment) => ({
+      const uniqueAssignments = {};
+
+      rawRows.forEach((row) => {
+        if (!uniqueAssignments[row.AssignmentID]) {
+          uniqueAssignments[row.AssignmentID] = row;
+        } else {
+          const currentSubId =
+            uniqueAssignments[row.AssignmentID].SubmissionID || 0;
+          const newSubId = row.SubmissionID || 0;
+
+          if (newSubId > currentSubId) {
+            uniqueAssignments[row.AssignmentID] = row;
+          }
+        }
+      });
+
+      return Object.values(uniqueAssignments).map((assignment) => ({
         AssignmentID: assignment.AssignmentID,
+        InstanceID: assignment.InstanceID,
         UnitID: assignment.UnitID,
         Title: assignment.Title,
         Description: assignment.Description,
@@ -1158,25 +1172,25 @@ class CourseRepository {
     }
   }
 
-    async getLearnerIdByAccountId(accountId) {
-      try {
-        const db = await connectDB();
+  async getLearnerIdByAccountId(accountId) {
+    try {
+      const db = await connectDB();
 
-        const [rows] = await db.query(
-          `SELECT LearnerID FROM learner WHERE AccID = ?`,
-          [accountId]
-        );
+      const [rows] = await db.query(
+        `SELECT LearnerID FROM learner WHERE AccID = ?`,
+        [accountId]
+      );
 
-        if (!rows.length) {
-          throw new Error("Learner profile not found");
-        }
-
-        return rows[0].LearnerID;
-      } catch (error) {
-        console.error("Database error in getLearnerIdByAccountId:", error);
-        throw error;
+      if (!rows.length) {
+        throw new Error("Learner profile not found");
       }
+
+      return rows[0].LearnerID;
+    } catch (error) {
+      console.error("Database error in getLearnerIdByAccountId:", error);
+      throw error;
     }
+  }
 }
 
 module.exports = new CourseRepository();

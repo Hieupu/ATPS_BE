@@ -23,13 +23,13 @@ function sanitizeQuestionForLearner(question, learnerAnswerMap) {
     type: question.Type,
     point: question.Point,
     orderIndex: question.Order_Index,
-    learnerAnswer
+    learnerAnswer,
   };
 
   if (Array.isArray(question.options)) {
-    safe.options = question.options.map(opt => ({
+    safe.options = question.options.map((opt) => ({
       optionId: opt.OptionID,
-      content: opt.Content
+      content: opt.Content,
     }));
   } else {
     safe.options = [];
@@ -46,24 +46,24 @@ function checkFillInBlankAnswer(learnerAnswer, correctAnswer) {
 }
 
 function determineSubmissionStatus(endTime) {
-  if (!endTime) return 'submitted';
+  if (!endTime) return "submitted";
   const now = new Date();
   const deadline = new Date(endTime);
-  return now > deadline ? 'late' : 'submitted';
+  return now > deadline ? "late" : "submitted";
 }
 
 async function buildExamStructureForLearner(examId, randomFlag, learnerId) {
-
   const savedAnswers = await learnerExamRepository.getLearnerAnswersForExam(
     examId,
     learnerId
   );
   const answerMap = {};
-  savedAnswers.forEach(q => {
+  savedAnswers.forEach((q) => {
     answerMap[q.ExamquestionId] = q.LearnerAnswer;
   });
-  const parentSections =
-    await instructorExamRepository.getParentSectionsByExam(examId);
+  const parentSections = await instructorExamRepository.getParentSectionsByExam(
+    examId
+  );
 
   for (const parent of parentSections) {
     parent.childSections =
@@ -74,7 +74,7 @@ async function buildExamStructureForLearner(examId, randomFlag, learnerId) {
         parent.SectionId,
         randomFlag
       );
-    parent.directQuestions = parentQuestions.map(q =>
+    parent.directQuestions = parentQuestions.map((q) =>
       sanitizeQuestionForLearner(q, answerMap)
     );
 
@@ -84,7 +84,7 @@ async function buildExamStructureForLearner(examId, randomFlag, learnerId) {
           child.SectionId,
           randomFlag
         );
-      child.questions = childQuestions.map(q =>
+      child.questions = childQuestions.map((q) =>
         sanitizeQuestionForLearner(q, answerMap)
       );
     }
@@ -95,8 +95,10 @@ async function buildExamStructureForLearner(examId, randomFlag, learnerId) {
 
 const getAvailableExamsService = async (learnerAccId) => {
   const learnerId = await getLearnerIdOrThrow(learnerAccId);
-  const instances = await learnerExamRepository.getAvailableExamInstances(learnerId);
-  return instances.map(inst => ({
+  const instances = await learnerExamRepository.getAvailableExamInstances(
+    learnerId
+  );
+  return instances.map((inst) => ({
     instanceId: inst.InstanceId,
     examId: inst.ExamId,
     examTitle: inst.ExamTitle,
@@ -109,7 +111,7 @@ const getAvailableExamsService = async (learnerAccId) => {
     attempt: inst.Attempt,
     usedAttempt: inst.UsedAttempt || 0,
     remainingAttempt: inst.RemainingAttempt || inst.Attempt,
-    hasInProgressAnswers: inst.HasInProgressAnswers || 0
+    hasInProgressAnswers: inst.HasInProgressAnswers || 0,
   }));
 };
 
@@ -120,12 +122,6 @@ const getExamToDoService = async (learnerAccId, instanceId) => {
   if (!instance) {
     const err = new Error("Không tìm thấy phiên thi");
     err.status = 404;
-    throw err;
-  }
-
-  if (instance.ExamType !== "Exam") {
-    const err = new Error("Phiên này không phải bài thi (Exam)");
-    err.status = 400;
     throw err;
   }
 
@@ -185,9 +181,9 @@ const getExamToDoService = async (learnerAccId, instanceId) => {
       status: instance.Status,
       attempt: instance.Attempt,
       usedAttempt: usedAttempt,
-      remainingAttempt: instance.Attempt - usedAttempt
+      remainingAttempt: instance.Attempt - usedAttempt,
     },
-    sections
+    sections,
   };
 };
 
@@ -210,23 +206,22 @@ const saveExamAnswersService = async (learnerAccId, instanceId, answers) => {
   }
   await learnerExamRepository.saveAnswers(learnerId, answers);
   return {
-    message: "Lưu đáp án thành công"
+    message: "Lưu đáp án thành công",
   };
 };
 
-const submitExamService = async (learnerAccId, instanceId, answers, metadata = {}) => {
+const submitExamService = async (
+  learnerAccId,
+  instanceId,
+  answers,
+  metadata = {}
+) => {
   const learnerId = await getLearnerIdOrThrow(learnerAccId);
 
   const instance = await learnerExamRepository.getInstanceWithExam(instanceId);
   if (!instance) {
     const err = new Error("Không tìm thấy phiên thi");
     err.status = 404;
-    throw err;
-  }
-
-  if (instance.ExamType !== "Exam") {
-    const err = new Error("Phiên này không phải bài thi (Exam)");
-    err.status = 400;
     throw err;
   }
 
@@ -261,7 +256,7 @@ const submitExamService = async (learnerAccId, instanceId, answers, metadata = {
     throw err;
   }
   const validAnswers = Array.isArray(answers)
-    ? answers.filter(ans => ans.examQuestionId && ans.answer !== undefined)
+    ? answers.filter((ans) => ans.examQuestionId && ans.answer !== undefined)
     : [];
 
   if (validAnswers.length > 0) {
@@ -282,25 +277,28 @@ const submitExamService = async (learnerAccId, instanceId, answers, metadata = {
     const point = question.Point || 0;
     maxScore += point;
 
-    if (
-      question.Type === "multiple_choice" ||
-      question.Type === "true_false"
-    ) {
-      const learnerAnswer = (question.LearnerAnswer || "").toString().trim().toLowerCase();
-      const correctAnswer = (question.CorrectAnswer || "").toString().trim().toLowerCase();
+    if (question.Type === "multiple_choice" || question.Type === "true_false") {
+      const learnerAnswer = (question.LearnerAnswer || "")
+        .toString()
+        .trim()
+        .toLowerCase();
+      const correctAnswer = (question.CorrectAnswer || "")
+        .toString()
+        .trim()
+        .toLowerCase();
 
       if (learnerAnswer && learnerAnswer === correctAnswer) {
         totalScore += point;
       }
       autoGradedCount++;
-    }
-    else if (question.Type === "fill_in_blank") {
-      if (checkFillInBlankAnswer(question.LearnerAnswer, question.CorrectAnswer)) {
+    } else if (question.Type === "fill_in_blank") {
+      if (
+        checkFillInBlankAnswer(question.LearnerAnswer, question.CorrectAnswer)
+      ) {
         totalScore += point;
       }
       autoGradedCount++;
-    }
-    else {
+    } else {
       manualGradeCount++;
     }
   }
@@ -321,8 +319,9 @@ const submitExamService = async (learnerAccId, instanceId, answers, metadata = {
   let submissionContent = null;
   if (metadata.content) {
     const cleanContent = {
-      totalQuestionsAttempted: metadata.content.totalQuestionsAttempted || validAnswers.length,
-      submittedFrom: metadata.content.submittedFrom || 'web'
+      totalQuestionsAttempted:
+        metadata.content.totalQuestionsAttempted || validAnswers.length,
+      submittedFrom: metadata.content.submittedFrom || "web",
     };
     submissionContent = JSON.stringify(cleanContent);
   }
@@ -334,7 +333,7 @@ const submitExamService = async (learnerAccId, instanceId, answers, metadata = {
     score: finalScore,
     feedback,
     content: submissionContent,
-    durationSec
+    durationSec,
   });
 
   if (metadata.assets && Array.isArray(metadata.assets)) {
@@ -351,7 +350,7 @@ const submitExamService = async (learnerAccId, instanceId, answers, metadata = {
     learnerId,
     examId: instance.ExamId,
     score: finalScore,
-    feedback
+    feedback,
   });
 
   let message = "Nộp bài thành công.";
@@ -373,7 +372,7 @@ const submitExamService = async (learnerAccId, instanceId, answers, metadata = {
     isLate,
     submissionStatus,
     durationSec,
-    message
+    message,
   };
 };
 
@@ -418,13 +417,13 @@ const getExamResultService = async (learnerAccId, instanceId) => {
     examTitle: instance.ExamTitle,
     score: result.Score,
     feedback: result.Feedback,
-    submissionDate: result.SubmissionDate
+    submissionDate: result.SubmissionDate,
   };
 
   if (submission) {
     response.submissionStatus = submission.Status;
     response.durationSec = submission.DurationSec;
-    response.isLate = submission.Status === 'late';
+    response.isLate = submission.Status === "late";
 
     if (submission.Content) {
       try {
@@ -440,7 +439,9 @@ const getExamResultService = async (learnerAccId, instanceId) => {
 
 const getHistoryService = async (learnerAccId) => {
   const learnerId = await getLearnerIdOrThrow(learnerAccId);
-  const history = await learnerExamRepository.getResultsHistoryByLearner(learnerId);
+  const history = await learnerExamRepository.getResultsHistoryByLearner(
+    learnerId
+  );
   return history;
 };
 
@@ -449,9 +450,6 @@ const retryExamService = async (learnerAccId, instanceId) => {
 
   const instance = await learnerExamRepository.getInstanceWithExam(instanceId);
   if (!instance) throw { status: 404, message: "Không tìm thấy phiên thi" };
-
-  if (instance.ExamType !== "Exam")
-    throw { status: 400, message: "Đây không phải bài thi" };
 
   const hasAccess = await learnerExamRepository.checkLearnerAccessToInstance(
     instanceId,
@@ -474,13 +472,19 @@ const retryExamService = async (learnerAccId, instanceId) => {
   if (usedAttempt >= instance.Attempt)
     throw {
       status: 400,
-      message: `Bạn đã dùng hết số lần làm bài (${instance.Attempt})`
+      message: `Bạn đã dùng hết số lần làm bài (${instance.Attempt})`,
     };
-  await learnerExamRepository.deleteLearnerAnswersForExam(instance.ExamId, learnerId);
-  await learnerExamRepository.deleteSubmissionByExamAndLearner(instance.ExamId, learnerId);
+  await learnerExamRepository.deleteLearnerAnswersForExam(
+    instance.ExamId,
+    learnerId
+  );
+  await learnerExamRepository.deleteSubmissionByExamAndLearner(
+    instance.ExamId,
+    learnerId
+  );
 
   return {
-    message: `Bạn đã được reset bài thi. Attempt hiện tại: ${usedAttempt}/${instance.Attempt}`
+    message: `Bạn đã được reset bài thi. Attempt hiện tại: ${usedAttempt}/${instance.Attempt}`,
   };
 };
 
@@ -515,10 +519,11 @@ const reviewExamService = async (learnerAccId, instanceId) => {
     throw err;
   }
 
-  const submissionData = await learnerExamRepository.getDetailedSubmissionForReview(
-    instance.ExamId,
-    learnerId
-  );
+  const submissionData =
+    await learnerExamRepository.getDetailedSubmissionForReview(
+      instance.ExamId,
+      learnerId
+    );
 
   const sectionsMap = {};
 
@@ -533,7 +538,7 @@ const reviewExamService = async (learnerAccId, instanceId) => {
         orderIndex: question.SectionOrderIndex,
         parentSectionId: question.ParentSectionId,
         FileURL: question.SectionFileURL || null,
-        questions: []
+        questions: [],
       };
     }
 
@@ -548,12 +553,21 @@ const reviewExamService = async (learnerAccId, instanceId) => {
     let earnedPoint = 0;
 
     if (question.Type === "multiple_choice" || question.Type === "true_false") {
-      const learnerAns = (question.LearnerAnswer || "").toString().trim().toLowerCase();
-      const correctAns = (question.CorrectAnswer || "").toString().trim().toLowerCase();
+      const learnerAns = (question.LearnerAnswer || "")
+        .toString()
+        .trim()
+        .toLowerCase();
+      const correctAns = (question.CorrectAnswer || "")
+        .toString()
+        .trim()
+        .toLowerCase();
       isCorrect = learnerAns === correctAns;
       earnedPoint = isCorrect ? question.Point : 0;
     } else if (question.Type === "fill_in_blank") {
-      isCorrect = checkFillInBlankAnswer(question.LearnerAnswer, question.CorrectAnswer);
+      isCorrect = checkFillInBlankAnswer(
+        question.LearnerAnswer,
+        question.CorrectAnswer
+      );
       earnedPoint = isCorrect ? question.Point : 0;
     } else {
       isCorrect = null;
@@ -571,11 +585,11 @@ const reviewExamService = async (learnerAccId, instanceId) => {
       correctAnswer: question.CorrectAnswer,
       isCorrect,
       earnedPoint,
-      options: options.map(opt => ({
+      options: options.map((opt) => ({
         optionId: opt.OptionID,
         content: opt.Content,
-        isCorrect: opt.IsCorrect === 1
-      }))
+        isCorrect: opt.IsCorrect === 1,
+      })),
     });
   }
 
@@ -585,58 +599,60 @@ const reviewExamService = async (learnerAccId, instanceId) => {
     return a.orderIndex - b.orderIndex;
   });
 
-  const parentSections = sections.filter(s => s.parentSectionId === null);
-  const childSections = sections.filter(s => s.parentSectionId !== null);
+  const parentSections = sections.filter((s) => s.parentSectionId === null);
+  const childSections = sections.filter((s) => s.parentSectionId !== null);
 
   let hierarchicalSections = [];
 
   if (parentSections.length > 0) {
-    hierarchicalSections = parentSections.map(parent => ({
+    hierarchicalSections = parentSections.map((parent) => ({
       sectionId: parent.sectionId,
       title: parent.title,
       type: parent.type,
       orderIndex: parent.orderIndex,
       childSections: childSections
-        .filter(child => child.parentSectionId === parent.sectionId)
-        .map(child => ({
+        .filter((child) => child.parentSectionId === parent.sectionId)
+        .map((child) => ({
           childSectionId: child.sectionId,
           title: child.title,
           type: child.type,
           orderIndex: child.orderIndex,
           FileURL: child.FileURL || null,
-          questions: child.questions
-        }))
+          questions: child.questions,
+        })),
     }));
   } else if (childSections.length > 0) {
-    const parentIds = [...new Set(childSections.map(s => s.parentSectionId))];
-    hierarchicalSections = parentIds.map(parentId => ({
+    const parentIds = [...new Set(childSections.map((s) => s.parentSectionId))];
+    hierarchicalSections = parentIds.map((parentId) => ({
       sectionId: parentId,
       title: `Section ${parentId}`,
       childSections: childSections
-        .filter(c => c.parentSectionId === parentId)
-        .map(child => ({
+        .filter((c) => c.parentSectionId === parentId)
+        .map((child) => ({
           childSectionId: child.sectionId,
           title: child.title,
           type: child.type,
           orderIndex: child.orderIndex,
           FileURL: child.FileURL || null,
-          questions: child.questions
-        }))
+          questions: child.questions,
+        })),
     }));
   } else {
-    hierarchicalSections = sections.map(s => ({
+    hierarchicalSections = sections.map((s) => ({
       sectionId: s.sectionId,
       title: s.title,
       type: s.type,
-      questions: s.questions
+      questions: s.questions,
     }));
   }
 
   const totalQuestions = submissionData.length;
-  const correctAnswers = submissionData.filter(q => {
+  const correctAnswers = submissionData.filter((q) => {
     if (q.Type === "multiple_choice" || q.Type === "true_false") {
-      return (q.LearnerAnswer || "").toString().trim().toLowerCase() ===
-        (q.CorrectAnswer || "").toString().trim().toLowerCase();
+      return (
+        (q.LearnerAnswer || "").toString().trim().toLowerCase() ===
+        (q.CorrectAnswer || "").toString().trim().toLowerCase()
+      );
     } else if (q.Type === "fill_in_blank") {
       return checkFillInBlankAnswer(q.LearnerAnswer, q.CorrectAnswer);
     }
@@ -645,11 +661,15 @@ const reviewExamService = async (learnerAccId, instanceId) => {
 
   const totalEarnedPoints = submissionData.reduce((sum, q) => {
     if (q.Type === "multiple_choice" || q.Type === "true_false") {
-      const isCorrect = (q.LearnerAnswer || "").toString().trim().toLowerCase() ===
+      const isCorrect =
+        (q.LearnerAnswer || "").toString().trim().toLowerCase() ===
         (q.CorrectAnswer || "").toString().trim().toLowerCase();
       return sum + (isCorrect ? q.Point : 0);
     } else if (q.Type === "fill_in_blank") {
-      const isCorrect = checkFillInBlankAnswer(q.LearnerAnswer, q.CorrectAnswer);
+      const isCorrect = checkFillInBlankAnswer(
+        q.LearnerAnswer,
+        q.CorrectAnswer
+      );
       return sum + (isCorrect ? q.Point : 0);
     }
     return sum;
@@ -666,15 +686,15 @@ const reviewExamService = async (learnerAccId, instanceId) => {
     examInfo: {
       examId: instance.ExamId,
       examTitle: instance.ExamTitle,
-      examDescription: instance.ExamDescription
+      examDescription: instance.ExamDescription,
     },
     resultInfo: {
       score: result.Score,
       feedback: result.Feedback,
       submissionDate: result.SubmissionDate,
-      submissionStatus: submission?.Status || 'submitted',
+      submissionStatus: submission?.Status || "submitted",
       durationSec: submission?.DurationSec || null,
-      isLate: submission?.Status === 'late'
+      isLate: submission?.Status === "late",
     },
     sections: hierarchicalSections,
     summary: {
@@ -682,10 +702,11 @@ const reviewExamService = async (learnerAccId, instanceId) => {
       correctAnswers,
       totalEarnedPoints,
       totalMaxPoints,
-      accuracy: totalQuestions > 0
-        ? ((correctAnswers / totalQuestions) * 100).toFixed(2)
-        : 0
-    }
+      accuracy:
+        totalQuestions > 0
+          ? ((correctAnswers / totalQuestions) * 100).toFixed(2)
+          : 0,
+    },
   };
 };
 
@@ -697,5 +718,5 @@ module.exports = {
   getExamResultService,
   getHistoryService,
   retryExamService,
-  reviewExamService
+  reviewExamService,
 };
