@@ -188,6 +188,36 @@ async getLearnerAttendance(learnerId) {
     }
   }
 
+  async recordAttendancenotJoin(sessionId, date, status, note) {
+    try {
+      const db = await connectDB();
+      
+      const [rows] = await db.query(
+        `SELECT l.LearnerID FROM learner l JOIN enrollment e ON e.LearnerID = l.LearnerID
+        JOIN class c ON c.ClassID = e.ClassID JOIN session s ON s.ClassID = c.ClassID
+        LEFT JOIN attendance a
+              ON a.LearnerID = l.LearnerID
+              AND a.SessionID = s.SessionID
+        WHERE s.SessionID = ?
+          AND a.AttendanceID IS NULL;`,
+        [sessionId]
+      );
+
+      for (const row of rows) {
+        await db.query(
+          `INSERT INTO attendance (LearnerID, SessionID, Status, Date, note)
+          VALUES (?, ?, ?, ?, ?)`,
+          [row.LearnerID, sessionId, status, date, note]
+        );
+      }
+
+      return { success: true, message: "Attendance for not joined recorded" };
+    } catch (error) {
+      console.error("Attendance recording error for not joined:", error);
+      return { success: false, message: "Failed to record attendance for not joined" };
+    }
+  }
+
   async recordAttendance(learnerId, sessionId, status, note) {
     try {
       const db = await connectDB();
