@@ -216,23 +216,19 @@ class AttendanceService {
   ) {
     try {
       const learner = await profileRepository.findLearnerByAccountId(accId);
-      if (!learner) {
-        console.log("Learner not found:", accId);
-        return { error: "Learner not found" };
-      }
 
       const sessionStart = new Date(`${date}T${startTime}`);
       const sessionEnd = new Date(`${date}T${endTime}`);
       const actionTime = new Date(timestamp);
 
-      const THIRTY_MIN = 30 * 60 * 1000;
+      const THIRTY_MIN = 3000 * 60 * 1000;
       const sessionDurationMs = sessionEnd - sessionStart;
       const eightyPercentMs = sessionDurationMs * 0.8;
 
       let finalStatus = "ABSENT";
       let finalNote = "";
 
-      if (type === "join") {
+      if (type === "join" && learner) {
         if (actionTime - sessionStart <= THIRTY_MIN) {
           finalStatus = "PRESENT";
           finalNote = "Tham gia đúng giờ (auto attendance)";
@@ -254,7 +250,7 @@ class AttendanceService {
           status: finalStatus,
           note: finalNote,
         };
-      } else if (type === "leave") {
+      } else if (type === "leave" && learner) {
         const attendedMs = actionTime - sessionStart;
 
         if (attendedMs >= eightyPercentMs) {
@@ -282,9 +278,9 @@ class AttendanceService {
         finalStatus = "ABSENT";
         finalNote = "Không tham gia buổi học";
 
-        await attendanceRepository.recordAttendance(
-          learner.LearnerID,
+        await attendanceRepository.recordAttendancenotJoin(
           sessionId,
+          date,
           finalStatus,
           finalNote
         );
