@@ -1,6 +1,5 @@
 const connectDB = require("../config/db");
 
-
 class SessionRepository {
   // Tạo session mới (dbver5 schema)
   async create(sessionData) {
@@ -144,6 +143,29 @@ class SessionRepository {
     return result;
   }
 
+  // Xóa nhiều sessions cùng lúc (Bulk Delete)
+  async deleteMany(sessionIds) {
+    if (!sessionIds || !Array.isArray(sessionIds) || sessionIds.length === 0) {
+      return { affectedRows: 0 };
+    }
+
+    // Validate: Tất cả phải là số
+    const validIds = sessionIds
+      .map((id) => Number(id))
+      .filter((id) => !isNaN(id) && id > 0);
+
+    if (validIds.length === 0) {
+      throw new Error("Không có SessionID hợp lệ để xóa");
+    }
+
+    const placeholders = validIds.map(() => "?").join(",");
+    const query = `DELETE FROM session WHERE SessionID IN (${placeholders})`;
+
+    const pool = await connectDB();
+    const [result] = await pool.execute(query, validIds);
+    return result;
+  }
+
   // Tạo nhiều sessions cùng lúc (Bulk Create) - dbver5
   async createBulk(sessionsData) {
     if (!sessionsData || sessionsData.length === 0) {
@@ -159,7 +181,7 @@ class SessionRepository {
       session.ClassID,
       session.TimeslotID,
       session.Date,
-      session.ZoomUUID || this.generateZoomUUID(), 
+      session.ZoomUUID || this.generateZoomUUID(),
     ]);
 
     const query = `
@@ -184,7 +206,7 @@ class SessionRepository {
         i.FullName as InstructorName
       FROM session s
       LEFT JOIN timeslot t ON s.TimeslotID = t.TimeslotID
-      LEFT JOIN \`class\` c ON s.ClassID = c.ClassID
+      LEFT JOIN class c ON s.ClassID = c.ClassID
       LEFT JOIN instructor i ON s.InstructorID = i.InstructorID
       WHERE s.Date >= ? AND s.Date <= ?
     `;
@@ -231,7 +253,7 @@ class SessionRepository {
         i.FullName as InstructorName
       FROM session s
       LEFT JOIN timeslot t ON s.TimeslotID = t.TimeslotID
-      LEFT JOIN \`class\` c ON s.ClassID = c.ClassID
+      LEFT JOIN class c ON s.ClassID = c.ClassID
       LEFT JOIN instructor i ON s.InstructorID = i.InstructorID
       WHERE s.TimeslotID = ?
       ORDER BY s.Date ASC
@@ -253,7 +275,7 @@ class SessionRepository {
         i.FullName as InstructorName
       FROM session s
       LEFT JOIN timeslot t ON s.TimeslotID = t.TimeslotID
-      LEFT JOIN \`class\` c ON s.ClassID = c.ClassID
+      LEFT JOIN class c ON s.ClassID = c.ClassID
       LEFT JOIN instructor i ON s.InstructorID = i.InstructorID
       WHERE s.InstructorID = ? 
         AND s.Date >= ? 
@@ -262,7 +284,11 @@ class SessionRepository {
     `;
 
     const pool = await connectDB();
-    const [rows] = await pool.execute(query, [instructorId, startDate, endDate]);
+    const [rows] = await pool.execute(query, [
+      instructorId,
+      startDate,
+      endDate,
+    ]);
     return rows;
   }
 }

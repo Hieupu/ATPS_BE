@@ -57,7 +57,7 @@ class AccountService {
       // Xử lý Status
       if (updateData.Status !== undefined) {
         const normalizedStatus = updateData.Status.toLowerCase();
-        // DB chỉ chấp nhận: active, inactive, banned
+        // DB chỉ chấp nhận: active, inactive
         const validStatuses = ["active", "inactive", "banned"];
         if (!validStatuses.includes(normalizedStatus)) {
           throw new ServiceError(

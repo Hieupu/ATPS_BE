@@ -38,82 +38,61 @@ class TimeslotRepository {
   }
 
   async findAll(options = {}) {
-    const pool = await connectDB();
-    const rawPage = options.page;
-    const rawLimit = options.limit;
-    const parsedLimit = parseInt(rawLimit, 10);
-    const limitNum =
-      Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : null;
-    const pageNum = limitNum ? parseInt(rawPage, 10) || 1 : 1;
-    const offset = limitNum ? (pageNum - 1) * limitNum : 0;
+  const pool = await connectDB();
 
-    // Kiểm tra xem cột Day có tồn tại không
-    let hasDayColumn = false;
-    try {
-      const checkQuery = `
-        SELECT COUNT(*) as count
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_SCHEMA = DATABASE()
-          AND TABLE_NAME = 'timeslot' 
-          AND COLUMN_NAME = 'Day'
-      `;
-      const [checkResult] = await pool.execute(checkQuery);
-      hasDayColumn = checkResult[0].count > 0;
-    } catch (error) {
-      console.warn("Could not check for Day column:", error.message);
-      hasDayColumn = false;
-    }
+  const rawPage = options.page;
+  const rawLimit = options.limit;
 
-    // Xây dựng query dựa trên việc cột Day có tồn tại hay không
-    let query = `
-      SELECT 
-        t.TimeslotID,
-        t.StartTime,
-        t.EndTime
-    `;
+  const limitNum = Number.isFinite(parseInt(rawLimit, 10))
+    ? parseInt(rawLimit, 10)
+    : null;
 
-    if (hasDayColumn) {
-      query += `, t.Day`;
-    } else {
-      query += `, NULL as Day`;
-    }
+  const pageNum = limitNum ? parseInt(rawPage, 10) || 1 : 1;
+  const offset = limitNum ? (pageNum - 1) * limitNum : 0;
 
-    query += `
-      FROM timeslot t
-      WHERE 1=1
-    `;
+  // Base query
+  let query = `
+    SELECT 
+      t.TimeslotID,
+      t.StartTime,
+      t.EndTime,
+      t.Day
+    FROM timeslot t
+    WHERE 1=1
+  `;
 
-    const params = [];
+  const params = [];
 
-    // Đếm tổng số bản ghi
-    const countQuery = query.replace(
-      /SELECT[\s\S]*?FROM/i,
-      "SELECT COUNT(*) as total FROM"
-    );
-    const [countResult] = await pool.execute(countQuery, params);
-    const total = countResult[0].total;
+  // Count query
+  const countQuery = query.replace(
+    /SELECT[\s\S]*?FROM/i,
+    "SELECT COUNT(*) as total FROM"
+  );
 
-    // Sắp xếp ổn định và phân trang (nếu có)
-    query += ` ORDER BY t.Day IS NULL, t.Day ASC, t.StartTime ASC`;
+  const [countResult] = await pool.execute(countQuery, params);
+  const total = countResult[0].total;
 
-    let dataQuery = query;
-    let dataParams = params;
-    if (limitNum) {
-      dataQuery += ` LIMIT ${limitNum} OFFSET ${offset}`;
-    }
+  // Order + pagination
+  query += `
+    ORDER BY t.Day ASC, t.StartTime ASC
+  `;
 
-    const [timeslots] = await pool.execute(dataQuery, dataParams);
-
-    return {
-      data: timeslots,
-      pagination: {
-        page: pageNum,
-        limit: limitNum || total,
-        total,
-        totalPages: limitNum ? Math.ceil(total / limitNum) : 1,
-      },
-    };
+  if (limitNum) {
+    query += ` LIMIT ${limitNum} OFFSET ${offset}`;
   }
+
+  const [timeslots] = await pool.execute(query, params);
+
+  return {
+    data: timeslots,
+    pagination: {
+      page: pageNum,
+      limit: limitNum || total,
+      total,
+      totalPages: limitNum ? Math.ceil(total / limitNum) : 1,
+    },
+  };
+}
 
   async update(id, updateData) {
     const pool = await connectDB();
@@ -152,7 +131,6 @@ class TimeslotRepository {
 
   async findByDateRange(startDate, endDate) {
     const pool = await connectDB();
-    // dbver5: timeslot không có Date, phải join với session
     const query = `
       SELECT 
         t.TimeslotID,
@@ -171,15 +149,6 @@ class TimeslotRepository {
     return rows;
   }
 
-  async findByLocation(location) {
-    // dbver5: timeslot không có Location
-    // Method này không còn phù hợp với schema mới
-    throw new Error(
-      "Method findByLocation không còn hỗ trợ trong schema dbver5"
-    );
-  }
-
-  // Lấy timeslots theo ClassID (dbver5 - session trực tiếp có TimeslotID)
   async findByClassId(classId) {
     const pool = await connectDB();
     const query = `
@@ -208,7 +177,6 @@ class TimeslotRepository {
     return timeslots;
   }
 
-  // Lấy timeslots theo CourseID (dbver5 - session trực tiếp có TimeslotID)
   async findByCourseId(courseId) {
     const pool = await connectDB();
     const query = `
@@ -235,7 +203,6 @@ class TimeslotRepository {
     return timeslots;
   }
 
-  // Lấy lịch học của học viên (dbver5 - session trực tiếp có TimeslotID)
   async getLearnerSchedule(learnerId) {
     const pool = await connectDB();
     const query = `
@@ -267,7 +234,6 @@ class TimeslotRepository {
     return schedule;
   }
 
-  // Lấy session đầu tiên và cuối cùng của một lớp (dbver5)
   async getClassSessionTimeRange(classId) {
     const pool = await connectDB();
     const query = `
@@ -289,7 +255,6 @@ class TimeslotRepository {
     return result[0];
   }
 
-  // Lấy session đầu tiên và cuối cùng của một khóa học (dbver5)
   async getCourseSessionTimeRange(courseId) {
     const pool = await connectDB();
     const query = `
@@ -314,7 +279,6 @@ class TimeslotRepository {
     return result[0];
   }
 
-  // Lấy tất cả timeslots với thông tin session đầu tiên và cuối cùng (dbver5)
   async getTimeslotsWithSessionRange(classId = null, courseId = null) {
     const pool = await connectDB();
     let whereClause = "WHERE 1=1";
@@ -371,7 +335,6 @@ class TimeslotRepository {
     return timeslots;
   }
 
-  // Lấy thống kê chi tiết về timeslots và sessions (dbver5)
   async getSessionStatistics(classId = null, courseId = null) {
     const pool = await connectDB();
     let whereClause = "WHERE 1=1";
@@ -409,7 +372,6 @@ class TimeslotRepository {
     return result[0];
   }
 
-  // Lấy danh sách lớp với thông tin thời gian session (dbver5)
   async getClassesWithTimeInfo() {
     const pool = await connectDB();
     const query = `
@@ -485,7 +447,6 @@ class TimeslotRepository {
     return transformedClasses;
   }
 
-  // Lấy schedule cho một class (dbver5)
   async getClassSchedule(classId) {
     const pool = await connectDB();
     const query = `
@@ -537,7 +498,6 @@ class TimeslotRepository {
     return Array.from(sessionMap.values());
   }
 
-  // Lấy class sessions theo format frontend cần (dbver5 schema - không có sessiontimeslot)
   async getClassSessionsForFrontend(classId) {
     const pool = await connectDB();
     const query = `
@@ -645,7 +605,6 @@ class TimeslotRepository {
     return timeslots;
   }
 
-  // Lấy thống kê ca học cho classlist (dbver5)
   async getClassListWithTimeStats() {
     const pool = await connectDB();
     const query = `
@@ -657,7 +616,6 @@ class TimeslotRepository {
         cl.Zoompass,
         c.Title as courseTitle,
         c.Duration as courseDuration,
-        c.TuitionFee as courseFee,
         i.FullName as instructorName,
         COUNT(DISTINCT s.SessionID) as totalSessions,
         COUNT(DISTINCT t.TimeslotID) as totalTimeslots,
@@ -678,13 +636,13 @@ class TimeslotRepository {
         MAX(t.EndTime) as lastSessionTime,
         GROUP_CONCAT(DISTINCT DATE_FORMAT(s.Date, '%d/%m/%Y') ORDER BY s.Date SEPARATOR ', ') as sessionDatesList,
         GROUP_CONCAT(DISTINCT CONCAT(TIME_FORMAT(t.StartTime, '%H:%i'), '-', TIME_FORMAT(t.EndTime, '%H:%i')) ORDER BY t.StartTime SEPARATOR ', ') as sessionTimesList
-      FROM \`class\` cl
+      FROM class cl
       LEFT JOIN course c ON cl.CourseID = c.CourseID
       LEFT JOIN instructor i ON cl.InstructorID = i.InstructorID
       LEFT JOIN session s ON cl.ClassID = s.ClassID
       LEFT JOIN timeslot t ON s.TimeslotID = t.TimeslotID
       LEFT JOIN enrollment e ON cl.ClassID = e.ClassID
-      GROUP BY cl.ClassID, cl.Name, cl.Status, cl.ZoomID, cl.Zoompass, c.Title, c.Duration, c.TuitionFee, i.FullName
+      GROUP BY cl.ClassID, cl.Name, cl.Status, cl.ZoomID, cl.Zoompass, c.Title, c.Duration, i.FullName
       ORDER BY cl.ClassID DESC
     `;
 
@@ -765,7 +723,6 @@ class TimeslotRepository {
     return learners;
   }
 
-  // Lấy thống kê enrollment cho classlist
   async getClassEnrollmentStats() {
     const pool = await connectDB();
     const query = `
@@ -816,10 +773,10 @@ class TimeslotRepository {
 
       const [rows] = await pool.execute(query);
 
-      console.log("📌 Raw rows result:", rows);
-      console.log("📌 Rows type:", typeof rows);
+      console.log(" Raw rows result:", rows);
+      console.log(" Rows type:", typeof rows);
       console.log(
-        "📌 Rows length:",
+        " Rows length:",
         Array.isArray(rows) ? rows.length : "NOT ARRAY"
       );
       if (!Array.isArray(rows)) {

@@ -9,6 +9,7 @@ const paymentRepository = require("../repositories/paymentRepository");
 const refundRepository = require("../repositories/refundRepository");
 const { generateSessions } = require("../utils/scheduleUtils");
 const connectDB = require("../config/db");
+const zoomService = require("./zoomService");
 
 class ServiceError extends Error {
   constructor(message, status = 400) {
@@ -41,9 +42,34 @@ class ClassService {
         Fee: data.Fee || null,
         OpendatePlan: data.OpendatePlan || null,
         EnddatePlan: data.EnddatePlan || null,
+        // Numofsession sẽ được tính từ Duration của course (dbver7)
         Numofsession: data.Numofsession || 0,
         Maxstudent: data.Maxstudent || 0,
       };
+
+      // Nếu DB yêu cầu ZoomID NOT NULL: tạo meeting mặc định khi thiếu
+      if (!classData.ZoomID) {
+        try {
+          const zoomMeeting = await zoomService.createZoomMeeting({
+            topic: className,
+          });
+          if (zoomMeeting && zoomMeeting.id) {
+            classData.ZoomID = zoomMeeting.id;
+            classData.Zoompass = zoomMeeting.password || null;
+          } else {
+            // fallback chuỗi rỗng để không vi phạm NOT NULL
+            classData.ZoomID = "";
+            classData.Zoompass = "";
+          }
+        } catch (zoomError) {
+          console.error(
+            "[ClassService] Failed to auto-create Zoom meeting:",
+            zoomError?.response?.data || zoomError.message
+          );
+          classData.ZoomID = "";
+          classData.Zoompass = "";
+        }
+      }
 
       // Check if course exists (only if CourseID is provided)
       if (classData.CourseID) {
@@ -51,6 +77,21 @@ class ClassService {
         if (!course) {
           throw new ServiceError("Khóa học không tồn tại", 404);
         }
+
+        // dbver7: Tính Numofsession từ Duration của course
+        // Quy tắc: Numofsession = max(1, ceil(Duration / 2))
+        const duration = Number(course.Duration);
+        if (!Number.isNaN(duration) && duration > 0) {
+          const raw = duration / 2;
+          const computedNum = Math.max(1, Math.ceil(raw));
+          classData.Numofsession = computedNum;
+        } else if (!classData.Numofsession || classData.Numofsession <= 0) {
+          // Fallback an toàn: nếu Duration không hợp lệ và không có Numofsession từ payload
+          classData.Numofsession = 1;
+        }
+      } else if (!classData.Numofsession || classData.Numofsession <= 0) {
+        // Trường hợp không có CourseID: giữ lại Numofsession từ payload hoặc fallback = 1
+        classData.Numofsession = 1;
       }
 
       // Check if instructor exists
@@ -84,8 +125,28 @@ class ClassService {
         });
 
         // Create each session
+        const hasZoomMeeting = Boolean(classData.ZoomID);
         for (const session of sessions) {
-          await sessionRepository.create(session);
+          let zoomUUID = null;
+          if (hasZoomMeeting) {
+            try {
+              zoomUUID = await zoomService.createZoomOccurrence(
+                classId,
+                session.Date,
+                session.TimeslotID
+              );
+            } catch (zoomError) {
+              console.error(
+                "[ClassService] Failed to create Zoom occurrence:",
+                zoomError?.response?.data || zoomError.message
+              );
+            }
+          }
+
+          await sessionRepository.create({
+            ...session,
+            ZoomUUID: zoomUUID || null,
+          });
         }
 
         console.log(
@@ -129,6 +190,17 @@ class ClassService {
     }
   }
 
+  /**
+   * Cập nhật metadata của lớp học (không ảnh hưởng đến sessions)
+   * 
+   * Lưu ý: Các trường ảnh hưởng đến schedule (OpendatePlan, EnddatePlan, Numofsession, InstructorID)
+   * không được phép cập nhật qua endpoint này. Phải sử dụng updateClassSchedule().
+   * 
+   * @param {number} id - ClassID
+   * @param {Object} data - Dữ liệu cập nhật
+   * @returns {Object} Class đã được cập nhật
+   * @throws {ServiceError} Nếu có trường schedule-affecting fields
+   */
   async updateClass(id, data) {
     try {
       // Check if class exists
@@ -137,20 +209,45 @@ class ClassService {
         throw new ServiceError("Lớp học không tồn tại", 404);
       }
 
-      const allowedFields = [
-        "Name",
-        "CourseID",
-        "InstructorID",
-        "Status",
-        "ZoomID",
-        "Zoompass",
-        "Fee",
+      // Các trường ảnh hưởng đến sessions - KHÔNG cho phép sửa qua updateClass()
+      // Phải dùng updateClassSchedule() để xử lý
+      const scheduleAffectingFields = [
         "OpendatePlan",
-        "Opendate",
         "EnddatePlan",
-        "Enddate",
         "Numofsession",
-        "Maxstudent",
+        "InstructorID",
+      ];
+
+      // Kiểm tra nếu có trường ảnh hưởng sessions
+      const hasScheduleAffectingFields = scheduleAffectingFields.some(
+        (field) => data[field] !== undefined && data[field] !== null
+      );
+
+      if (hasScheduleAffectingFields) {
+        const foundFields = scheduleAffectingFields.filter(
+          (field) => data[field] !== undefined && data[field] !== null
+        );
+        throw new ServiceError(
+          `Không thể cập nhật các trường ảnh hưởng đến lịch học (${foundFields.join(
+            ", "
+          )}) qua endpoint này. ` +
+            `Vui lòng sử dụng endpoint /classes/${id}/schedule/update để cập nhật lịch học.`,
+          400
+        );
+      }
+
+      // Các trường được phép sửa (metadata không ảnh hưởng sessions)
+      const allowedFields = [
+        "Name", // Tên lớp
+        "CourseID", // ID khóa học
+        "Status", // Trạng thái
+        "ZoomID", // Zoom meeting ID
+        "Zoompass", // Zoom password
+        "Fee", // Học phí
+        "Maxstudent", // Sĩ số tối đa
+        // Các trường thực tế (không ảnh hưởng sessions khi chỉ cập nhật)
+        "Opendate", // Ngày bắt đầu thực tế
+        "Enddate", // Ngày kết thúc thực tế
       ];
 
       const filteredData = {};
@@ -290,6 +387,22 @@ class ClassService {
         });
 
         // Tạo session với TimeslotID và Date
+        let zoomUUID = null;
+        if (classInfo[0]?.ZoomID) {
+          try {
+            zoomUUID = await zoomService.createZoomOccurrence(
+              classId,
+              timeslotData.date,
+              timeslot.TimeslotID
+            );
+          } catch (zoomError) {
+            console.error(
+              "[ClassService] Failed to create Zoom occurrence (createClassSession):",
+              zoomError?.response?.data || zoomError.message
+            );
+          }
+        }
+
         const sessionResult = await sessionRepository.create({
           Title: title,
           Description: description,
@@ -297,6 +410,7 @@ class ClassService {
           InstructorID: classInfo[0].InstructorID,
           TimeslotID: timeslot.TimeslotID,
           Date: timeslotData.date,
+          ZoomUUID: zoomUUID || null,
         });
 
         createdSessions.push(sessionResult);
