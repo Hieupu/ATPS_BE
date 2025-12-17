@@ -809,7 +809,7 @@ async createExamInstance(data) {
     const db = await connectDB();
     const sql = `
       SELECT 
-        q.QuestionID, q.Content, q.Type, q.Point, q.CorrectAnswer,
+        q.QuestionID, q.Content, q.Type, q.Point, q.CorrectAnswer, es.FileURL,
         es.SectionId, es.Type as SectionType, es.OrderIndex,
         eq.ExamquestionId, eq.Order_Index,
         ea.Answer as LearnerAnswer
