@@ -13,6 +13,8 @@ const {
   forgotPassword,
   verifyResetCode,
   resetPassword,
+  sendRegisterVerificationEmail,
+  verifyRegisterCode
 } = require("../controllers/authController");
 const { verifyToken, authorizeFeature } = require("../middlewares/middware");
 const router = express.Router();
@@ -27,6 +29,9 @@ router.get("/google", googleAuth);
 router.get("/google/callback", googleAuthCallback);
 router.get("/facebook", facebookAuth);
 router.get("/facebook/callback", facebookAuthCallback);
+
+router.post("/send-register-verification", sendRegisterVerificationEmail);
+router.post("/verify-register-code", verifyRegisterCode);
 
 //phân quyền mẫu (Manager Admin là Name trong bảng Features)
 // router.get(
