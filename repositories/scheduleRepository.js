@@ -383,7 +383,7 @@ async getInstructorWeeklySchedule(instructorId, weekStartDate) {
 
     console.log('=== FINAL SCHEDULE ===');
     console.log('Total entries:', schedule.length);
-    console.log('Available:', schedule.filter(s => s.Status === 'available').length);
+    console.log('Available:', schedule.filter(s => s.Status === 'AVAILABLE').length);
     console.log('Busy:', schedule.filter(s => s.Status === 'busy').length);
     console.log('Empty:', schedule.filter(s => s.Status === 'empty').length);
 

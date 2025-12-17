@@ -49,32 +49,31 @@ class ProgressRepository {
                     SELECT UnitID FROM unit WHERE CourseID = c.CourseID
                   ))
                 ),
-                'CompletedAssignments', (
-                  SELECT COUNT(DISTINCT s.SubmissionID)
-                  FROM submission s
-                  INNER JOIN exam_instances ei ON s.ExamID = ei.ExamId
-                  INNER JOIN exam ex ON ei.ExamId = ex.ExamID
-                  WHERE ei.ClassId = e2.ClassID
-                  AND ex.Type = 'Assignment'
-                  AND s.LearnerID = e2.LearnerID
-                  AND s.Status IN ('submitted', 'late')
-                  AND (ei.UnitId IS NULL OR ei.UnitId IN (
-                    SELECT UnitID FROM unit WHERE CourseID = c.CourseID
-                  ))
-                ),
-                'AvgScore', (
-                  SELECT COALESCE(AVG(s.Score), 0)
-                  FROM submission s
-                  INNER JOIN exam_instances ei ON s.ExamID = ei.ExamId
-                  INNER JOIN exam ex ON ei.ExamId = ex.ExamID
-                  WHERE ei.ClassId = e2.ClassID
-                  AND ex.Type = 'Assignment'
-                  AND s.LearnerID = e2.LearnerID
-                  AND s.Score IS NOT NULL
-                  AND (ei.UnitId IS NULL OR ei.UnitId IN (
-                    SELECT UnitID FROM unit WHERE CourseID = c.CourseID
-                  ))
-                ),
+                  'CompletedAssignments', (
+          SELECT COUNT(DISTINCT er.ResultID)
+          FROM examresult er
+          INNER JOIN exam_instances ei ON er.ExamID = ei.ExamId
+          INNER JOIN exam ex ON ei.ExamId = ex.ExamID
+          WHERE ei.ClassId = e2.ClassID
+          AND ex.Type = 'Assignment'
+          AND er.LearnerID = e2.LearnerID
+          AND (ei.UnitId IS NULL OR ei.UnitId IN (
+            SELECT UnitID FROM unit WHERE CourseID = c.CourseID
+          ))
+        ),
+                  'AvgScore', (
+          SELECT COALESCE(AVG(er.Score), 0)
+          FROM examresult er
+          INNER JOIN exam_instances ei ON er.ExamID = ei.ExamId
+          INNER JOIN exam ex ON ei.ExamId = ex.ExamID
+          WHERE ei.ClassId = e2.ClassID
+          AND ex.Type = 'Assignment'
+          AND er.LearnerID = e2.LearnerID
+          AND er.Score IS NOT NULL
+          AND (ei.UnitId IS NULL OR ei.UnitId IN (
+            SELECT UnitID FROM unit WHERE CourseID = c.CourseID
+          ))
+        ),
                 'TotalSessions', (
                   SELECT COUNT(*)
                   FROM session se
@@ -118,39 +117,38 @@ class ProgressRepository {
                 ),
                 'ClassProgress', (
                   SELECT CASE
-                    WHEN (
-                      SELECT COUNT(DISTINCT ei.InstanceId)
-                      FROM exam_instances ei
-                      INNER JOIN exam ex ON ei.ExamId = ex.ExamID
-                      WHERE ei.ClassId = e2.ClassID
-                      AND ex.Type = 'Assignment'
-                      AND ex.Status = 'Published'
-                      AND (ei.UnitId IS NULL OR ei.UnitId IN (
-                        SELECT UnitID FROM unit WHERE CourseID = c.CourseID
-                      ))
+                   WHEN (
+              SELECT COUNT(DISTINCT ei.InstanceId)
+              FROM exam_instances ei
+              INNER JOIN exam ex ON ei.ExamId = ex.ExamID
+              WHERE ei.ClassId = e2.ClassID
+              AND ex.Type = 'Assignment'
+              AND ex.Status = 'Published'
+              AND (ei.UnitId IS NULL OR ei.UnitId IN (
+                SELECT UnitID FROM unit WHERE CourseID = c.CourseID
+              ))
                     ) > 0
                     THEN ROUND((
-                      SELECT COUNT(DISTINCT s.SubmissionID)
-                      FROM submission s
-                      INNER JOIN exam_instances ei ON s.ExamID = ei.ExamId
-                      INNER JOIN exam ex ON ei.ExamId = ex.ExamID
-                      WHERE ei.ClassId = e2.ClassID
-                      AND ex.Type = 'Assignment'
-                      AND s.LearnerID = e2.LearnerID
-                      AND s.Status IN ('submitted', 'late')
-                      AND (ei.UnitId IS NULL OR ei.UnitId IN (
-                        SELECT UnitID FROM unit WHERE CourseID = c.CourseID
-                      ))
+              SELECT COUNT(DISTINCT er.ResultID)
+              FROM examresult er
+              INNER JOIN exam_instances ei ON er.ExamID = ei.ExamId
+              INNER JOIN exam ex ON ei.ExamId = ex.ExamID
+              WHERE ei.ClassId = e2.ClassID
+              AND ex.Type = 'Assignment'
+              AND er.LearnerID = e2.LearnerID
+              AND (ei.UnitId IS NULL OR ei.UnitId IN (
+                SELECT UnitID FROM unit WHERE CourseID = c.CourseID
+              ))
                     ) / (
-                      SELECT COUNT(DISTINCT ei.InstanceId)
-                      FROM exam_instances ei
-                      INNER JOIN exam ex ON ei.ExamId = ex.ExamID
-                      WHERE ei.ClassId = e2.ClassID
-                      AND ex.Type = 'Assignment'
-                      AND ex.Status = 'Published'
-                      AND (ei.UnitId IS NULL OR ei.UnitId IN (
-                        SELECT UnitID FROM unit WHERE CourseID = c.CourseID
-                      ))
+                        SELECT COUNT(DISTINCT ei.InstanceId)
+              FROM exam_instances ei
+              INNER JOIN exam ex ON ei.ExamId = ex.ExamID
+              WHERE ei.ClassId = e2.ClassID
+              AND ex.Type = 'Assignment'
+              AND ex.Status = 'Published'
+              AND (ei.UnitId IS NULL OR ei.UnitId IN (
+                SELECT UnitID FROM unit WHERE CourseID = c.CourseID
+              ))
                     ) * 100)
                     ELSE 0
                   END
@@ -204,42 +202,41 @@ class ProgressRepository {
            ))) as TotalAssignments,
           
           -- Đếm số assignments đã hoàn thành
-          (SELECT COUNT(DISTINCT s.SubmissionID)
-           FROM submission s
-           INNER JOIN exam_instances ei ON s.ExamID = ei.ExamId
-           INNER JOIN exam ex ON ei.ExamId = ex.ExamID
-           WHERE ex.Type = 'Assignment'
-           AND s.LearnerID = e.LearnerID
-           AND s.Status IN ('submitted', 'late', 'graded')
-           AND ei.ClassId IN (
-             SELECT e3.ClassID 
-             FROM enrollment e3
-             INNER JOIN class cl3 ON e3.ClassID = cl3.ClassID
-             WHERE e3.LearnerID = e.LearnerID
-             AND cl3.CourseID = c.CourseID
-           )
-           AND (ei.UnitId IS NULL OR ei.UnitId IN (
-             SELECT UnitID FROM unit WHERE CourseID = c.CourseID
-           ))) as CompletedAssignments,
+             (SELECT COUNT(DISTINCT er.ResultID)
+         FROM examresult er
+         INNER JOIN exam_instances ei ON er.ExamID = ei.ExamId
+         INNER JOIN exam ex ON ei.ExamId = ex.ExamID
+         WHERE ex.Type = 'Assignment'
+         AND er.LearnerID = e.LearnerID
+         AND ei.ClassId IN (
+           SELECT e3.ClassID 
+           FROM enrollment e3
+           INNER JOIN class cl3 ON e3.ClassID = cl3.ClassID
+           WHERE e3.LearnerID = e.LearnerID
+           AND cl3.CourseID = c.CourseID
+         )
+             AND (ei.UnitId IS NULL OR ei.UnitId IN (
+           SELECT UnitID FROM unit WHERE CourseID = c.CourseID
+         ))) as CompletedAssignments,
           
           -- Điểm trung bình assignments
-          (SELECT COALESCE(AVG(s.Score), 0)
-           FROM submission s
-           INNER JOIN exam_instances ei ON s.ExamID = ei.ExamId
-           INNER JOIN exam ex ON ei.ExamId = ex.ExamID
-           WHERE ex.Type = 'Assignment'
-           AND s.LearnerID = e.LearnerID
-           AND s.Score IS NOT NULL
-           AND ei.ClassId IN (
-             SELECT e3.ClassID 
-             FROM enrollment e3
-             INNER JOIN class cl3 ON e3.ClassID = cl3.ClassID
-             WHERE e3.LearnerID = e.LearnerID
-             AND cl3.CourseID = c.CourseID
-           )
-           AND (ei.UnitId IS NULL OR ei.UnitId IN (
-             SELECT UnitID FROM unit WHERE CourseID = c.CourseID
-           ))) as AvgAssignmentScore,
+             (SELECT COALESCE(AVG(er.Score), 0)
+         FROM examresult er
+         INNER JOIN exam_instances ei ON er.ExamID = ei.ExamId
+         INNER JOIN exam ex ON ei.ExamId = ex.ExamID
+         WHERE ex.Type = 'Assignment'
+         AND er.LearnerID = e.LearnerID
+         AND er.Score IS NOT NULL
+         AND ei.ClassId IN (
+           SELECT e3.ClassID 
+           FROM enrollment e3
+           INNER JOIN class cl3 ON e3.ClassID = cl3.ClassID
+           WHERE e3.LearnerID = e.LearnerID
+           AND cl3.CourseID = c.CourseID
+         )
+                AND (ei.UnitId IS NULL OR ei.UnitId IN (
+           SELECT UnitID FROM unit WHERE CourseID = c.CourseID
+         ))) as AvgAssignmentScore,
           
           -- Đếm tổng số sessions (tất cả classes)
           (SELECT COUNT(*) 
@@ -451,160 +448,201 @@ class ProgressRepository {
     }
   }
 
-  async getCourseDetailProgress(learnerId, courseId) {
-    try {
-      const db = await connectDB();
-      
-      const query = `
-        SELECT 
-          u.UnitID,
-          u.Title as UnitTitle,
-          u.Description as UnitDescription,
-          u.Duration as UnitDuration,
-          u.OrderIndex as UnitOrder,
-          
-          COUNT(DISTINCT l.LessonID) as TotalLessons,
-          COALESCE(SUM(l.Duration), 0) as TotalLessonDuration,
-          
-          (SELECT COUNT(DISTINCT ei.InstanceId)
-           FROM exam_instances ei
-           INNER JOIN exam ex ON ei.ExamId = ex.ExamID
-           WHERE ei.UnitId = u.UnitID
-           AND ex.Type = 'Assignment'
-           AND ex.Status = 'Published'
-           AND ei.ClassId IN (
-             SELECT e.ClassID 
-             FROM enrollment e
-             INNER JOIN class cl ON e.ClassID = cl.ClassID
-             WHERE cl.CourseID = u.CourseID
-             AND e.LearnerID = ?
-           )) as TotalAssignments,
-          
-          (SELECT COUNT(DISTINCT s.SubmissionID)
-           FROM submission s
-           INNER JOIN exam_instances ei ON s.ExamID = ei.ExamId
-           INNER JOIN exam ex ON ei.ExamId = ex.ExamID
-           WHERE ei.UnitId = u.UnitID
-           AND ex.Type = 'Assignment'
-           AND ex.Status = 'Published'
-           AND s.LearnerID = ?
-           AND s.Status IN ('submitted', 'late')
-           AND ei.ClassId IN (
-             SELECT e.ClassID 
-             FROM enrollment e
-             INNER JOIN class cl ON e.ClassID = cl.ClassID
-             WHERE cl.CourseID = u.CourseID
-             AND e.LearnerID = ?
-           )) as CompletedAssignments,
-          
-          (SELECT COALESCE(AVG(s.Score), 0)
-           FROM submission s
-           INNER JOIN exam_instances ei ON s.ExamID = ei.ExamId
-           INNER JOIN exam ex ON ei.ExamId = ex.ExamID
-           WHERE ei.UnitId = u.UnitID
-           AND ex.Type = 'Assignment'
-           AND ex.Status = 'Published'
-           AND s.LearnerID = ?
-           AND s.Score IS NOT NULL
-           AND ei.ClassId IN (
-             SELECT e.ClassID 
-             FROM enrollment e
-             INNER JOIN class cl ON e.ClassID = cl.ClassID
-             WHERE cl.CourseID = u.CourseID
-             AND e.LearnerID = ?
-           )) as AvgUnitScore
-          
-        FROM unit u
-        LEFT JOIN lesson l ON u.UnitID = l.UnitID AND l.Status = 'VISIBLE'
-        WHERE u.CourseID = ?
-        AND u.Status = 'VISIBLE'
-        GROUP BY u.UnitID, u.Title, u.Description, u.Duration, u.OrderIndex, u.CourseID
-        ORDER BY u.OrderIndex ASC
-      `;
+async getCourseDetailProgress(learnerId, courseId) {
+  try {
+    const db = await connectDB();
+    
+    const query = `
+      SELECT 
+        u.UnitID,
+        u.Title as UnitTitle,
+        u.Description as UnitDescription,
+        u.Duration as UnitDuration,
+        u.OrderIndex as UnitOrder,
+        
+        COUNT(DISTINCT l.LessonID) as TotalLessons,
+        COALESCE(SUM(l.Duration), 0) as TotalLessonDuration,
+        
+        (SELECT COUNT(DISTINCT ei.InstanceId)
+         FROM exam_instances ei
+         INNER JOIN exam ex ON ei.ExamId = ex.ExamID
+         WHERE ei.UnitId = u.UnitID
+         AND ex.Type = 'Assignment'
+         AND ex.Status = 'Published'
+         AND ei.ClassId IN (
+           SELECT e.ClassID 
+           FROM enrollment e
+           INNER JOIN class cl ON e.ClassID = cl.ClassID
+           WHERE cl.CourseID = u.CourseID
+           AND e.LearnerID = ?
+         )) as TotalAssignments,
+        
+        (SELECT COUNT(DISTINCT er.ResultID)
+         FROM examresult er
+         INNER JOIN exam_instances ei ON er.ExamID = ei.ExamId
+         INNER JOIN exam ex ON ei.ExamId = ex.ExamID
+         WHERE ei.UnitId = u.UnitID
+         AND ex.Type = 'Assignment'
+         AND ex.Status = 'Published'
+         AND er.LearnerID = ?
+         AND ei.ClassId IN (
+           SELECT e.ClassID 
+           FROM enrollment e
+           INNER JOIN class cl ON e.ClassID = cl.ClassID
+           WHERE cl.CourseID = u.CourseID
+           AND e.LearnerID = ?
+         )) as CompletedAssignments,
+        
+        (SELECT COALESCE(AVG(er.Score), 0)
+         FROM examresult er
+         INNER JOIN exam_instances ei ON er.ExamID = ei.ExamId
+         INNER JOIN exam ex ON ei.ExamId = ex.ExamID
+         WHERE ei.UnitId = u.UnitID
+         AND ex.Type = 'Assignment'
+         AND ex.Status = 'Published'
+         AND er.LearnerID = ?
+         AND er.Score IS NOT NULL
+         AND ei.ClassId IN (
+           SELECT e.ClassID 
+           FROM enrollment e
+           INNER JOIN class cl ON e.ClassID = cl.ClassID
+           WHERE cl.CourseID = u.CourseID
+           AND e.LearnerID = ?
+         )) as AvgUnitScore
+        
+      FROM unit u
+      LEFT JOIN lesson l ON u.UnitID = l.UnitID AND l.Status = 'VISIBLE'
+      WHERE u.CourseID = ?
+      AND u.Status = 'VISIBLE'
+      GROUP BY u.UnitID, u.Title, u.Description, u.Duration, u.OrderIndex, u.CourseID
+      ORDER BY u.OrderIndex ASC
+    `;
 
-      const [rows] = await db.query(query, [
-        learnerId, learnerId, learnerId, learnerId, learnerId, courseId
-      ]);
+    const [rows] = await db.query(query, [
+      learnerId, learnerId, learnerId, learnerId, learnerId, courseId
+    ]);
 
-      const results = rows.map((row) => {
-        const unitProgress = row.TotalAssignments > 0
-          ? Math.round((row.CompletedAssignments / row.TotalAssignments) * 100)
-          : (row.TotalLessons > 0 ? 0 : 100);
+    const results = rows.map((row) => {
+      const unitProgress = row.TotalAssignments > 0
+        ? Math.round((row.CompletedAssignments / row.TotalAssignments) * 100)
+        : (row.TotalLessons > 0 ? 0 : 100);
 
-        return {
-          ...row,
-          UnitProgress: unitProgress,
-          IsCompleted: unitProgress >= 100,
-          TotalLessonHours: Math.round((row.TotalLessonDuration / 60) * 10) / 10,
-        };
-      });
+      return {
+        ...row,
+        UnitProgress: unitProgress,
+        IsCompleted: unitProgress >= 100,
+        TotalLessonHours: Math.round((row.TotalLessonDuration / 60) * 10) / 10,
+      };
+    });
 
-      return results;
-    } catch (error) {
-      console.error("Database error in getCourseDetailProgress:", error);
-      throw error;
-    }
+    return results;
+  } catch (error) {
+    console.error("Database error in getCourseDetailProgress:", error);
+    throw error;
   }
+}
 
-  async getOverallStatistics(learnerId) {
-    try {
-      const db = await connectDB();
+async getOverallStatistics(learnerId) {
+  try {
+    const db = await connectDB();
+    
+    const query = `
+      SELECT 
+        -- Tổng số enrollments
+        COUNT(DISTINCT e.EnrollmentID) as TotalEnrollments,
+        
+        -- Tổng số khóa học đã đăng ký
+        COUNT(DISTINCT cl.CourseID) as TotalCourses,
+        
+        -- Số khóa học đang học
+        COUNT(DISTINCT CASE 
+          WHEN e.Status IN ('Enrolled', 'enrolled', 'ACTIVE', 'active') 
+          THEN cl.CourseID 
+        END) as ActiveCourses,
+        
+        -- Tổng số phút đã học (từ attendance)
+        IFNULL(SUM(
+          CASE 
+            WHEN a.Status = 'present' 
+            THEN TIMESTAMPDIFF(MINUTE, ts.StartTime, ts.EndTime)
+            ELSE 0 
+          END
+        ), 0) as TotalMinutesLearned,
+        
+        -- Tổng số bài nộp (assignments và exams từ examresult)
+        IFNULL(COUNT(DISTINCT er.ResultID), 0) as TotalSubmissions,
+        
+        -- Điểm trung bình tổng (assignments và exams)
+        IFNULL(AVG(er.Score), 0) as OverallAvgScore,
+        
+        -- Tổng số lần điểm danh có mặt
+        IFNULL(COUNT(DISTINCT CASE 
+          WHEN a.Status = 'present' 
+          THEN a.AttendanceID 
+        END), 0) as TotalAttendances,
+        
+        -- Tổng số sessions đã tham gia (để tính attendance rate)
+        IFNULL(COUNT(DISTINCT a.SessionID), 0) as TotalSessions,
+        
+        -- Số exams đã làm (Type = 'Exam')
+        IFNULL(COUNT(DISTINCT CASE 
+          WHEN ex.Type = 'Exam' 
+          THEN er.ResultID 
+        END), 0) as TotalExamsTaken,
+        
+        -- Số assignments đã làm (Type = 'Assignment')
+        IFNULL(COUNT(DISTINCT CASE 
+          WHEN ex.Type = 'Assignment' 
+          THEN er.ResultID 
+        END), 0) as TotalAssignmentsDone
+        
+      FROM enrollment e
+      INNER JOIN class cl ON e.ClassID = cl.ClassID
       
-      const query = `
-         SELECT 
-  COUNT(DISTINCT e.EnrollmentID) as TotalEnrollments,
-  COUNT(DISTINCT cl.CourseID) as TotalCourses,
-  
-  COUNT(DISTINCT CASE 
-    WHEN e.Status IN ('Enrolled', 'enrolled') 
-    THEN e.EnrollmentID 
-  END) as ActiveCourses,
-  
-  IFNULL(SUM(
-    CASE 
-      WHEN a.Status = 'present' 
-      THEN TIMESTAMPDIFF(MINUTE, ts.StartTime, ts.EndTime)
-      ELSE 0 
-    END
-  ), 0) as TotalMinutesLearned,
-  
-  IFNULL(COUNT(DISTINCT s.SubmissionID), 0) as TotalSubmissions,
-  
-  IFNULL(AVG(s.Score), 0) as OverallAvgScore,
-  
-  IFNULL(COUNT(DISTINCT a.AttendanceID), 0) as TotalAttendances,
-  
-  IFNULL(COUNT(DISTINCT er.ResultID), 0) as TotalExamsTaken
-  
-FROM enrollment e
-INNER JOIN class cl ON e.ClassID = cl.ClassID
-LEFT JOIN attendance a ON a.LearnerID = e.LearnerID
-LEFT JOIN session se ON a.SessionID = se.SessionID
-LEFT JOIN timeslot ts ON se.TimeslotID = ts.TimeslotID
-LEFT JOIN submission s ON s.LearnerID = e.LearnerID
-LEFT JOIN examresult er ON er.LearnerID = e.LearnerID
-WHERE e.LearnerID = ?
-      `;
+      -- JOIN attendance thông qua session và class
+      LEFT JOIN session se ON se.ClassID = cl.ClassID
+      LEFT JOIN attendance a ON a.SessionID = se.SessionID AND a.LearnerID = e.LearnerID
+      LEFT JOIN timeslot ts ON se.TimeslotID = ts.TimeslotID
+      
+      -- JOIN examresult thông qua exam_instances và exam
+      LEFT JOIN examresult er ON er.LearnerID = e.LearnerID
+      LEFT JOIN exam_instances ei ON er.ExamID = ei.ExamId
+      LEFT JOIN exam ex ON ei.ExamId = ex.ExamID
+      
+      WHERE e.LearnerID = ?
+    `;
 
-      const [rows] = await db.query(query, [learnerId]);
+    const [rows] = await db.query(query, [learnerId]);
+    
+    if (rows.length > 0) {
+      const stats = rows[0];
       
-      if (rows.length > 0) {
-        const stats = rows[0];
-        return {
-          ...stats,
-          TotalHoursLearned: Math.round((stats.TotalMinutesLearned / 60) * 10) / 10,
-          CompletionRate: stats.TotalCourses > 0 
-            ? Math.round(((stats.TotalCourses - stats.ActiveCourses) / stats.TotalCourses) * 100)
-            : 0,
-        };
-      }
+      // Tính tỷ lệ hoàn thành dựa trên số khóa học đã hoàn thành / tổng số khóa học
+      // Giả định: khóa học hoàn thành khi không còn Active
+      const completedCourses = stats.TotalCourses - stats.ActiveCourses;
       
-      return null;
-    } catch (error) {
-      console.error("Database error in getOverallStatistics:", error);
-      throw error;
+      // Tính attendance rate
+      const attendanceRate = stats.TotalSessions > 0 
+        ? Math.round((stats.TotalAttendances / stats.TotalSessions) * 100)
+        : 0;
+      
+      return {
+        ...stats,
+        TotalHoursLearned: Math.round((stats.TotalMinutesLearned / 60) * 10) / 10,
+        CompletedCourses: completedCourses,
+        CompletionRate: stats.TotalCourses > 0 
+          ? Math.round((completedCourses / stats.TotalCourses) * 100)
+          : 0,
+        AttendanceRate: attendanceRate,
+      };
     }
+    
+    return null;
+  } catch (error) {
+    console.error("Database error in getOverallStatistics:", error);
+    throw error;
   }
+}
 }
 
 module.exports = new ProgressRepository();

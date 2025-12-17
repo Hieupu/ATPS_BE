@@ -295,7 +295,15 @@ async function notifyRefundApproved(refundId) {
     const payment = await paymentRepository.findByEnrollmentId(
       refund.EnrollmentID
     );
-    const refundAmount = payment && payment.length > 0 ? payment[0].Amount : 0;
+    const paymentAmount = payment && payment.length > 0 ? payment[0].Amount : 0;
+
+    // Tính toán số tiền hoàn trực tiếp (không lưu vào database)
+    const refundService = require("../services/refundService");
+    const refundCalculation = await refundService.calculateRefundAmount(refund.EnrollmentID);
+
+    const refundAmount = refundCalculation.refundAmount || 0;
+    const refundReason = refundCalculation.refundReason || "Không có thông tin";
+    const refundPercentage = refundCalculation.refundPercentage || 0;
 
     const completedDate = new Date().toLocaleDateString("vi-VN");
 
@@ -306,6 +314,12 @@ async function notifyRefundApproved(refundId) {
         style: "currency",
         currency: "VND",
       }).format(refundAmount),
+      paymentAmount: new Intl.NumberFormat("vi-VN", {
+        style: "currency",
+        currency: "VND",
+      }).format(paymentAmount),
+      refundPercentage: `${refundPercentage}%`,
+      refundReason: refundReason,
       className: className,
       completedDate: completedDate,
     });

@@ -37,6 +37,9 @@ class ProfileService {
     } else if (role === "learner") {
       const learner = await profileRepository.findLearnerByAccountId(accountId);
       profileData = { ...profileData, ...learner };
+    } else if (role === "admin") {
+      const admin = await profileRepository.findAdminByAccountId(accountId);
+      profileData = { ...profileData, ...admin };
     } else if (role === "parent") {
       const parent = await profileRepository.findParentByAccountId(accountId);
       profileData = { ...profileData, ...parent };
@@ -53,7 +56,8 @@ class ProfileService {
 
     const learner = await profileRepository.findLearnerByAccountId(accountId);
     if (learner) return "learner";
-
+    const admin = await profileRepository.findAdminByAccountId(accountId);
+    if (admin) return "admin";
     const parent = await profileRepository.findParentByAccountId(accountId);
     if (parent) return "parent";
 

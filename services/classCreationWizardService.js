@@ -138,7 +138,7 @@ async function createClassWizard(params) {
 
       const sessionData = {
         Title: `Session for class ${className}`,
-        Description: `Buổi học thứ ${sessionNumber}`,
+
         ClassID: ClassID,
         InstructorID: InstructorID,
         TimeslotID: timeslot.TimeslotID,
@@ -313,29 +313,884 @@ async function delayClassStart(classId) {
 }
 
 /**
+ * Helper: Cập nhật sessions (UPDATE trực tiếp)
+ * @param {Array} sessionsToUpdate - [{SessionID, Date, TimeslotID, ...}]
+ * @returns {Object} { updated: [...], errors: [...] }
+ */
+/**
+ * UPDATE sessions trực tiếp thay vì xóa rồi tạo lại
+ * @param {Array} sessionsToUpdate - Array of session objects với SessionID, Date, TimeslotID, ...
+ * @returns {Object} { updated: [], errors: [] }
+ */
+async function updateSessions(sessionsToUpdate) {
+  if (!Array.isArray(sessionsToUpdate) || sessionsToUpdate.length === 0) {
+    return { updated: [], errors: [] };
+  }
+
+  const updated = [];
+  const errors = [];
+
+  console.log(
+    `[updateSessions] Bắt đầu update ${sessionsToUpdate.length} sessions`
+  );
+
+  for (const session of sessionsToUpdate) {
+    try {
+      // 1. Validate SessionID
+      if (!session.SessionID) {
+        errors.push({
+          session,
+          error: "SessionID là bắt buộc để update",
+        });
+        continue;
+      }
+
+      const sessionId = Number(session.SessionID);
+      if (isNaN(sessionId) || sessionId <= 0) {
+        errors.push({
+          session,
+          error: `SessionID không hợp lệ: ${session.SessionID}`,
+        });
+        continue;
+      }
+
+      // 2. Lấy session hiện tại từ DB để có đầy đủ thông tin
+      const existingSessions = await sessionRepository.findById(sessionId);
+      if (!existingSessions || existingSessions.length === 0) {
+        errors.push({
+          session,
+          error: `Không tìm thấy session với SessionID: ${sessionId}`,
+        });
+        continue;
+      }
+
+      const existingSession = existingSessions[0];
+      const currentInstructorID =
+        session.InstructorID || existingSession.InstructorID;
+      const currentClassID = session.ClassID || existingSession.ClassID;
+      const currentZoomUUID = existingSession.ZoomUUID;
+
+      // 3. Validate Date và TimeslotID
+      if (!session.Date || !session.TimeslotID) {
+        errors.push({
+          session,
+          error: "Date và TimeslotID là bắt buộc",
+        });
+        continue;
+      }
+
+      // Validate Date format (YYYY-MM-DD)
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(session.Date)) {
+        errors.push({
+          session,
+          error: `Date format không hợp lệ: ${session.Date} (phải là YYYY-MM-DD)`,
+        });
+        continue;
+      }
+
+      // Validate TimeslotID
+      const timeslotId = Number(session.TimeslotID);
+      if (isNaN(timeslotId) || timeslotId <= 0) {
+        errors.push({
+          session,
+          error: `TimeslotID không hợp lệ: ${session.TimeslotID}`,
+        });
+        continue;
+      }
+
+      // 4. Kiểm tra xem có thay đổi Date hoặc TimeslotID không
+      const hasDateChange = existingSession.Date !== session.Date;
+      const hasTimeslotChange =
+        Number(existingSession.TimeslotID) !== timeslotId;
+      const hasInstructorChange =
+        session.InstructorID &&
+        Number(existingSession.InstructorID) !== Number(session.InstructorID);
+
+      if (!hasDateChange && !hasTimeslotChange && !hasInstructorChange) {
+        // Không có thay đổi gì, chỉ update Title/Description nếu có
+        if (session.Title !== undefined || session.Description !== undefined) {
+          const updateData = {};
+          if (session.Title !== undefined) updateData.Title = session.Title;
+          if (session.Description !== undefined)
+            updateData.Description = session.Description;
+
+          if (Object.keys(updateData).length > 0) {
+            await sessionRepository.update(sessionId, updateData);
+            updated.push({
+              SessionID: sessionId,
+              Date: existingSession.Date,
+              TimeslotID: existingSession.TimeslotID,
+              note: "Chỉ cập nhật Title/Description",
+            });
+          }
+        }
+        continue;
+      }
+
+      // 5. Check conflict với lịch giảng viên trước khi update
+      // Exclude session hiện tại (không chỉ exclude class) để tránh conflict với chính nó
+      const conflictCheck = await sessionService.checkSessionConflictInfo({
+        InstructorID: currentInstructorID,
+        Date: session.Date,
+        TimeslotID: timeslotId,
+        excludeSessionId: sessionId, // Exclude session hiện tại
+        excludeClassId: currentClassID, // Exclude current class
+      });
+
+      if (conflictCheck.hasConflict) {
+        errors.push({
+          session,
+          error: "Conflict với lịch giảng viên",
+          conflictInfo: conflictCheck,
+          details: {
+            InstructorID: currentInstructorID,
+            Date: session.Date,
+            TimeslotID: timeslotId,
+            conflictType: conflictCheck.conflictType,
+          },
+        });
+        continue;
+      }
+
+      // 6. Prepare update data
+      const updateData = {
+        Date: session.Date,
+        TimeslotID: timeslotId,
+      };
+
+      // Optional fields
+      if (session.Title !== undefined) updateData.Title = session.Title;
+      if (session.Description !== undefined)
+        updateData.Description = session.Description;
+      if (session.InstructorID !== undefined)
+        updateData.InstructorID = Number(session.InstructorID);
+
+      // 7. Update session trong DB
+      await sessionRepository.update(sessionId, updateData);
+
+      console.log(`[updateSessions] ✅ Updated session ${sessionId}:`, {
+        oldDate: existingSession.Date,
+        newDate: session.Date,
+        oldTimeslotID: existingSession.TimeslotID,
+        newTimeslotID: timeslotId,
+        hasInstructorChange,
+      });
+
+      // 8. TODO: Update Zoom occurrence nếu Date/TimeslotID thay đổi
+      // Nếu có ZoomUUID và Date/TimeslotID thay đổi, cần update Zoom occurrence
+      if (currentZoomUUID && (hasDateChange || hasTimeslotChange)) {
+        // TODO: Implement Zoom occurrence update
+        // const zoomService = require('./zoomService');
+        // await zoomService.updateZoomOccurrence({
+        //   zoomUUID: currentZoomUUID,
+        //   newDate: session.Date,
+        //   newTimeslotID: timeslotId,
+        //   oldDate: existingSession.Date,
+        //   oldTimeslotID: existingSession.TimeslotID,
+        // });
+        console.log(
+          `[updateSessions] ⚠️ TODO: Update Zoom occurrence cho session ${sessionId} (ZoomUUID: ${currentZoomUUID})`
+        );
+      }
+
+      updated.push({
+        SessionID: sessionId,
+        Date: session.Date,
+        TimeslotID: timeslotId,
+        InstructorID: currentInstructorID,
+        ClassID: currentClassID,
+        changes: {
+          dateChanged: hasDateChange,
+          timeslotChanged: hasTimeslotChange,
+          instructorChanged: hasInstructorChange,
+        },
+      });
+    } catch (error) {
+      console.error(
+        `[updateSessions] ❌ Error updating session ${session.SessionID}:`,
+        error
+      );
+      errors.push({
+        session,
+        error: error.message || "Lỗi khi update session",
+        stack: error.stack,
+      });
+    }
+  }
+
+  console.log(
+    `[updateSessions] Kết thúc: ${updated.length} updated, ${errors.length} errors`
+  );
+
+  return { updated, errors };
+}
+
+/**
+ * Helper: Tạo sessions mới (CREATE)
+ * @param {Array} sessionsToCreate - [{Date, TimeslotID, InstructorID, ClassID, ...}]
+ * @returns {Object} { created: [...], errors: [...] }
+ */
+/**
+ * CREATE sessions mới khi cần
+ * @param {Array} sessionsToCreate - Array of session objects với Date, TimeslotID, InstructorID, ClassID, ...
+ * @returns {Object} { created: [], errors: [] }
+ */
+async function createSessions(sessionsToCreate) {
+  if (!Array.isArray(sessionsToCreate) || sessionsToCreate.length === 0) {
+    return { created: [], errors: [] };
+  }
+
+  const created = [];
+  const errors = [];
+
+  console.log(
+    `[createSessions] Bắt đầu create ${sessionsToCreate.length} sessions`
+  );
+
+  for (const session of sessionsToCreate) {
+    try {
+      // 1. Validate required fields
+      if (
+        !session.Date ||
+        !session.TimeslotID ||
+        !session.InstructorID ||
+        !session.ClassID
+      ) {
+        errors.push({
+          session,
+          error: "Date, TimeslotID, InstructorID, ClassID là bắt buộc",
+        });
+        continue;
+      }
+
+      // 2. Validate Date format (YYYY-MM-DD)
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(session.Date)) {
+        errors.push({
+          session,
+          error: `Date format không hợp lệ: ${session.Date} (phải là YYYY-MM-DD)`,
+        });
+        continue;
+      }
+
+      // 3. Validate TimeslotID
+      const timeslotId = Number(session.TimeslotID);
+      if (isNaN(timeslotId) || timeslotId <= 0) {
+        errors.push({
+          session,
+          error: `TimeslotID không hợp lệ: ${session.TimeslotID}`,
+        });
+        continue;
+      }
+
+      // 4. Validate InstructorID và ClassID
+      const instructorId = Number(session.InstructorID);
+      const classId = Number(session.ClassID);
+      if (isNaN(instructorId) || instructorId <= 0) {
+        errors.push({
+          session,
+          error: `InstructorID không hợp lệ: ${session.InstructorID}`,
+        });
+        continue;
+      }
+      if (isNaN(classId) || classId <= 0) {
+        errors.push({
+          session,
+          error: `ClassID không hợp lệ: ${session.ClassID}`,
+        });
+        continue;
+      }
+
+      // 5. Prepare session data
+      const sessionData = {
+        Title: session.Title || `Session for class ${classId}`,
+        Description: session.Description || "",
+        InstructorID: instructorId,
+        ClassID: classId,
+        TimeslotID: timeslotId,
+        Date: session.Date,
+        ZoomUUID: session.ZoomUUID || null,
+      };
+
+      // 6. Create session (sử dụng sessionService để có validation và Zoom handling)
+      // sessionService.createSession sẽ tự động:
+      // - Validate class tồn tại
+      // - Validate timeslot tồn tại
+      // - Validate Date-Day consistency
+      // - Check instructor leave
+      // - Check conflict với lịch giảng viên
+      // - Tạo Zoom occurrence nếu class có ZoomID
+      // - Sync class dates
+      // - Mark instructor slot as booked
+      const createResult = await sessionService.createSession(sessionData);
+
+      if (createResult.conflict) {
+        // Nếu có conflict (không nên xảy ra vì đã check ở trên, nhưng để an toàn)
+        errors.push({
+          session,
+          error:
+            createResult.conflict.conflictInfo?.message ||
+            "Conflict khi tạo session",
+          conflictType: createResult.conflict.conflictType,
+          conflictInfo: createResult.conflict.conflictInfo,
+        });
+        continue;
+      }
+
+      if (!createResult.success) {
+        errors.push({
+          session,
+          error: "Không thể tạo session (không có lỗi cụ thể)",
+        });
+        continue;
+      }
+
+      const newSession = createResult.success;
+      const newSessionId = newSession.insertId || newSession.SessionID;
+
+      console.log(`[createSessions] ✅ Created session ${newSessionId}:`, {
+        Date: session.Date,
+        TimeslotID: timeslotId,
+        InstructorID: instructorId,
+        ClassID: classId,
+        ZoomUUID: newSession.ZoomUUID || session.ZoomUUID || null,
+      });
+
+      created.push({
+        SessionID: newSessionId,
+        Date: session.Date,
+        TimeslotID: timeslotId,
+        InstructorID: instructorId,
+        ClassID: classId,
+        Title: sessionData.Title,
+        Description: sessionData.Description,
+        ZoomUUID: newSession.ZoomUUID || session.ZoomUUID || null,
+      });
+    } catch (error) {
+      console.error(`[createSessions] ❌ Error creating session:`, error);
+      errors.push({
+        session,
+        error: error.message || "Lỗi khi create session",
+        stack: error.stack,
+      });
+    }
+  }
+
+  console.log(
+    `[createSessions] Kết thúc: ${created.length} created, ${errors.length} errors`
+  );
+
+  return { created, errors };
+}
+
+/**
+ * Helper: Xóa sessions (DELETE)
+ * @param {Array<number>} sessionIds - [SessionID1, SessionID2, ...]
+ * @returns {Object} { deleted: [...], errors: [...] }
+ */
+async function deleteSessions(sessionIds) {
+  if (!Array.isArray(sessionIds) || sessionIds.length === 0) {
+    return { deleted: [], errors: [] };
+  }
+
+  const deleted = [];
+  const errors = [];
+  const classIdsToSync = new Set(); // Để sync class dates sau khi xóa
+
+  console.log(`[deleteSessions] Bắt đầu delete ${sessionIds.length} sessions`);
+
+  // 1. Validate sessionIds
+  const validIds = sessionIds
+    .map((id) => Number(id))
+    .filter((id) => !isNaN(id) && id > 0);
+
+  if (validIds.length === 0) {
+    return {
+      deleted: [],
+      errors: [{ error: "Không có SessionID hợp lệ" }],
+    };
+  }
+
+  // 2. Lấy thông tin sessions trước khi xóa
+  const sessionsToDelete = [];
+  for (const sessionId of validIds) {
+    try {
+      const sessionData = await sessionRepository.findById(sessionId);
+      if (!sessionData || sessionData.length === 0) {
+        errors.push({
+          sessionId,
+          error: `Không tìm thấy session với SessionID: ${sessionId}`,
+        });
+        continue;
+      }
+
+      const session = sessionData[0];
+      sessionsToDelete.push({
+        SessionID: sessionId,
+        InstructorID: session.InstructorID,
+        TimeslotID: session.TimeslotID,
+        Date: session.Date,
+        ClassID: session.ClassID,
+        ZoomUUID: session.ZoomUUID,
+      });
+
+      // Thu thập ClassIDs để sync sau
+      if (session.ClassID) {
+        classIdsToSync.add(Number(session.ClassID));
+      }
+    } catch (error) {
+      console.error(
+        `[deleteSessions] ❌ Error getting session ${sessionId}:`,
+        error
+      );
+      errors.push({
+        sessionId,
+        error: `Lỗi khi lấy thông tin session: ${error.message}`,
+      });
+    }
+  }
+
+  if (sessionsToDelete.length === 0) {
+    console.log(
+      `[deleteSessions] Không có session nào để xóa sau khi validate`
+    );
+    return { deleted, errors };
+  }
+
+  // 3. Xóa Zoom occurrences trước (nếu có)
+  const zoomService = require("./zoomService");
+  for (const session of sessionsToDelete) {
+    if (session.ZoomUUID) {
+      try {
+        // TODO: Implement Zoom occurrence deletion
+        // await zoomService.deleteZoomOccurrence({
+        //   zoomUUID: session.ZoomUUID,
+        //   sessionId: session.SessionID,
+        // });
+        console.log(
+          `[deleteSessions] ⚠️ TODO: Delete Zoom occurrence cho session ${session.SessionID} (ZoomUUID: ${session.ZoomUUID})`
+        );
+      } catch (zoomError) {
+        console.error(
+          `[deleteSessions] ❌ Error deleting Zoom occurrence cho session ${session.SessionID}:`,
+          zoomError
+        );
+        // Không throw để không làm gián đoạn flow xóa session
+      }
+    }
+  }
+
+  // 4. Giải phóng instructor slots (markSlotAsAvailable)
+  const instructorAvailabilityService = require("./instructorAvailabilityService");
+  for (const session of sessionsToDelete) {
+    if (session.InstructorID && session.TimeslotID && session.Date) {
+      try {
+        await instructorAvailabilityService.markSlotAsAvailable(
+          session.InstructorID,
+          session.TimeslotID,
+          session.Date
+        );
+        console.log(
+          `[deleteSessions] ✅ Released instructor slot: InstructorID=${session.InstructorID}, TimeslotID=${session.TimeslotID}, Date=${session.Date}`
+        );
+      } catch (releaseError) {
+        console.error(
+          `[deleteSessions] ❌ Error releasing instructor slot cho session ${session.SessionID}:`,
+          releaseError
+        );
+        // Không throw để không làm gián đoạn flow xóa session
+      }
+    }
+  }
+
+  // 5. Xóa sessions trong DB
+  try {
+    const sessionIdsToDelete = sessionsToDelete.map((s) => s.SessionID);
+    const result = await sessionRepository.deleteMany(sessionIdsToDelete);
+
+    console.log(
+      `[deleteSessions] ✅ Deleted ${
+        result.affectedRows || sessionIdsToDelete.length
+      } sessions từ DB`
+    );
+
+    // 6. Sync class dates sau khi xóa
+    for (const classId of classIdsToSync) {
+      try {
+        await sessionService.syncClassDates(classId);
+        console.log(
+          `[deleteSessions] ✅ Synced class dates cho ClassID: ${classId}`
+        );
+      } catch (syncError) {
+        console.error(
+          `[deleteSessions] ❌ Error syncing class dates cho ClassID ${classId}:`,
+          syncError
+        );
+        // Không throw để không làm gián đoạn flow
+      }
+    }
+
+    // 7. Return kết quả
+    deleted.push(
+      ...sessionsToDelete.map((s) => ({
+        SessionID: s.SessionID,
+        ClassID: s.ClassID,
+        Date: s.Date,
+        TimeslotID: s.TimeslotID,
+        InstructorID: s.InstructorID,
+      }))
+    );
+  } catch (error) {
+    console.error(`[deleteSessions] ❌ Error deleting sessions:`, error);
+    errors.push({
+      error: error.message || "Lỗi khi delete sessions",
+      stack: error.stack,
+    });
+  }
+
+  console.log(
+    `[deleteSessions] Kết thúc: ${deleted.length} deleted, ${errors.length} errors`
+  );
+
+  return { deleted, errors };
+}
+
+/**
+ * Helper: Reschedule sessions (Xóa cũ + Tạo mới)
+ * @param {Array} sessionsToReschedule - [{originalSessionID, Date, TimeslotID, ...}]
+ * @returns {Object} { rescheduled: [...], errors: [...] }
+ */
+/**
+ * RESCHEDULE sessions (Xóa session cũ + Tạo session mới)
+ * @param {Array} sessionsToReschedule - Array of session objects với originalSessionID, Date, TimeslotID, ...
+ * @returns {Object} { rescheduled: [], errors: [] }
+ */
+async function rescheduleSessions(sessionsToReschedule) {
+  if (
+    !Array.isArray(sessionsToReschedule) ||
+    sessionsToReschedule.length === 0
+  ) {
+    return { rescheduled: [], errors: [] };
+  }
+
+  const rescheduled = [];
+  const errors = [];
+
+  console.log(
+    `[rescheduleSessions] Bắt đầu reschedule ${sessionsToReschedule.length} sessions`
+  );
+
+  for (const session of sessionsToReschedule) {
+    try {
+      // 1. Validate originalSessionID
+      if (!session.originalSessionID) {
+        errors.push({
+          session,
+          error: "originalSessionID là bắt buộc để reschedule",
+        });
+        continue;
+      }
+
+      const originalSessionId = Number(session.originalSessionID);
+      if (isNaN(originalSessionId) || originalSessionId <= 0) {
+        errors.push({
+          session,
+          error: `originalSessionID không hợp lệ: ${session.originalSessionID}`,
+        });
+        continue;
+      }
+
+      // 2. Validate required fields cho session mới
+      if (
+        !session.Date ||
+        !session.TimeslotID ||
+        !session.InstructorID ||
+        !session.ClassID
+      ) {
+        errors.push({
+          session,
+          error:
+            "Date, TimeslotID, InstructorID, ClassID là bắt buộc cho session mới",
+        });
+        continue;
+      }
+
+      // 3. Validate Date format (YYYY-MM-DD)
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(session.Date)) {
+        errors.push({
+          session,
+          error: `Date format không hợp lệ: ${session.Date} (phải là YYYY-MM-DD)`,
+        });
+        continue;
+      }
+
+      // 4. Validate TimeslotID, InstructorID, ClassID
+      const timeslotId = Number(session.TimeslotID);
+      const instructorId = Number(session.InstructorID);
+      const classId = Number(session.ClassID);
+
+      if (isNaN(timeslotId) || timeslotId <= 0) {
+        errors.push({
+          session,
+          error: `TimeslotID không hợp lệ: ${session.TimeslotID}`,
+        });
+        continue;
+      }
+      if (isNaN(instructorId) || instructorId <= 0) {
+        errors.push({
+          session,
+          error: `InstructorID không hợp lệ: ${session.InstructorID}`,
+        });
+        continue;
+      }
+      if (isNaN(classId) || classId <= 0) {
+        errors.push({
+          session,
+          error: `ClassID không hợp lệ: ${session.ClassID}`,
+        });
+        continue;
+      }
+
+      // 5. Lấy thông tin session cũ trước khi xóa
+      const oldSessionData = await sessionRepository.findById(
+        originalSessionId
+      );
+      if (!oldSessionData || oldSessionData.length === 0) {
+        errors.push({
+          session,
+          error: `Không tìm thấy session cũ với SessionID: ${originalSessionId}`,
+        });
+        continue;
+      }
+
+      const oldSession = oldSessionData[0];
+      const oldZoomUUID = oldSession.ZoomUUID;
+
+      // 6. Check conflict với lịch giảng viên trước khi reschedule
+      // Exclude session cũ để tránh conflict với chính nó
+      const conflictCheck = await sessionService.checkSessionConflictInfo({
+        InstructorID: instructorId,
+        Date: session.Date,
+        TimeslotID: timeslotId,
+        excludeSessionId: originalSessionId, // Exclude session cũ
+        excludeClassId: classId, // Exclude current class
+      });
+
+      if (conflictCheck.hasConflict) {
+        errors.push({
+          session,
+          error: "Conflict với lịch giảng viên",
+          conflictType: conflictCheck.conflictType,
+          conflictInfo: conflictCheck.conflictInfo,
+        });
+        continue;
+      }
+
+      // 7. Xóa session cũ (sử dụng sessionService để có đầy đủ logic)
+      // sessionService.deleteSession sẽ tự động:
+      // - Release instructor slot
+      // - Sync class dates
+      await sessionService.deleteSession(originalSessionId);
+
+      console.log(
+        `[rescheduleSessions] ✅ Deleted old session ${originalSessionId}`
+      );
+
+      // 8. Tạo session mới (sử dụng sessionService để có validation và Zoom handling)
+      const sessionData = {
+        Title:
+          session.Title || oldSession.Title || `Session for class ${classId}`,
+        Description: session.Description || oldSession.Description || "",
+        InstructorID: instructorId,
+        ClassID: classId,
+        TimeslotID: timeslotId,
+        Date: session.Date,
+        ZoomUUID: session.ZoomUUID || null, // ZoomUUID sẽ được tạo tự động nếu class có ZoomID
+      };
+
+      const createResult = await sessionService.createSession(sessionData);
+
+      if (createResult.conflict) {
+        // Nếu có conflict khi tạo session mới (không nên xảy ra vì đã check ở trên)
+        errors.push({
+          session,
+          error:
+            createResult.conflict.conflictInfo?.message ||
+            "Conflict khi tạo session mới",
+          conflictType: createResult.conflict.conflictType,
+          conflictInfo: createResult.conflict.conflictInfo,
+        });
+        // Session cũ đã bị xóa, cần rollback hoặc thông báo lỗi nghiêm trọng
+        console.error(
+          `[rescheduleSessions] ❌ CRITICAL: Session cũ đã bị xóa nhưng không thể tạo session mới! originalSessionID: ${originalSessionId}`
+        );
+        continue;
+      }
+
+      if (!createResult.success) {
+        errors.push({
+          session,
+          error: "Không thể tạo session mới (không có lỗi cụ thể)",
+        });
+        // Session cũ đã bị xóa, cần rollback hoặc thông báo lỗi nghiêm trọng
+        console.error(
+          `[rescheduleSessions] ❌ CRITICAL: Session cũ đã bị xóa nhưng không thể tạo session mới! originalSessionID: ${originalSessionId}`
+        );
+        continue;
+      }
+
+      const newSession = createResult.success;
+      const newSessionId = newSession.insertId || newSession.SessionID;
+
+      // 9. TODO: Update Zoom occurrence nếu có ZoomUUID cũ
+      // Nếu session cũ có ZoomUUID và session mới cũng có ZoomUUID (từ class ZoomID),
+      // cần update Zoom occurrence thay vì xóa rồi tạo mới
+      if (oldZoomUUID && newSession.ZoomUUID) {
+        // TODO: Implement Zoom occurrence update
+        // const zoomService = require('./zoomService');
+        // await zoomService.updateZoomOccurrence({
+        //   oldZoomUUID: oldZoomUUID,
+        //   newZoomUUID: newSession.ZoomUUID,
+        //   oldDate: oldSession.Date,
+        //   newDate: session.Date,
+        //   oldTimeslotID: oldSession.TimeslotID,
+        //   newTimeslotID: timeslotId,
+        // });
+        console.log(
+          `[rescheduleSessions] ⚠️ TODO: Update Zoom occurrence: oldZoomUUID=${oldZoomUUID}, newZoomUUID=${newSession.ZoomUUID}`
+        );
+      } else if (oldZoomUUID && !newSession.ZoomUUID) {
+        // Session cũ có ZoomUUID nhưng session mới không có (class không có ZoomID)
+        // TODO: Delete Zoom occurrence cũ
+        console.log(
+          `[rescheduleSessions] ⚠️ TODO: Delete Zoom occurrence cũ: oldZoomUUID=${oldZoomUUID}`
+        );
+      }
+
+      console.log(`[rescheduleSessions] ✅ Rescheduled session:`, {
+        originalSessionID: originalSessionId,
+        newSessionID: newSessionId,
+        oldDate: oldSession.Date,
+        newDate: session.Date,
+        oldTimeslotID: oldSession.TimeslotID,
+        newTimeslotID: timeslotId,
+        oldZoomUUID: oldZoomUUID,
+        newZoomUUID: newSession.ZoomUUID || null,
+      });
+
+      rescheduled.push({
+        originalSessionID: originalSessionId,
+        newSessionID: newSessionId,
+        Date: session.Date,
+        TimeslotID: timeslotId,
+        InstructorID: instructorId,
+        ClassID: classId,
+        Title: sessionData.Title,
+        Description: sessionData.Description,
+        oldDate: oldSession.Date,
+        oldTimeslotID: oldSession.TimeslotID,
+        oldZoomUUID: oldZoomUUID,
+        newZoomUUID: newSession.ZoomUUID || null,
+      });
+    } catch (error) {
+      console.error(
+        `[rescheduleSessions] ❌ Error rescheduling session:`,
+        error
+      );
+      errors.push({
+        session,
+        error: error.message || "Lỗi khi reschedule session",
+        stack: error.stack,
+      });
+    }
+  }
+
+  console.log(
+    `[rescheduleSessions] Kết thúc: ${rescheduled.length} rescheduled, ${errors.length} errors`
+  );
+
+  return { rescheduled, errors };
+}
+
+/**
  * Cập nhật lại schedule của lớp khi admin chỉnh sửa (Edit Class Wizard)
- * - Nhận danh sách sessions mới từ FE (đã đảm bảo không trùng, đủ Numofsession, v.v.)
- * - Xóa các sessions cũ thuộc lớp trong khoảng ngày bị thay đổi (nếu cần)
- * - Tự động giải phóng các slot OTHER -> AVAILABLE thông qua sessionService.deleteSession()
- * - Tạo lại các sessions mới bằng sessionService.createBulkSessions()
- * - Trả về chi tiết conflicts (nếu có) để FE hiển thị message kiểu:
- *   "Ca {Thứ, StartTime-EndTime, Ngày} đã có lịch, vui lòng chọn ca khác"
+ *
+ * Format mới (optimized) - Chỉ hỗ trợ format này:
+ * - sessions phải là Object với các trường: update, create, delete, reschedule
+ * - Mỗi trường là array các session objects hoặc session IDs
+ * - Operations được thực hiện theo thứ tự: UPDATE → CREATE → DELETE → RESCHEDULE
  *
  * @param {Object} params
- * @param {number} params.ClassID
- * @param {Array} params.sessions - danh sách sessions mới [{Date, TimeslotID, InstructorID, Title, Description}]
- * @param {string} [params.startDate] - (optional) ngày bắt đầu vùng cần cập nhật
- * @param {string} [params.endDate] - (optional) ngày kết thúc vùng cần cập nhật
+ * @param {number} params.ClassID - ID của lớp học
+ * @param {Object} params.sessions - Object chứa các operations:
+ *   - update: Array sessions cần UPDATE [{SessionID, Date, TimeslotID, Title?, Description?, InstructorID?}]
+ *     * SessionID: Bắt buộc, ID của session cần update
+ *     * Date: Bắt buộc, ngày mới (format: YYYY-MM-DD)
+ *     * TimeslotID: Bắt buộc, ID của timeslot mới
+ *   - create: Array sessions cần CREATE [{Date, TimeslotID, InstructorID, ClassID, Title?, Description?}]
+ *     * Date, TimeslotID, InstructorID, ClassID: Bắt buộc
+ *   - delete: Array SessionIDs cần DELETE [SessionID1, SessionID2, ...]
+ *     * Chỉ cần gửi SessionID (number)
+ *   - reschedule: Array sessions cần RESCHEDULE [{originalSessionID, Date, TimeslotID, InstructorID, ClassID, ...}]
+ *     * originalSessionID: Bắt buộc, ID của session cũ cần xóa
+ *     * Date, TimeslotID, InstructorID, ClassID: Bắt buộc cho session mới
+ * @param {string} [params.OpendatePlan] - (optional) Ngày bắt đầu kế hoạch mới (format: YYYY-MM-DD)
+ * @param {string} [params.EnddatePlan] - (optional) Ngày kết thúc kế hoạch mới (format: YYYY-MM-DD)
+ * @param {number} [params.Numofsession] - (optional) Số buổi học mới
+ * @param {number} [params.InstructorID] - (optional) ID giảng viên mới (sẽ update tất cả sessions nếu có)
+ * @returns {Object} { success: boolean, summary: {...}, details: {...}, conflicts: [...] }
+ *
+ * @example
+ * await updateClassSchedule({
+ *   ClassID: 157,
+ *   sessions: {
+ *     update: [{ SessionID: 123, Date: "2026-01-15", TimeslotID: 26 }],
+ *     create: [{ Date: "2026-01-20", TimeslotID: 26, InstructorID: 16, ClassID: 157 }],
+ *     delete: [124, 125],
+ *     reschedule: [{ originalSessionID: 126, Date: "2026-01-25", TimeslotID: 26, InstructorID: 16, ClassID: 157 }]
+ *   },
+ *   OpendatePlan: "2026-01-01",
+ *   Numofsession: 12
+ * });
  */
 async function updateClassSchedule(params) {
-  const { ClassID, sessions, startDate, endDate, scheduleDetail } = params;
+  const {
+    ClassID,
+    sessions,
+    scheduleDetail,
+    // Metadata changes
+    OpendatePlan,
+    EnddatePlan,
+    Numofsession,
+    InstructorID,
+  } = params;
 
   if (!ClassID) {
     throw new ServiceError("Thiếu ClassID khi cập nhật lịch", 400);
   }
 
-  if (!Array.isArray(sessions) || sessions.length === 0) {
-    throw new ServiceError("Danh sách buổi học mới không được rỗng", 400);
+  // Validate payload format mới: sessions phải là object với update/create/delete/reschedule
+  if (!sessions || typeof sessions !== "object" || Array.isArray(sessions)) {
+    throw new ServiceError(
+      "Payload không hợp lệ: sessions phải là object với các trường update, create, delete, hoặc reschedule",
+      400
+    );
+  }
+
+  // Validate: Phải có ít nhất một trong các trường update/create/delete/reschedule
+  const hasAnySessions =
+    (Array.isArray(sessions.update) && sessions.update.length > 0) ||
+    (Array.isArray(sessions.create) && sessions.create.length > 0) ||
+    (Array.isArray(sessions.delete) && sessions.delete.length > 0) ||
+    (Array.isArray(sessions.reschedule) && sessions.reschedule.length > 0);
+
+  if (!hasAnySessions) {
+    throw new ServiceError(
+      "Danh sách buổi học mới không được rỗng (phải có ít nhất một trong: update, create, delete, reschedule)",
+      400
+    );
   }
 
   // Lấy thông tin lớp để dùng Name khi cần
@@ -344,214 +1199,127 @@ async function updateClassSchedule(params) {
     throw new ServiceError("Lớp học không tồn tại", 404);
   }
 
-  // Logic mới: Validate single timeslot pattern cho lớp DRAFT
+  // 1. Cập nhật metadata nếu có (OpendatePlan, Numofsession, InstructorID)
+  // Lưu ý: Không gọi classService.updateClass() vì nó không cho phép cập nhật schedule fields
+  // Thay vào đó, cập nhật trực tiếp qua repository
+  if (OpendatePlan || EnddatePlan || Numofsession || InstructorID) {
+    const metadataUpdate = {};
+    if (OpendatePlan) metadataUpdate.OpendatePlan = OpendatePlan;
+    if (EnddatePlan) metadataUpdate.EnddatePlan = EnddatePlan;
+    if (Numofsession) metadataUpdate.Numofsession = Numofsession;
+    if (InstructorID) metadataUpdate.InstructorID = InstructorID;
+
+    if (Object.keys(metadataUpdate).length > 0) {
+      // Cập nhật trực tiếp qua repository (bypass updateClass validation)
+      await classRepository.update(ClassID, metadataUpdate);
+      console.log(
+        `[updateClassSchedule] Đã cập nhật metadata:`,
+        metadataUpdate
+      );
+    }
+  }
+
+  // 2. Xử lý sessions với format mới
+  return await updateClassScheduleNewFormat({
+    ClassID,
+    sessions,
+    classData,
+    scheduleDetail,
+  });
+}
+
+/**
+ * Xử lý updateClassSchedule với format mới (optimized)
+ * @private
+ */
+async function updateClassScheduleNewFormat(params) {
+  const { ClassID, sessions, classData, scheduleDetail } = params;
+
+  // Validate DRAFT pattern nếu cần
   const classStatus = classData.Status || classData.status || "";
   const isDraftClass = classStatus === "DRAFT" || classStatus === "draft";
-
-  if (isDraftClass) {
-    // Nếu có scheduleDetail, validate từ TimeslotsByDay
-    if (scheduleDetail) {
-      validateSingleTimeslotPattern(scheduleDetail);
-    } else if (sessions && sessions.length > 0) {
-      // Nếu không có scheduleDetail, validate từ sessions array
-      // Logic mới: Các ngày phải có cùng set timeslots (so sánh StartTime-EndTime), ngày cuối được phép có subset
-
-      // Lấy tất cả TimeslotID từ sessions để query timeslot info
-      const allTimeslotIds = [
-        ...new Set(
-          sessions.map((s) => s.TimeslotID).filter((id) => id != null)
-        ),
-      ];
-
-      // Lấy thông tin timeslot từ database
-      const timeslotMap = new Map();
-      for (const timeslotId of allTimeslotIds) {
-        const timeslot = await timeslotRepository.findById(timeslotId);
-        if (timeslot) {
-          timeslotMap.set(timeslotId, timeslot);
-        }
-      }
-
-      // Helper function: Tạo key từ StartTime-EndTime để so sánh
-      // Ưu tiên dùng TimeslotStart/TimeslotEnd từ session nếu có, nếu không thì lấy từ timeslot
-      const getTimeslotKey = (session) => {
-        // Ưu tiên dùng TimeslotStart/TimeslotEnd từ session
-        if (session.TimeslotStart && session.TimeslotEnd) {
-          return `${(session.TimeslotStart || "").trim()}-${(
-            session.TimeslotEnd || ""
-          ).trim()}`;
-        }
-        // Fallback: lấy từ timeslot
-        const timeslot = timeslotMap.get(session.TimeslotID);
-        if (!timeslot) return null;
-        const startTime = (timeslot.StartTime || "").trim();
-        const endTime = (timeslot.EndTime || "").trim();
-        return `${startTime}-${endTime}`;
-      };
-
-      // Nhóm sessions theo Date, lưu timeslot keys (StartTime-EndTime) thay vì TimeslotID
-      const sessionsByDate = {};
-      sessions.forEach((session) => {
-        const date = session.Date;
-        if (!date) return;
-
-        if (!sessionsByDate[date]) {
-          sessionsByDate[date] = [];
-        }
-        const timeslotKey = getTimeslotKey(session);
-        if (timeslotKey) {
-          sessionsByDate[date].push(timeslotKey);
-        }
-      });
-
-      // Sắp xếp các ngày theo thứ tự
-      const sortedDates = Object.keys(sessionsByDate).sort();
-
-      if (sortedDates.length === 0) {
-        throw new ServiceError(
-          "Lớp trạng thái DRAFT nhưng không có buổi hợp lệ",
-          400
-        );
-      }
-
-      // Lấy set timeslot keys chung từ các ngày (trừ ngày cuối)
-      if (sortedDates.length > 1) {
-        const datesToCheck = sortedDates.slice(0, -1); // Tất cả ngày trừ ngày cuối
-
-        // Lấy set timeslot keys từ ngày đầu tiên làm chuẩn
-        const firstDateTimeslots = new Set(sessionsByDate[datesToCheck[0]]);
-
-        // Kiểm tra các ngày còn lại (trừ ngày cuối) có cùng set timeslot keys không
-        for (let i = 1; i < datesToCheck.length; i++) {
-          const date = datesToCheck[i];
-          const dateTimeslots = new Set(sessionsByDate[date]);
-
-          // So sánh 2 sets có giống nhau không (so sánh StartTime-EndTime)
-          if (
-            firstDateTimeslots.size !== dateTimeslots.size ||
-            ![...firstDateTimeslots].every((key) => dateTimeslots.has(key))
-          ) {
-            throw new ServiceError(
-              `Lớp DRAFT: Các ca học trong ngày phải giống nhau. ` +
-                `Ngày ${datesToCheck[0]} có ca [${[...firstDateTimeslots].join(
-                  ", "
-                )}], ` +
-                `ngày ${date} có ca [${[...dateTimeslots].join(", ")}]`,
-              400
-            );
-          }
-        }
-
-        // Kiểm tra ngày cuối: được phép có subset của set chung
-        const lastDate = sortedDates[sortedDates.length - 1];
-        const lastDateTimeslots = new Set(sessionsByDate[lastDate]);
-
-        // Kiểm tra ngày cuối có phải subset của set chung không (so sánh StartTime-EndTime)
-        const isSubset = [...lastDateTimeslots].every((key) =>
-          firstDateTimeslots.has(key)
-        );
-
-        if (!isSubset) {
-          throw new ServiceError(
-            `Lớp DRAFT: Ngày cuối (${lastDate}) có ca [${[
-              ...lastDateTimeslots,
-            ].join(", ")}] không khớp ca chung [${[...firstDateTimeslots].join(
-              ", "
-            )}]`,
-            400
-          );
-        }
-      }
-    }
+  if (isDraftClass && scheduleDetail) {
+    validateSingleTimeslotPattern(scheduleDetail);
   }
 
-  // 1. Lấy toàn bộ sessions hiện tại của lớp
-  const existingSessions = await sessionRepository.findByClassId(ClassID);
+  const results = {
+    updated: [],
+    created: [],
+    deleted: [],
+    rescheduled: [],
+    errors: [],
+  };
 
-  // 2. Xác định vùng thời gian cần cập nhật
-  // Nếu FE truyền startDate/endDate thì dùng luôn, nếu không thì tự tính min/max từ sessions mới
-  let effectiveStart = startDate;
-  let effectiveEnd = endDate;
-
-  if (!effectiveStart || !effectiveEnd) {
-    const dates = sessions
-      .map((s) => s.Date)
-      .filter((d) => !!d)
-      .sort();
-    if (dates.length > 0) {
-      effectiveStart = effectiveStart || dates[0];
-      effectiveEnd = effectiveEnd || dates[dates.length - 1];
-    }
-  }
-
-  // 3. Xác định các sessions cũ cần xóa trong vùng bị thay đổi
-  let sessionsToDelete = existingSessions;
-  if (effectiveStart && effectiveEnd) {
-    sessionsToDelete = existingSessions.filter((s) => {
-      const d = s.Date;
-      return d >= effectiveStart && d <= effectiveEnd;
-    });
-  }
-
-  // 4. Xóa các sessions cũ trong vùng (deleteSession sẽ tự giải phóng slot và syncClassDates)
-  for (const session of sessionsToDelete) {
-    try {
-      await sessionService.deleteSession(session.SessionID);
-    } catch (error) {
-      console.error(
-        `[updateClassSchedule] Lỗi khi xóa session ${session.SessionID}:`,
-        error
-      );
-      // Tiếp tục với các session khác, không throw để không dừng cả batch
-    }
-  }
-
-  // Logic mới: Preserve ZoomUUID từ sessions cũ khi tạo sessions mới
-  // Map ZoomUUID từ existingSessions sang sessions mới dựa trên Date và TimeslotID
-  const zoomUUIDMap = new Map();
-  existingSessions.forEach((oldSession) => {
-    if (oldSession.ZoomUUID) {
-      const key = `${oldSession.Date}-${oldSession.TimeslotID}`;
-      zoomUUIDMap.set(key, oldSession.ZoomUUID);
-    }
-  });
-
-  // 5. Chuẩn bị dữ liệu sessions mới để tạo
-  const preparedSessions = sessions.map((s) => {
-    // Logic mới: Tìm ZoomUUID từ sessions cũ dựa trên Date và TimeslotID
-    const mapKey = `${s.Date}-${s.TimeslotID}`;
-    const preservedZoomUUID = zoomUUIDMap.get(mapKey) || null;
-
-    return {
-      Title:
-        s.Title ||
-        `Session for class ${
-          classData.Name || classData.ClassName || `Class ${ClassID}`
-        }`,
-      Description: s.Description || "",
+  // 1. UPDATE sessions
+  if (Array.isArray(sessions.update) && sessions.update.length > 0) {
+    // Ensure ClassID và InstructorID cho mỗi session
+    const sessionsToUpdate = sessions.update.map((s) => ({
+      ...s,
+      ClassID: s.ClassID || ClassID,
       InstructorID: s.InstructorID || classData.InstructorID,
-      ClassID: ClassID,
-      TimeslotID: s.TimeslotID,
-      Date: s.Date,
-      ZoomUUID: preservedZoomUUID || s.ZoomUUID || null, // Logic mới: Preserve ZoomUUID từ session cũ hoặc từ payload
-    };
-  });
+    }));
 
-  // 6. Tạo lại sessions bằng createBulkSessions (sử dụng checkSessionConflictInfo bên trong)
-  const result = await sessionService.createBulkSessions(preparedSessions);
+    const updateResult = await updateSessions(sessionsToUpdate);
+    results.updated = updateResult.updated;
+    results.errors.push(...updateResult.errors);
+  }
 
-  // Chuẩn hóa output cho FE
+  // 2. CREATE sessions
+  if (Array.isArray(sessions.create) && sessions.create.length > 0) {
+    // Ensure ClassID và InstructorID cho mỗi session
+    const sessionsToCreate = sessions.create.map((s) => ({
+      ...s,
+      ClassID: s.ClassID || ClassID,
+      InstructorID: s.InstructorID || classData.InstructorID,
+    }));
+
+    const createResult = await createSessions(sessionsToCreate);
+    results.created = createResult.created;
+    results.errors.push(...createResult.errors);
+  }
+
+  // 3. DELETE sessions
+  if (Array.isArray(sessions.delete) && sessions.delete.length > 0) {
+    const deleteResult = await deleteSessions(sessions.delete);
+    results.deleted = deleteResult.deleted;
+    results.errors.push(...deleteResult.errors);
+  }
+
+  // 4. RESCHEDULE sessions
+  if (Array.isArray(sessions.reschedule) && sessions.reschedule.length > 0) {
+    // Ensure ClassID và InstructorID cho mỗi session
+    const sessionsToReschedule = sessions.reschedule.map((s) => ({
+      ...s,
+      ClassID: s.ClassID || ClassID,
+      InstructorID: s.InstructorID || classData.InstructorID,
+    }));
+
+    const rescheduleResult = await rescheduleSessions(sessionsToReschedule);
+    results.rescheduled = rescheduleResult.rescheduled;
+    results.errors.push(...rescheduleResult.errors);
+  }
+
+  // Return kết quả
   return {
-    success: result.success || [],
-    conflicts: (result.conflicts || []).map((conflict) => ({
-      type: conflict.conflictType || "instructor",
-      info: conflict.conflictInfo || conflict,
-    })),
-    summary: result.summary || {
-      total: preparedSessions.length,
-      created: (result.success || []).length,
-      conflicts: (result.conflicts || []).length,
+    success: true,
+    summary: {
+      updated: results.updated.length,
+      created: results.created.length,
+      deleted: results.deleted.length,
+      rescheduled: results.rescheduled.length,
+      errors: results.errors.length,
     },
+    details: {
+      updated: results.updated,
+      created: results.created,
+      deleted: results.deleted,
+      rescheduled: results.rescheduled,
+    },
+    conflicts: results.errors.map((err) => ({
+      type: "error",
+      info: err.error || err,
+      session: err.session,
+    })),
   };
 }
 
@@ -782,7 +1550,7 @@ async function findAvailableInstructorSlots(params) {
         let reason = "";
         if (hasLeaveConflict) {
           reason = `GV nghỉ: ${
-            leaveValidation.conflictInfo.status || "Holiday"
+            leaveValidation.conflictInfo.status || "HOLIDAY"
           }`;
         }
         if (hasTeachingConflict) {
@@ -870,6 +1638,144 @@ async function findAvailableInstructorSlots(params) {
   // Không có gì
   console.log(`[findAvailableInstructorSlots] Không tìm thấy slots nào`);
   return [];
+}
+
+/**
+ * Hàm gợi ý ca học cho EDIT schedule
+ * - Gọi findAvailableInstructorSlots để lấy suggestions
+ * - Sau đó check HOLIDAY cho từng slot bằng cách query instructor_leave table
+ * - Chỉ trả về các slot không có HOLIDAY
+ */
+async function findAvailableSlotsForEdit(params) {
+  const {
+    InstructorID,
+    TimeslotID,
+    Day,
+    numSuggestions = 20,
+    startDate,
+    excludeClassId = null,
+    ClassID = null,
+  } = params;
+
+  console.log(
+    `[findAvailableSlotsForEdit] Params:`,
+    JSON.stringify({ InstructorID, TimeslotID, Day, ClassID, excludeClassId })
+  );
+
+  // Nếu có ClassID, query để xem các sessions hiện tại của lớp này
+  if (ClassID) {
+    const connectDB = require("../config/db");
+    const pool = await connectDB();
+    const checkQuery = `
+      SELECT SessionID, Date, TimeslotID, ClassID
+      FROM session
+      WHERE ClassID = ?
+        AND InstructorID = ?
+      ORDER BY Date
+      LIMIT 20
+    `;
+    const [existingSessions] = await pool.execute(checkQuery, [
+      ClassID,
+      InstructorID,
+    ]);
+    console.log(
+      `[findAvailableSlotsForEdit] Existing sessions of class ${ClassID}:`,
+      existingSessions
+    );
+  }
+
+  // Bước 1: Lấy suggestions từ findAvailableInstructorSlots
+  // KHÔNG truyền excludeClassId (truyền null) để vẫn check conflict với các sessions của lớp hiện tại
+  // Nếu truyền excludeClassId, nó sẽ bỏ qua các sessions của lớp đó, không check conflict
+  const allSuggestions = await findAvailableInstructorSlots({
+    InstructorID,
+    TimeslotID,
+    Day,
+    numSuggestions,
+    startDate,
+    excludeClassId: null, // Không bỏ qua lớp hiện tại, vẫn check conflict với TẤT CẢ sessions
+    ClassID,
+  });
+
+  if (allSuggestions.length === 0) {
+    return [];
+  }
+
+  // Bước 2: Lấy danh sách HOLIDAY dates và check conflict với lớp hiện tại
+  const connectDB = require("../config/db");
+  const pool = await connectDB();
+
+  // Tìm min và max date từ suggestions
+  const dates = allSuggestions
+    .map((s) => s.date || s.Date)
+    .filter(Boolean)
+    .sort();
+
+  if (dates.length === 0) {
+    return allSuggestions;
+  }
+
+  const minDate = dates[0];
+  const maxDate = dates[dates.length - 1];
+
+  // Query HOLIDAY leaves trong khoảng ngày
+  const holidayQuery = `
+    SELECT DISTINCT Date, TimeslotID
+    FROM instructortimeslot
+    WHERE InstructorID = ?
+      AND Status = 'HOLIDAY'
+      AND Date >= ?
+      AND Date <= ?
+      AND (TimeslotID = ? OR TimeslotID IS NULL)
+  `;
+
+  const [holidayRows] = await pool.execute(holidayQuery, [
+    InstructorID,
+    minDate,
+    maxDate,
+    TimeslotID,
+  ]);
+
+  // Tạo Set các ngày HOLIDAY (cả ngày hoặc theo timeslot)
+  const holidayDates = new Set();
+  holidayRows.forEach((row) => {
+    if (row.TimeslotID === null || row.TimeslotID === TimeslotID) {
+      holidayDates.add(row.Date);
+    }
+  });
+
+  console.log(
+    `[findAvailableSlotsForEdit] Found ${holidayDates.size} HOLIDAY dates:`,
+    Array.from(holidayDates)
+  );
+
+  // Bước 3: Filter các suggestions không có HOLIDAY
+  // Conflict với các sessions (kể cả lớp hiện tại) đã được check trong findAvailableInstructorSlots
+  // với excludeClassId: null, nên không cần check thêm
+  const validSuggestions = allSuggestions.filter((suggestion) => {
+    const slotDate = suggestion.date || suggestion.Date;
+    if (!slotDate) return false;
+
+    // Nếu slot date nằm trong holidayDates, bỏ qua
+    if (holidayDates.has(slotDate)) {
+      console.log(
+        `[findAvailableSlotsForEdit] Slot ${slotDate} là HOLIDAY, bỏ qua`
+      );
+      return false;
+    }
+
+    return true;
+  });
+
+  console.log(
+    `[findAvailableSlotsForEdit] Filtered: ${allSuggestions.length} → ${
+      validSuggestions.length
+    } (removed ${
+      allSuggestions.length - validSuggestions.length
+    } HOLIDAY slots)`
+  );
+
+  return validSuggestions;
 }
 
 /**
@@ -1436,9 +2342,9 @@ async function getTimeslotLockReasons(params, depth = 0) {
     numofsession,
   } = params;
 
-  if (depth > 50) {
+  if (depth > 20) {
     throw new ServiceError(
-      "Không thể tìm đủ số buổi trong thời gian hợp lý (quá 50 lần đệ quy)",
+      "Không thể tìm đủ số buổi trong thời gian hợp lý (quá 20 lần đệ quy)",
       400
     );
   }
@@ -1462,7 +2368,7 @@ async function getTimeslotLockReasons(params, depth = 0) {
 
       blockMap.set(dateStr, b.Status);
 
-      if (b.Status === "Holiday") {
+      if (b.Status === "HOLIDAY") {
         holidayMap.set(dateStr, true);
       }
     });
@@ -1533,7 +2439,7 @@ async function getTimeslotLockReasons(params, depth = 0) {
 
           validCount++;
         } else {
-          if (!status || status === "Available" || status === "AVAILABLE") {
+          if (!status || status === "AVAILABLE") {
             validCount++;
           } else {
             return {
@@ -1633,6 +2539,7 @@ module.exports = {
   updateClassSchedule,
   addMakeupSessionAtEnd,
   findAvailableInstructorSlots,
+  findAvailableSlotsForEdit,
   checkLearnerConflicts,
   analyzeBlockedDays,
   searchTimeslots,

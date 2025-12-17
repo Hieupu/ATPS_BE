@@ -522,41 +522,43 @@ class CourseRepository {
       const db = await connectDB();
 
       // Main query - optimized
-      const [classes] = await db.query(
-        `SELECT 
-        cl.ClassID,
-        cl.CourseID,
-        cl.Name as ClassName,
-        cl.ZoomID,
-        cl.Zoompass,
-        cl.Status,
-        cl.Fee,
-        cl.Maxstudent,
-        cl.Opendate,
-        cl.OpendatePlan,
-        cl.Enddate,
-        cl.Numofsession,
-        i.InstructorID,
-        i.FullName as InstructorName,
-        COALESCE(enr.StudentCount, 0) as StudentCount,
-        COUNT(DISTINCT se.SessionID) as TotalSessions
-       FROM class cl
-       INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
-       LEFT JOIN session se ON cl.ClassID = se.ClassID
-       LEFT JOIN (
-         SELECT ClassID, COUNT(*) as StudentCount 
-         FROM enrollment 
-         WHERE Status = 'enrolled'
-         GROUP BY ClassID
-       ) enr ON cl.ClassID = enr.ClassID
-       WHERE cl.CourseID = ? AND cl.Status IN ('active', 'ACTIVE', 'PUBLISHED', 'APPROVED', 'PENDING_APPROVAL', 'DRAFT')
-       GROUP BY cl.ClassID, cl.Name, cl.ZoomID,
-         cl.Zoompass, cl.Status, cl.Fee, cl.Maxstudent, 
-         cl.Opendate, cl.Enddate, cl.Numofsession, 
-         i.InstructorID, i.FullName, enr.StudentCount
-       ORDER BY cl.ClassID`,
-        [courseId]
-      );
+    const [classes] = await db.query(
+  `SELECT 
+    cl.ClassID,
+    cl.CourseID,
+    cl.Name as ClassName,
+    cl.ZoomID,
+    cl.Zoompass,
+    cl.Status,
+    cl.Fee,
+    cl.Maxstudent,
+    cl.Opendate,
+    cl.OpendatePlan,
+    cl.Enddate,
+    cl.Numofsession,
+    i.InstructorID,
+    i.FullName as InstructorName,
+    COALESCE(enr.StudentCount, 0) as StudentCount,
+    COUNT(DISTINCT se.SessionID) as TotalSessions
+   FROM class cl
+   INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
+   LEFT JOIN session se ON cl.ClassID = se.ClassID
+   LEFT JOIN (
+     SELECT ClassID, COUNT(*) as StudentCount 
+     FROM enrollment 
+     WHERE LOWER(Status) = 'enrolled'
+     GROUP BY ClassID
+   ) enr ON cl.ClassID = enr.ClassID
+   WHERE cl.CourseID = ?
+     AND LOWER(cl.Status) = 'active'
+   GROUP BY cl.ClassID, cl.Name, cl.ZoomID,
+     cl.Zoompass, cl.Status, cl.Fee, cl.Maxstudent, 
+     cl.Opendate, cl.Enddate, cl.Numofsession, 
+     i.InstructorID, i.FullName, enr.StudentCount
+   ORDER BY cl.ClassID`,
+  [courseId]
+);
+
 
       // Check if there are any classes before processing
       if (!classes.length) {

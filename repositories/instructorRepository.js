@@ -190,7 +190,7 @@ class InstructorRepository {
           FROM instructortimeslot its 
           WHERE its.TimeslotID IN (${timeslotPlaceholders})
           AND its.Date IN (${datePlaceholders})
-          AND its.Status = 'available'
+          AND its.Status = 'AVAILABLE'
         )`);
 
           params.push(...validTimeslotIds, ...nextWeekDates);

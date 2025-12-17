@@ -5,14 +5,14 @@ class InstructorTimeslot {
     InstructorID,
     TimeslotID,
     Date,
-    Status,  // 'Holiday', 'PersonalLeave', ...
+    Status, 
     Note,
   }) {
     this.InstructortimeslotID = InstructortimeslotID;
     this.InstructorID = InstructorID;
     this.TimeslotID = TimeslotID;
     this.Date = Date;
-    this.Status = Status || 'Holiday';
+    this.Status = Status || 'HOLIDAY';
     this.Note = Note || null;
   }
 }
