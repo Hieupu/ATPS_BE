@@ -1,5 +1,12 @@
 const learnerExamRepository = require("../repositories/learnerExamRepository");
 const instructorExamRepository = require("../repositories/instructorExamRepository");
+const axios = require("axios");
+const mammoth = require("mammoth");
+const { OpenAI } = require("openai");
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 async function getLearnerIdOrThrow(accId) {
   const learnerId = await learnerExamRepository.getLearnerIdByAccId(accId);
@@ -277,6 +284,8 @@ const submitExamService = async (learnerAccId, instanceId, answers, metadata = {
   let maxScore = 0;
   let autoGradedCount = 0;
   let manualGradeCount = 0;
+  const speakingBatch = [];
+  const writingBatch = [];
 
   for (const question of submission) {
     const point = question.Point || 0;
@@ -300,21 +309,69 @@ const submitExamService = async (learnerAccId, instanceId, answers, metadata = {
       }
       autoGradedCount++;
     }
-    else {
-      manualGradeCount++;
+    else if (question.Type === "speaking" ) {
+      console.log("Question speaking:", question.Content);
+      if (question.LearnerAnswer) {
+        console.log("Learner answer audio URL:", question.LearnerAnswer);
+        const transcript = await transcribeAudioFromUrl(q.LearnerAnswer);
+        console.log("Transcribed text:", transcript);
+        speakingBatch.push({
+          questionId: question.QuestionID,
+          question: question.Content,
+          transcript,
+          point
+        });
+      }
+    }
+    else if (question.Type === "essay" ) {
+      console.log("Question essay:", question.Content);
+      if (question.LearnerAnswer && question.LearnerAnswer.trim().length >= 30) {
+        const result = await readDocxFromUrl(question.FileURL);
+        console.log("Extracted writing text:", result);
+        writingBatch.push({
+          questionId: question.QuestionID,
+          material: result,
+          question: question.Content,
+          writingText: question.LearnerAnswer,
+          point
+        });
+      }
+    }
+  }
+
+  let speakingResults = [];
+  try {
+    speakingResults = await gradeSpeakingBatch(speakingBatch);
+    console.log("Speaking grading results:", speakingResults);
+  } catch (err) {
+    console.error("Error grading speaking batch:", err);
+  }
+  for (const result of speakingResults) {
+    const q = speakingBatch.find(x => x.questionId === Number.parseInt(result.questionId, 10));
+    if (q) {
+      totalScore += q.point * result.score;
+    }
+  }
+
+  let writingResults = [];
+  try {
+    const writingMaterial = instance.WritingMaterial || "";
+    writingResults = await gradeWritingBatch(writingBatch, writingMaterial);
+    console.log("Writing grading results:", writingResults);
+  } catch (err) {
+    console.error("Error grading writing batch:", err);
+  }
+  for (const result of writingResults) {
+    const q = writingBatch.find(x => x.questionId === Number.parseInt(result.questionId, 10));
+    if (q) {
+      totalScore += q.point * result.score;
     }
   }
 
   const scorePercent = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
   const finalScore = scorePercent.toFixed(2);
 
-  let feedback = "Chấm điểm tự động";
-  if (isLate) {
-    feedback += " [NỘP MUỘN]";
-  }
-  if (manualGradeCount > 0) {
-    feedback += ` (${autoGradedCount} câu tự động, ${manualGradeCount} câu chờ giáo viên chấm)`;
-  }
+  let feedback = "";
 
   const durationSec = metadata.durationSec || null;
 
@@ -376,6 +433,157 @@ const submitExamService = async (learnerAccId, instanceId, answers, metadata = {
     message
   };
 };
+
+async function readDocxFromUrl(url) {
+  try {
+    const response = await axios.get(url, {
+      responseType: "arraybuffer",
+      timeout: 15000,
+      validateStatus: status => status >= 200 && status < 300
+    });
+
+    const result = await mammoth.extractRawText({
+      buffer: response.data,
+    });
+    return result.value;
+
+  } catch (error) {
+    console.error("Failed to read DOCX from URL:", url);
+  }
+}
+
+async function transcribeAudioFromUrl(audioUrl) {
+  const res = await axios.get(audioUrl, { responseType: "stream" });
+
+  const form = new FormData();
+  form.append("file", res.data, "audio.mp3");
+  form.append("model", "gpt-4o-transcribe");
+
+  const response = await axios.post(
+    "https://api.openai.com/v1/audio/transcriptions",
+    form,
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        ...form.getHeaders(),
+      },
+    }
+  );
+
+  return response.data.text;
+}
+
+async function gradeSpeakingBatch(speakingBatch) {
+  if (!speakingBatch || speakingBatch.length === 0) return [];
+
+  const prompt = `
+You are an IELTS Speaking examiner.
+
+Each response corresponds to ONE question below
+in the SAME ORDER.
+
+${speakingBatch
+  .map(
+    (item, i) =>
+      `${i + 1}. [ID ${item.questionId}] ${item.question}
+Response:
+"""
+${item.transcript}
+"""
+`
+  )
+  .join("\n")}
+
+Return a JSON array.
+
+Each item:
+{
+  "questionId": number,
+  "score": number (0.0–1.0),
+  "feedback": string,
+  "suggestions": string[]
+}
+
+Rules:
+- Feedback in Vietnamese
+- Return ONLY JSON
+`;
+
+  const response = await openai.responses.create({
+    model: "gpt-4.1-mini",
+    temperature: 0.2,
+    input: prompt,
+  });
+
+  return JSON.parse(response.output_text).map(r => ({
+    ...r,
+    questionId: Number(r.questionId),
+  }));
+}
+
+async function gradeWritingBatch(writingBatch, material) {
+  if (!writingBatch || writingBatch.length === 0) return [];
+
+  const prompt = `
+You are an IELTS Writing examiner.
+
+Reference Material:
+"""
+${material}
+"""
+
+Evaluate each writing independently.
+
+Return a JSON array.
+Each item:
+{
+  "questionId": string,
+  "score": number (0.0–1.0),
+  "feedback": {
+    "taskResponse": string,
+    "coherence": string,
+    "lexical": string,
+    "grammar": string
+  },
+  "suggestions": string[]
+}
+
+Feedback must be in Vietnamese.
+Do NOT wrap JSON in markdown.
+`;
+
+  const writingsText = writingBatch.map(w => `
+Question ID: ${w.questionId}
+Question: ${w.question}
+Writing:
+"""
+${w.writingText}
+"""
+`).join("\n");
+
+  try {
+    const response = await openai.responses.create({
+      model: "gpt-4.1-mini",
+      input: [
+        {
+          role: "system",
+          content: "You are an IELTS Writing examiner.",
+        },
+        {
+          role: "user",
+          content: prompt + "\n" + writingsText,
+        },
+      ],
+      temperature: 0.2,
+    });
+
+    return JSON.parse(response.output_text);
+
+  } catch (error) {
+    console.error("[OpenAI][Writing]", error.message);
+    throw new Error("OPENAI_GRADE_WRITING_FAILED");
+  }
+}
 
 const getExamResultService = async (learnerAccId, instanceId) => {
   const learnerId = await getLearnerIdOrThrow(learnerAccId);
@@ -555,7 +763,11 @@ const reviewExamService = async (learnerAccId, instanceId) => {
     } else if (question.Type === "fill_in_blank") {
       isCorrect = checkFillInBlankAnswer(question.LearnerAnswer, question.CorrectAnswer);
       earnedPoint = isCorrect ? question.Point : 0;
-    } else {
+    } else if (question.Type === "speaking" || question.Type === "essay") {
+      earnedPoint = question.EarnedPoint || 0;
+      isCorrect = earnedPoint >= question.Point * 0.6;
+    }
+     else {
       isCorrect = null;
       earnedPoint = 0;
     }
