@@ -482,7 +482,6 @@ class InstructorClassRosterRepository {
       const dateObj = new Date(newDate);
       const dayName = days[dateObj.getDay()];
 
-   
       const [timeslotRows] = await connection.query(
         `SELECT TimeslotID FROM timeslot WHERE StartTime = ? AND Day = ? LIMIT 1`,
         [newStartTime, dayName]
@@ -495,7 +494,6 @@ class InstructorClassRosterRepository {
       }
       const newTimeslotId = timeslotRows[0].TimeslotID;
 
- 
       const [conflictRows] = await connection.query(
         `
         SELECT l.FullName, l.LearnerID
@@ -518,12 +516,23 @@ class InstructorClassRosterRepository {
       );
 
       if (conflictRows.length > 0) {
+        const maxDisplay = 3;
+        const firstFewNames = conflictRows
+          .slice(0, maxDisplay)
+          .map((row) => row.FullName)
+          .join(", ");
+
+        let message = `Học viên ${firstFewNames}`;
+
+        if (conflictRows.length > maxDisplay) {
+          message += ` và ${conflictRows.length - maxDisplay} người khác`;
+        }
+
         throw new Error(
-          `Không thể đổi lịch vì học viên ${conflictRows[0].FullName} đã có lịch học khác vào khung giờ này.`
+          `Không thể đổi lịch vì ${message} đã có lịch học khác vào khung giờ này.`
         );
       }
 
-   
       const [result] = await connection.query(
         `INSERT INTO session_change_request 
           (SessionID, InstructorID, NewDate, NewTimeslotID, Reason, Status, CreatedDate) 
@@ -533,7 +542,6 @@ class InstructorClassRosterRepository {
 
       const newRequestId = result.insertId;
 
-    
       const [instructorRows] = await connection.query(
         `SELECT FullName FROM instructor WHERE InstructorID = ?`,
         [instructorId]
