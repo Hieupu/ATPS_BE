@@ -4,9 +4,9 @@ const attendanceService = require("../services/attendanceService");
 const { use } = require("passport");
 const { start } = require("repl");
 const { time } = require("console");
+const e = require("express");
 
 let zoomCache = [];
-
 const cleanupZoomCache = (accIdToRemove, sessionIdToRemove) => {
   const beforeCount = zoomCache.length;
 
@@ -91,26 +91,29 @@ class ZoomController {
   // POST /api/zoom/webhook
   async zoomRes(req, res) {
   if (req.body.accId && req.body.sessionId) {
-
-  const existing = zoomCache.findIndex(z => z.sessionId === req.body.sessionId && z.userName === req.body.userName);
-
+  
+  const existing = zoomCache.findIndex(z => z.sessionId === req.body.sessionId && z.accId === req.body.accId);
+    console.log("Existing index:", existing);
+    
   const newEntry = {
     accId: req.body.accId,
+    userRole: req.body.userRole,
     sessionId: req.body.sessionId,
     userName: req.body.userName,
     startTime: req.body.startTime,
     endTime: req.body.endTime,
     date: req.body.date,
+    zoomId: req.body.zoomId,
     cachedAt: Date.now()
   };
 
-  if (existing !== -1) {
-    zoomCache[existing] = newEntry;
-  } else {
+  if (existing === -1) {
     zoomCache.push(newEntry);
   }
+  console.log("Current zoomCache:", zoomCache);
 }
   try {
+    let isJoined = false;
     const event = req.body.event;
     const data  = req.body.payload?.object;
 
@@ -133,21 +136,12 @@ class ZoomController {
 
     // PARTICIPANT JOINED
     if (event === "meeting.participant_joined") {
-
-      const tokenUrl = `https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${process.env.ZOOM_ACCOUNT_ID}`;
-    const authHeader = Buffer.from(`${process.env.ZOOM_CLIENT_ID}:${process.env.ZOOM_CLIENT_SECRET}`).toString("base64");
-
-    const response = await axios.post(tokenUrl, null, {
-      headers: { Authorization: `Basic ${authHeader}` },
-    });
-    console.log( response.data.access_token);
-
-
-      const userName   = data.participant?.user_name;
-      const joinTime   = data.participant?.join_time;
+      isJoined = true;
+      const userName = data.participant?.user_name;
+      const joinTime = data.participant?.join_time;
 
       const parseData = zoomCache.find(z => z.userName === userName);
-
+      
       const attend = await attendanceService.attendanceLogic(parseData?.accId, parseData?.startTime, parseData?.endTime,      
       parseData?.date, parseData?.sessionId, joinTime, "join");
 
@@ -163,7 +157,19 @@ class ZoomController {
       const parseData = zoomCache.find(z => z.userName === userName);
       const attend = await attendanceService.attendanceLogic(parseData?.accId, parseData?.startTime, parseData?.endTime,      
       parseData?.date, parseData?.sessionId, leaveTime, "leave");
+        
+      if(parseData?.userRole !== "instructor"){
+      cleanupZoomCache(parseData?.accId, parseData?.sessionId);
+      }
+      return res.status(200).json({ success: true, leave: attend });
+    }
 
+    if(event === "meeting.ended" && !isJoined) {
+      const zoomId = data.id;
+
+      const parseData = zoomCache.find(z => z.zoomId === zoomId);
+      const attend = await attendanceService.attendanceLogic(parseData?.accId, parseData?.startTime, parseData?.endTime,      
+      parseData?.date, parseData?.sessionId, null, "notjoin");
       cleanupZoomCache(parseData?.accId, parseData?.sessionId);
       return res.status(200).json({ success: true, leave: attend });
     }

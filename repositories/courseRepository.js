@@ -522,41 +522,43 @@ class CourseRepository {
       const db = await connectDB();
 
       // Main query - optimized
-      const [classes] = await db.query(
-        `SELECT 
-        cl.ClassID,
-        cl.CourseID,
-        cl.Name as ClassName,
-        cl.ZoomID,
-        cl.Zoompass,
-        cl.Status,
-        cl.Fee,
-        cl.Maxstudent,
-        cl.Opendate,
-        cl.OpendatePlan,
-        cl.Enddate,
-        cl.Numofsession,
-        i.InstructorID,
-        i.FullName as InstructorName,
-        COALESCE(enr.StudentCount, 0) as StudentCount,
-        COUNT(DISTINCT se.SessionID) as TotalSessions
-       FROM class cl
-       INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
-       LEFT JOIN session se ON cl.ClassID = se.ClassID
-       LEFT JOIN (
-         SELECT ClassID, COUNT(*) as StudentCount 
-         FROM enrollment 
-         WHERE Status = 'enrolled'
-         GROUP BY ClassID
-       ) enr ON cl.ClassID = enr.ClassID
-       WHERE cl.CourseID = ? AND cl.Status IN ('active', 'ACTIVE', 'PUBLISHED', 'APPROVED', 'PENDING_APPROVAL', 'DRAFT')
-       GROUP BY cl.ClassID, cl.Name, cl.ZoomID,
-         cl.Zoompass, cl.Status, cl.Fee, cl.Maxstudent, 
-         cl.Opendate, cl.Enddate, cl.Numofsession, 
-         i.InstructorID, i.FullName, enr.StudentCount
-       ORDER BY cl.ClassID`,
-        [courseId]
-      );
+    const [classes] = await db.query(
+  `SELECT 
+    cl.ClassID,
+    cl.CourseID,
+    cl.Name as ClassName,
+    cl.ZoomID,
+    cl.Zoompass,
+    cl.Status,
+    cl.Fee,
+    cl.Maxstudent,
+    cl.Opendate,
+    cl.OpendatePlan,
+    cl.Enddate,
+    cl.Numofsession,
+    i.InstructorID,
+    i.FullName as InstructorName,
+    COALESCE(enr.StudentCount, 0) as StudentCount,
+    COUNT(DISTINCT se.SessionID) as TotalSessions
+   FROM class cl
+   INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
+   LEFT JOIN session se ON cl.ClassID = se.ClassID
+   LEFT JOIN (
+     SELECT ClassID, COUNT(*) as StudentCount 
+     FROM enrollment 
+     WHERE LOWER(Status) = 'enrolled'
+     GROUP BY ClassID
+   ) enr ON cl.ClassID = enr.ClassID
+   WHERE cl.CourseID = ?
+     AND LOWER(cl.Status) = 'active'
+   GROUP BY cl.ClassID, cl.Name, cl.ZoomID,
+     cl.Zoompass, cl.Status, cl.Fee, cl.Maxstudent, 
+     cl.Opendate, cl.Enddate, cl.Numofsession, 
+     i.InstructorID, i.FullName, enr.StudentCount
+   ORDER BY cl.ClassID`,
+  [courseId]
+);
+
 
       // Check if there are any classes before processing
       if (!classes.length) {
@@ -646,13 +648,11 @@ class CourseRepository {
 
       const queryParams = [];
 
-      // Filter theo tháng
       if (filters.month) {
         query += ` AND (MONTH(cl.OpendatePlan) = ? OR MONTH(cl.Opendate) = ?)`;
         queryParams.push(filters.month, filters.month);
       }
 
-      // Filter theo ngày trong tuần
       if (filters.days) {
         const daysArray = filters.days.split(",").map((d) => d.trim());
         const placeholders = daysArray.map(() => "?").join(",");
@@ -665,7 +665,6 @@ class CourseRepository {
         queryParams.push(...daysArray);
       }
 
-      // Filter theo khung giờ
       if (filters.timeSlot) {
         query += ` AND cl.ClassID IN (
         SELECT DISTINCT s.ClassID 
@@ -680,7 +679,6 @@ class CourseRepository {
 
       const [classes] = await db.query(query, queryParams);
 
-      // Lấy thông tin lịch học cho từng lớp
       for (let classItem of classes) {
         const [schedule] = await db.query(
           `SELECT DISTINCT
@@ -697,7 +695,6 @@ class CourseRepository {
           [classItem.ClassID]
         );
 
-        // Process schedule như trước...
         if (schedule.length > 0) {
           const days = schedule
             .map((s) => {
@@ -743,13 +740,10 @@ class CourseRepository {
         }
       }
 
-      // Filter theo level (thực hiện sau khi có dữ liệu)
       if (filters.levels) {
         const levelsArray = filters.levels.split(",").map((l) => l.trim());
         return classes.filter((classItem) => {
-          return levelsArray.some((level) =>
-            classItem.ClassName.includes(level)
-          );
+          return levelsArray.includes(classItem.CourseLevel);
         });
       }
 
@@ -764,7 +758,6 @@ class CourseRepository {
     try {
       const db = await connectDB();
 
-      // Lấy danh sách Units của course
       const [units] = await db.query(
         `
       SELECT UnitID, Title, Description, Duration, OrderIndex
@@ -781,7 +774,6 @@ class CourseRepository {
 
       const unitIds = units.map((u) => u.UnitID);
 
-      // Lấy tất cả lessons thuộc các unit trên
       const [lessons] = await db.query(
         `
       SELECT LessonID, Title, Duration, Type, FileURL, UnitID, OrderIndex, Status
@@ -822,13 +814,9 @@ class CourseRepository {
     }
   }
 
-  // Tính tổng thời gian (phút) của course từ Duration
   async getCourseTotalDuration(courseId) {
     try {
       const db = await connectDB();
-
-      // Luôn tính tổng từ các unit (không dùng Course.Duration)
-      // Vì Duration của course có thể không chính xác, cần tính từ units
       const [units] = await db.query(
         `
         SELECT UnitID, Duration
@@ -843,7 +831,6 @@ class CourseRepository {
         return 0;
       }
 
-      // Tính tổng Duration từ các units (Duration là số phút)
       const totalMinutes = units.reduce((sum, unit) => {
         const duration = parseInt(unit.Duration) || 0;
         return sum + duration;
@@ -859,7 +846,6 @@ class CourseRepository {
     try {
       const db = await connectDB();
 
-      // Kiểm tra learner tồn tại
       const [learner] = await db.query(
         "SELECT * FROM learner WHERE LearnerID = ?",
         [learnerId]
@@ -869,7 +855,6 @@ class CourseRepository {
         throw new Error("Learner not found");
       }
 
-      // Kiểm tra class tồn tại và active
       const [classData] = await db.query(
         "SELECT cl.*, c.Title as CourseTitle FROM class cl LEFT JOIN course c ON cl.CourseID = c.CourseID WHERE cl.ClassID = ? AND cl.Status = 'active'",
         [classId]
@@ -1074,10 +1059,10 @@ class CourseRepository {
   async getCourseAssignments(courseId, learnerId) {
     try {
       const db = await connectDB();
-
-      const [assignments] = await db.query(
+      const [rawRows] = await db.query(
         `SELECT 
         e.ExamID AS AssignmentID,
+        ei.InstanceID,
         e.Title,
         e.Description,
         e.Type,
@@ -1097,11 +1082,8 @@ class CourseRepository {
         s.FileURL as SubmissionFileURL
 
         FROM exam e
-   
         INNER JOIN exam_instances ei ON e.ExamID = ei.ExamId
-  
         INNER JOIN unit u ON ei.UnitId = u.UnitID
-     
         LEFT JOIN submission s ON e.ExamID = s.ExamID AND s.LearnerID = ?
         
         WHERE u.CourseID = ? 
@@ -1109,12 +1091,29 @@ class CourseRepository {
           AND e.Status = 'Published' 
           AND u.Status = 'VISIBLE'
         
-        ORDER BY ei.EndTime ASC, e.ExamID ASC`,
+        ORDER BY ei.EndTime ASC, e.ExamID ASC, s.SubmissionID DESC`,
         [learnerId, courseId]
       );
 
-      return assignments.map((assignment) => ({
+      const uniqueAssignments = {};
+
+      rawRows.forEach((row) => {
+        if (!uniqueAssignments[row.AssignmentID]) {
+          uniqueAssignments[row.AssignmentID] = row;
+        } else {
+          const currentSubId =
+            uniqueAssignments[row.AssignmentID].SubmissionID || 0;
+          const newSubId = row.SubmissionID || 0;
+
+          if (newSubId > currentSubId) {
+            uniqueAssignments[row.AssignmentID] = row;
+          }
+        }
+      });
+
+      return Object.values(uniqueAssignments).map((assignment) => ({
         AssignmentID: assignment.AssignmentID,
+        InstanceID: assignment.InstanceID,
         UnitID: assignment.UnitID,
         Title: assignment.Title,
         Description: assignment.Description,
@@ -1175,28 +1174,25 @@ class CourseRepository {
     }
   }
 
-  //   /**
-  //    * Lấy LearnerID từ AccountID (có thể đã có, nhưng thêm cho chắc)
-  //    */
-  //   async getLearnerIdByAccountId(accountId) {
-  //     try {
-  //       const db = await connectDB();
+  async getLearnerIdByAccountId(accountId) {
+    try {
+      const db = await connectDB();
 
-  //       const [rows] = await db.query(
-  //         `SELECT LearnerID FROM learner WHERE AccID = ?`,
-  //         [accountId]
-  //       );
+      const [rows] = await db.query(
+        `SELECT LearnerID FROM learner WHERE AccID = ?`,
+        [accountId]
+      );
 
-  //       if (!rows.length) {
-  //         throw new Error("Learner profile not found");
-  //       }
+      if (!rows.length) {
+        throw new Error("Learner profile not found");
+      }
 
-  //       return rows[0].LearnerID;
-  //     } catch (error) {
-  //       console.error("Database error in getLearnerIdByAccountId:", error);
-  //       throw error;
-  //     }
-  //   }
+      return rows[0].LearnerID;
+    } catch (error) {
+      console.error("Database error in getLearnerIdByAccountId:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new CourseRepository();

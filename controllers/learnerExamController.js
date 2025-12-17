@@ -1,4 +1,3 @@
-// controllers/learnerExamController.js
 const {
   getAvailableExamsService,
   getExamToDoService,
@@ -6,13 +5,11 @@ const {
   submitExamService,
   getExamResultService,
   getHistoryService,
-  retryExamService
+  retryExamService,
+  reviewExamService
 } = require("../services/learnerExamService");
 
-/**
- * GET /api/exams/instances
- * Lấy danh sách phiên thi đang mở cho learner
- */
+
 const getAvailableExams = async (req, res) => {
   try {
     const learnerAccId = req.user.id;
@@ -31,10 +28,6 @@ const getAvailableExams = async (req, res) => {
   }
 };
 
-/**
- * GET /api/exams/instances/:instanceId
- * Lấy đề thi (section + question) để làm
- */
 const getExamToDo = async (req, res) => {
   try {
     const learnerAccId = req.user.id;
@@ -54,11 +47,6 @@ const getExamToDo = async (req, res) => {
   }
 };
 
-/**
- * POST /api/exams/instances/:instanceId/answers
- * Body: { answers: [{ examQuestionId, answer }, ...] }
- * Lưu đáp án (auto-save)
- */
 const saveExamAnswers = async (req, res) => {
   try {
     const learnerAccId = req.user.id;
@@ -83,26 +71,39 @@ const saveExamAnswers = async (req, res) => {
   }
 };
 
-/**
- * POST /api/exams/instances/:instanceId/submit
- * Body optional: { answers: [...] } – nếu FE gửi kèm để nộp lần cuối
- */
 const submitExam = async (req, res) => {
   try {
     const learnerAccId = req.user.id;
     const { instanceId } = req.params;
-    const { answers } = req.body || {};
+    const { answers, durationSec, content, assets } = req.body || {};
+
+    const metadata = {
+      durationSec,
+      content,
+      assets
+    };
 
     const result = await submitExamService(
       learnerAccId,
       instanceId,
-      answers || []
+      answers || [],
+      metadata
     );
 
     return res.status(200).json({
       success: true,
-      message: "Nộp bài và chấm điểm thành công",
-      ...result
+      message: result.message,
+      data: {
+        submissionId: result.submissionId,
+        score: result.score,
+        maxScore: result.maxScore,
+        totalScore: result.totalScore,
+        autoGradedCount: result.autoGradedCount,
+        manualGradeCount: result.manualGradeCount,
+        isLate: result.isLate,
+        submissionStatus: result.submissionStatus,
+        durationSec: result.durationSec
+      }
     });
   } catch (err) {
     return res.status(err.status || 400).json({
@@ -112,10 +113,6 @@ const submitExam = async (req, res) => {
   }
 };
 
-/**
- * GET /api/exams/instances/:instanceId/result
- * Xem kết quả một bài thi cụ thể
- */
 const getExamResult = async (req, res) => {
   try {
     const learnerAccId = req.user.id;
@@ -135,10 +132,6 @@ const getExamResult = async (req, res) => {
   }
 };
 
-/**
- * GET /api/exams/results/history
- * Lịch sử kết quả các bài thi của learner
- */
 const getExamHistory = async (req, res) => {
   try {
     const learnerAccId = req.user.id;
@@ -156,6 +149,8 @@ const getExamHistory = async (req, res) => {
     });
   }
 };
+
+
 const retryExam = async (req, res) => {
   try {
     const learnerAccId = req.user.id;
@@ -175,6 +170,25 @@ const retryExam = async (req, res) => {
   }
 };
 
+const reviewExam = async (req, res) => {
+  try {
+    const learnerAccId = req.user.id;
+    const { instanceId } = req.params;
+
+    const data = await reviewExamService(learnerAccId, instanceId);
+
+    return res.status(200).json({
+      success: true,
+      data
+    });
+  } catch (err) {
+    return res.status(err.status || 400).json({
+      success: false,
+      message: err.message || "Lỗi khi lấy review bài thi"
+    });
+  }
+};
+
 module.exports = {
   getAvailableExams,
   getExamToDo,
@@ -182,5 +196,6 @@ module.exports = {
   submitExam,
   getExamResult,
   getExamHistory,
-  retryExam
+  retryExam,
+  reviewExam
 };

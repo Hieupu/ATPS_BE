@@ -51,7 +51,7 @@ async getLearnerAttendance(learnerId) {
     }
   }
 
-  async getAttendanceStats(learnerId, sessionId = null) {
+  async getAttendanceStats(learnerId) {
     try {
       const db = await connectDB();
       let query = `
@@ -59,7 +59,6 @@ async getLearnerAttendance(learnerId) {
           COUNT(*) as TotalSessions,
           SUM(CASE WHEN a.Status = 'Present' THEN 1 ELSE 0 END) as PresentCount,
           SUM(CASE WHEN a.Status = 'Absent' THEN 1 ELSE 0 END) as AbsentCount,
-          SUM(CASE WHEN a.Status = 'Late' THEN 1 ELSE 0 END) as LateCount,
           ROUND((SUM(CASE WHEN a.Status = 'Present' THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(*), 0)), 2) as AttendanceRate
         FROM attendance a
         INNER JOIN session s ON a.SessionID = s.SessionID
@@ -67,11 +66,6 @@ async getLearnerAttendance(learnerId) {
       `;
 
       const params = [learnerId];
-
-      if (sessionId) {
-        query += ` AND a.SessionID = ?`;
-        params.push(sessionId);
-      }
 
       const [rows] = await db.query(query, params);
       return rows[0];
@@ -191,6 +185,36 @@ async getLearnerAttendance(learnerId) {
     } catch (error) {
       console.error("Database error in getSessionAttendance:", error);
       throw error;
+    }
+  }
+
+  async recordAttendancenotJoin(sessionId, date, status, note) {
+    try {
+      const db = await connectDB();
+      
+      const [rows] = await db.query(
+        `SELECT l.LearnerID FROM learner l JOIN enrollment e ON e.LearnerID = l.LearnerID
+        JOIN class c ON c.ClassID = e.ClassID JOIN session s ON s.ClassID = c.ClassID
+        LEFT JOIN attendance a
+              ON a.LearnerID = l.LearnerID
+              AND a.SessionID = s.SessionID
+        WHERE s.SessionID = ?
+          AND a.AttendanceID IS NULL;`,
+        [sessionId]
+      );
+
+      for (const row of rows) {
+        await db.query(
+          `INSERT INTO attendance (LearnerID, SessionID, Status, Date, note)
+          VALUES (?, ?, ?, ?, ?)`,
+          [row.LearnerID, sessionId, status, date, note]
+        );
+      }
+
+      return { success: true, message: "Attendance for not joined recorded" };
+    } catch (error) {
+      console.error("Attendance recording error for not joined:", error);
+      return { success: false, message: "Failed to record attendance for not joined" };
     }
   }
 

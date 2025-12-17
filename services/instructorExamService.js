@@ -1576,8 +1576,8 @@ const createFullExamService = async (instructorAccId, data) => {
     title: data.exam.title,
     description: data.exam.description,
     status: "Draft",
-    type: "Exam",
-    instructorId,
+    type: data.instance.instanceType || "Exam",
+    instructorId
   });
 
   // --- Tạo sections ---

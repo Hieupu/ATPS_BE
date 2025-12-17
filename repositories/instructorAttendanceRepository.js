@@ -33,36 +33,44 @@ class InstructorAttendanceRepository {
 
   async saveAttendance(sessionId, attendanceData) {
     const db = await connectDB();
+    const connection = await db.getConnection(); // Lấy connection để dùng transaction
+    await connection.beginTransaction(); // BẮT ĐẦU TRANSACTION
 
-    const [[session]] = await db.query(
-      `SELECT Date FROM session WHERE SessionID = ?`,
-      [sessionId]
-    );
-
-    if (!session) {
-      throw new Error("Buổi học không tồn tại");
-    }
-
-    const sessionDate = session.Date;
-
-    await db.query(`DELETE FROM attendance WHERE SessionID = ?`, [sessionId]);
-
-    const insertData = attendanceData.map((r) => [
-      r.LearnerID,
-      sessionId,
-      r.Status,
-      sessionDate,
-      r.note || null,
-    ]);
-
-    if (insertData.length > 0) {
-      await db.query(
-        `INSERT INTO attendance (LearnerID, SessionID, Status, Date, note) VALUES ?`,
-        [insertData]
+    try {
+      const [[session]] = await connection.query(
+        `SELECT Date FROM session WHERE SessionID = ?`,
+        [sessionId]
       );
-    }
+      if (!session) throw new Error("Buổi học không tồn tại");
 
-    return { success: true };
+      // Xóa cũ -> Thêm mới (An toàn nhờ Transaction)
+      await connection.query(`DELETE FROM attendance WHERE SessionID = ?`, [
+        sessionId,
+      ]);
+
+      const insertData = attendanceData.map((r) => [
+        r.LearnerID,
+        sessionId,
+        r.Status,
+        session.Date,
+        r.note || null,
+      ]);
+
+      if (insertData.length > 0) {
+        await connection.query(
+          `INSERT INTO attendance (LearnerID, SessionID, Status, Date, Note) VALUES ?`,
+          [insertData]
+        );
+      }
+
+      await connection.commit(); // LƯU THÀNH CÔNG
+      return { success: true };
+    } catch (error) {
+      await connection.rollback(); // HOÀN TÁC NẾU LỖI
+      throw error;
+    } finally {
+      connection.release(); // TRẢ CONNECTION
+    }
   }
 }
 

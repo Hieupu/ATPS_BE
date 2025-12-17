@@ -57,7 +57,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "https://atps-be.onrender.com/api/google/callback",
+      callbackURL: `${process.env.BACKEND_URL}/api/google/callback`,
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -438,6 +438,15 @@ const register = async (req, res) => {
     const email = (req.body.email || "").trim().toLowerCase();
     const phone = (req.body.phone || "").trim();
     const password = req.body.password || "";
+    
+    // Kiểm tra email đã được xác thực chưa
+    const storedData = emailVerificationCodes.get(email);
+    if (!storedData || !storedData.verified) {
+      return res.status(400).json({ 
+        message: "Email chưa được xác thực! Vui lòng xác thực email trước khi đăng ký." 
+      });
+    }
+
     const { id } = await registerService({
       username,
       email,
@@ -445,6 +454,9 @@ const register = async (req, res) => {
       password,
       provider: "local",
     });
+
+    // Xóa mã xác thực sau khi đăng ký thành công
+    emailVerificationCodes.delete(email);
 
     return res.status(201).json({
       message: "Account created successfully!",
@@ -469,6 +481,97 @@ const register = async (req, res) => {
   }
 };
 
+const emailVerificationCodes = new Map(); // Lưu mã xác thực cho đăng ký
+
+// Gửi mã xác thực email khi đăng ký
+const sendRegisterVerificationEmail = async (req, res) => {
+  try {
+    console.log("=== SEND REGISTER VERIFICATION EMAIL STARTED ===");
+    const { email } = req.body;
+    console.log("Email received:", email);
+
+    if (!email) {
+      return res.status(400).json({ message: "Vui lòng nhập email!" });
+    }
+
+    // Kiểm tra email đã tồn tại chưa
+    const existingUser = await accountRepository.findAccountByEmail(email);
+    if (existingUser) {
+      return res.status(400).json({ message: "Email đã được đăng ký!" });
+    }
+
+    // Tạo mã xác thực 4 số
+    const verificationCode = Math.floor(1000 + Math.random() * 9000);
+    console.log("Verification code generated:", verificationCode);
+
+    // Lưu mã vào bộ nhớ (15 phút)
+    emailVerificationCodes.set(email, {
+      code: verificationCode,
+      expiresAt: Date.now() + 15 * 60 * 1000,
+    });
+
+    // Tự động xóa sau 15 phút
+    setTimeout(() => {
+      emailVerificationCodes.delete(email);
+    }, 15 * 60 * 1000);
+
+    // Gửi email (sử dụng cùng hàm với forgot password)
+    sendVerificationEmail(email, verificationCode, "register");
+    console.log("Verification email sent successfully");
+
+    res.json({
+      message: "Mã xác thực đã được gửi đến email của bạn!",
+      email: email,
+    });
+    console.log("=== SEND REGISTER VERIFICATION EMAIL COMPLETED ===");
+  } catch (error) {
+    console.error("Send verification email error:", error);
+    res.status(500).json({ message: "Hệ thống lỗi, vui lòng thử lại sau!" });
+  }
+};
+
+const verifyRegisterCode = async (req, res) => {
+  try {
+    const { email, code } = req.body;
+
+    if (!email || !code) {
+      return res.status(400).json({ message: "Vui lòng nhập email và mã xác thực!" });
+    }
+
+    const storedData = emailVerificationCodes.get(email);
+
+    if (!storedData) {
+      return res.status(400).json({ message: "Mã xác thực không tồn tại hoặc đã hết hạn!" });
+    }
+
+    if (Date.now() > storedData.expiresAt) {
+      emailVerificationCodes.delete(email);
+      return res.status(400).json({ message: "Mã xác thực đã hết hạn!" });
+    }
+
+    if (storedData.code !== parseInt(code)) {
+      return res.status(400).json({ message: "Mã xác thực không chính xác!" });
+    }
+
+    // Đánh dấu email đã xác thực (lưu thêm trạng thái xác thực)
+    emailVerificationCodes.set(email, {
+      ...storedData,
+      verified: true,
+    });
+
+    res.json({
+      message: "Xác thực email thành công!",
+      email: email,
+    });
+  } catch (error) {
+    console.error("Verify register code error:", error);
+    res.status(500).json({ message: "Hệ thống lỗi, vui lòng thử lại sau!" });
+  }
+};
+
+
+
+
 module.exports = {
   login,
   logout,
@@ -480,4 +583,6 @@ module.exports = {
   forgotPassword,
   verifyResetCode,
   resetPassword,
+  sendRegisterVerificationEmail,
+  verifyRegisterCode
 };
