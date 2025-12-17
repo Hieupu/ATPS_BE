@@ -57,10 +57,10 @@ class ClassRepository {
         i.FullName as instructorName,
         i.Major as instructorMajor,
         COUNT(e.EnrollmentID) as currentLearners
-      FROM \`class\` c
+      FROM class c
       LEFT JOIN course co ON c.CourseID = co.CourseID
       LEFT JOIN instructor i ON c.InstructorID = i.InstructorID
-      LEFT JOIN enrollment e ON c.ClassID = e.ClassID AND e.Status = 'active'
+      LEFT JOIN enrollment e ON c.ClassID = e.ClassID AND e.Status = 'Enrolled'
       WHERE c.ClassID = ?
       GROUP BY c.ClassID
     `;
@@ -122,11 +122,16 @@ class ClassRepository {
 
   async update(id, updateData) {
     const pool = await connectDB();
+
+    if (!updateData || Object.keys(updateData).length === 0) {
+      throw new Error("No fields provided for update");
+    }
+
     const fields = Object.keys(updateData);
     const values = Object.values(updateData);
     const setClause = fields.map((field) => `${field} = ?`).join(", ");
 
-    const query = `UPDATE \`class\` SET ${setClause} WHERE ClassID = ?`;
+    const query = `UPDATE class SET ${setClause} WHERE ClassID = ?`;
     const [result] = await pool.execute(query, [...values, id]);
 
     if (result.affectedRows === 0) return null;
@@ -136,7 +141,7 @@ class ClassRepository {
 
   async exists(id) {
     const pool = await connectDB();
-    const query = `SELECT 1 FROM \`class\` WHERE ClassID = ?`;
+    const query = `SELECT 1 FROM class WHERE ClassID = ?`;
     const [rows] = await pool.execute(query, [id]);
     return rows.length > 0;
   }

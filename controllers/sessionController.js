@@ -228,7 +228,7 @@ const sessionController = {
   createBulkSessions: async (req, res) => {
     try {
       const { sessions } = req.body;
-      
+
       // Validate sessions array
       if (!sessions || !Array.isArray(sessions) || sessions.length === 0) {
         return res.status(400).json({
@@ -244,34 +244,58 @@ const sessionController = {
       const sessionErrors = {};
       for (let i = 0; i < sessions.length; i++) {
         const session = sessions[i];
-        
+
         // Validate required fields
-        if (!session.Date || !session.TimeslotID || !session.InstructorID || !session.ClassID) {
+        if (
+          !session.Date ||
+          !session.TimeslotID ||
+          !session.InstructorID ||
+          !session.ClassID
+        ) {
           const missingFields = [];
           if (!session.Date) missingFields.push("Date");
           if (!session.TimeslotID) missingFields.push("TimeslotID");
           if (!session.InstructorID) missingFields.push("InstructorID");
           if (!session.ClassID) missingFields.push("ClassID");
-          
-          sessionErrors[`session_${i}`] = `Session ${i + 1} thiếu: ${missingFields.join(", ")}`;
+
+          sessionErrors[`session_${i}`] = `Session ${
+            i + 1
+          } thiếu: ${missingFields.join(", ")}`;
           continue;
         }
 
         // Validate Date format
         if (!/^\d{4}-\d{2}-\d{2}$/.test(session.Date)) {
-          sessionErrors[`session_${i}_Date`] = `Session ${i + 1}: Date phải có format YYYY-MM-DD`;
+          sessionErrors[`session_${i}_Date`] = `Session ${
+            i + 1
+          }: Date phải có format YYYY-MM-DD`;
           continue;
         }
 
         // Validate integer fields
-        if (!Number.isInteger(Number(session.TimeslotID)) || Number(session.TimeslotID) <= 0) {
-          sessionErrors[`session_${i}_TimeslotID`] = `Session ${i + 1}: TimeslotID phải là số nguyên dương`;
+        if (
+          !Number.isInteger(Number(session.TimeslotID)) ||
+          Number(session.TimeslotID) <= 0
+        ) {
+          sessionErrors[`session_${i}_TimeslotID`] = `Session ${
+            i + 1
+          }: TimeslotID phải là số nguyên dương`;
         }
-        if (!Number.isInteger(Number(session.InstructorID)) || Number(session.InstructorID) <= 0) {
-          sessionErrors[`session_${i}_InstructorID`] = `Session ${i + 1}: InstructorID phải là số nguyên dương`;
+        if (
+          !Number.isInteger(Number(session.InstructorID)) ||
+          Number(session.InstructorID) <= 0
+        ) {
+          sessionErrors[`session_${i}_InstructorID`] = `Session ${
+            i + 1
+          }: InstructorID phải là số nguyên dương`;
         }
-        if (!Number.isInteger(Number(session.ClassID)) || Number(session.ClassID) <= 0) {
-          sessionErrors[`session_${i}_ClassID`] = `Session ${i + 1}: ClassID phải là số nguyên dương`;
+        if (
+          !Number.isInteger(Number(session.ClassID)) ||
+          Number(session.ClassID) <= 0
+        ) {
+          sessionErrors[`session_${i}_ClassID`] = `Session ${
+            i + 1
+          }: ClassID phải là số nguyên dương`;
         }
       }
 
@@ -299,11 +323,13 @@ const sessionController = {
           // Lấy thông tin timeslot để có startTime và endTime
           let startTime = conflict.conflictInfo?.startTime || null;
           let endTime = conflict.conflictInfo?.endTime || null;
-          
+
           // Nếu chưa có startTime/endTime, lấy từ timeslot
           if (!startTime || !endTime) {
             try {
-              const timeslotId = conflict.sessionData?.TimeslotID || conflict.conflictInfo?.timeslotId;
+              const timeslotId =
+                conflict.sessionData?.TimeslotID ||
+                conflict.conflictInfo?.timeslotId;
               if (timeslotId) {
                 const timeslot = await timeslotRepository.findById(timeslotId);
                 if (timeslot && timeslot.length > 0) {
@@ -317,17 +343,35 @@ const sessionController = {
           }
 
           const conflictInfo = {
-            message: conflict.conflictInfo?.message || conflict.error || "Xung đột không xác định",
-            className: conflict.sessionData?.className || conflict.conflictInfo?.className || "N/A",
-            sessionTitle: conflict.sessionData?.Title || conflict.conflictInfo?.sessionTitle || "N/A",
-            date: conflict.sessionData?.Date || conflict.conflictInfo?.date || "N/A",
+            message:
+              conflict.conflictInfo?.message ||
+              conflict.error ||
+              "Xung đột không xác định",
+            className:
+              conflict.sessionData?.className ||
+              conflict.conflictInfo?.className ||
+              "N/A",
+            sessionTitle:
+              conflict.sessionData?.Title ||
+              conflict.conflictInfo?.sessionTitle ||
+              "N/A",
+            date:
+              conflict.sessionData?.Date ||
+              conflict.conflictInfo?.date ||
+              "N/A",
             startTime: startTime,
             endTime: endTime,
           };
 
           // Thêm thông tin instructor nếu có
-          if (conflict.conflictType === "instructor" || conflict.conflictType === "instructor_leave") {
-            conflictInfo.instructorName = conflict.sessionData?.instructorName || conflict.conflictInfo?.instructorName || "N/A";
+          if (
+            conflict.conflictType === "instructor" ||
+            conflict.conflictType === "instructor_leave"
+          ) {
+            conflictInfo.instructorName =
+              conflict.sessionData?.instructorName ||
+              conflict.conflictInfo?.instructorName ||
+              "N/A";
           }
 
           return {
@@ -366,9 +410,10 @@ const sessionController = {
         return res.status(200).json({
           ...response,
           success: false, // Đảm bảo success: false khi có conflicts
-          message: conflictCount === totalCount 
-            ? `Tất cả ${totalCount} sessions đều bị xung đột`
-            : `Tạo thành công ${createdCount} sessions, ${conflictCount} sessions bị xung đột`,
+          message:
+            conflictCount === totalCount
+              ? `Tất cả ${totalCount} sessions đều bị xung đột`
+              : `Tạo thành công ${createdCount} sessions, ${conflictCount} sessions bị xung đột`,
         });
       }
 
@@ -380,13 +425,14 @@ const sessionController = {
       });
     } catch (error) {
       console.error("Error creating bulk sessions:", error);
-      
+
       // Nếu là validation error, trả về 400
-      if (error.message && (
-        error.message.includes("validation") ||
-        error.message.includes("format") ||
-        error.message.includes("không khớp")
-      )) {
+      if (
+        error.message &&
+        (error.message.includes("validation") ||
+          error.message.includes("format") ||
+          error.message.includes("không khớp"))
+      ) {
         return res.status(400).json({
           success: false,
           message: error.message,
@@ -395,7 +441,7 @@ const sessionController = {
           },
         });
       }
-      
+
       // Server error
       res.status(500).json({
         success: false,
@@ -626,7 +672,8 @@ const sessionController = {
 
       res.json({
         success: true,
-        message: "Duyệt lớp thành công. Lớp sẽ tự động chuyển sang ACTIVE khi đủ điều kiện.",
+        message:
+          "Duyệt lớp thành công. Lớp sẽ tự động chuyển sang ACTIVE khi đủ điều kiện.",
         data: updatedClass,
       });
     } catch (error) {

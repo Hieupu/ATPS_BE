@@ -198,7 +198,7 @@ async function addBulkInstructorLeave(params) {
  * @param {number} params.InstructorID
  * @param {string} params.Date - Format: 'YYYY-MM-DD'
  * @param {number} params.TimeslotID
- * @param {string} params.Status - 'Holiday', 'PersonalLeave', ...
+ * @param {string} params.Status - 'Holiday'
  * @returns {Object} { hasConflicts: boolean, affectedSessions: [...], affectedClasses: [...] }
  */
 async function checkFutureConflicts(params) {

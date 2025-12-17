@@ -88,6 +88,14 @@ router.delete(
   classController.deleteClass
 );
 
+// Refresh/Tạo mới Zoom meeting cho lớp (admin)
+router.post(
+  "/:classId/zoom/refresh",
+  verifyToken,
+  authorizeFeature("admin"),
+  classController.refreshZoomMeeting
+);
+
 // Course-related APIs
 router.get(
   "/course/:courseId",
@@ -272,6 +280,14 @@ router.post(
   verifyToken,
   authorizeFeature("admin"),
   classScheduleController.updateClassSchedule
+);
+
+// Gợi ý ca học cho EDIT schedule (tách riêng với API gợi ý chung)
+router.get(
+  "/instructor/available-slots/edit",
+  verifyToken,
+  authorizeFeature("admin"),
+  classScheduleController.findAvailableSlotsForEdit
 );
 
 // Đếm học viên

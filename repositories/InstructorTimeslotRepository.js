@@ -10,22 +10,22 @@ class InstructorTimeslotRepository {
     return rows.map((r) => new Timeslot(r));
   }
 
-  async create(courseId, sessionId, data) {
-    const db = await connectDB();
-    const { Date, StartTime, EndTime } = data;
-    const [result] = await db.query(
-      "INSERT INTO timeslot (CourseID, LessonID, Date, StartTime, EndTime) VALUES (?, ?, ?, ?, ?)",
-      [courseId, sessionId, Date, StartTime, EndTime]
-    );
-    return new Timeslot({
-      TimeslotID: result.insertId,
-      CourseID: courseId,
-      LessonID: sessionId,
-      Date,
-      StartTime,
-      EndTime,
-    });
-  }
+  // async create(courseId, sessionId, data) {
+  //   const db = await connectDB();
+  //   const { Date, StartTime, EndTime } = data;
+  //   const [result] = await db.query(
+  //     "INSERT INTO timeslot (CourseID, LessonID, Date, StartTime, EndTime) VALUES (?, ?, ?, ?, ?)",
+  //     [courseId, sessionId, Date, StartTime, EndTime]
+  //   );
+  //   return new Timeslot({
+  //     TimeslotID: result.insertId,
+  //     CourseID: courseId,
+  //     LessonID: sessionId,
+  //     Date,
+  //     StartTime,
+  //     EndTime,
+  //   });
+  // }
 
   async update(timeslotId, data) {
     const db = await connectDB();

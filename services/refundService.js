@@ -130,6 +130,111 @@ class RefundService {
     }
   }
 
+  // Tính toán số tiền hoàn dựa trên quy tắc:
+  // - Trước 1 tuần và học ít hơn 4 buổi: 100%
+  // - Sau tuần 1 đến < 50% số buổi: 50%
+  // - Sau 50% số buổi: 0%
+  async calculateRefundAmount(enrollmentId) {
+    try {
+      const enrollment = await enrollmentRepository.findById(enrollmentId);
+      if (!enrollment) {
+        throw new ServiceError("Không tìm thấy enrollment", 404);
+      }
+
+      // Lấy thông tin lớp học
+      const classRepository = require("../repositories/classRepository");
+      const classData = await classRepository.findById(enrollment.ClassID);
+      if (!classData || classData.length === 0) {
+        throw new ServiceError("Không tìm thấy lớp học", 404);
+      }
+      const classInfo = classData[0];
+
+      // Lấy số tiền đã thanh toán
+      const payment = await paymentRepository.findByEnrollmentId(enrollmentId);
+      if (!payment || payment.length === 0) {
+        throw new ServiceError("Không tìm thấy thông tin thanh toán", 404);
+      }
+      const paymentAmount = payment[0].Amount || 0;
+
+      // Lấy ngày bắt đầu lớp (ưu tiên Opendate, nếu không có thì dùng OpendatePlan)
+      const classStartDate = classInfo.Opendate 
+        ? new Date(classInfo.Opendate) 
+        : classInfo.OpendatePlan 
+        ? new Date(classInfo.OpendatePlan) 
+        : null;
+
+      if (!classStartDate) {
+        throw new ServiceError("Không tìm thấy ngày bắt đầu lớp học", 404);
+      }
+
+      // Lấy tổng số buổi học
+      const totalSessions = classInfo.Numofsession || 0;
+
+      // Đếm số buổi đã học (có attendance với Status = 'Present')
+      const attendanceRepository = require("../repositories/attendanceRepository");
+      const connectDB = require("../config/db");
+      const db = await connectDB();
+      const [attendanceRows] = await db.execute(
+        `SELECT COUNT(DISTINCT a.SessionID) as attendedSessions
+         FROM attendance a
+         INNER JOIN session s ON a.SessionID = s.SessionID
+         WHERE a.LearnerID = ? 
+           AND s.ClassID = ? 
+           AND a.Status = 'Present'`,
+        [enrollment.LearnerID, enrollment.ClassID]
+      );
+      const attendedSessions = attendanceRows[0]?.attendedSessions || 0;
+
+      // Tính số ngày từ ngày bắt đầu lớp đến hiện tại
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const startDate = new Date(classStartDate);
+      startDate.setHours(0, 0, 0, 0);
+      const daysDiff = Math.floor((today - startDate) / (1000 * 60 * 60 * 24));
+      const isBeforeOneWeek = daysDiff < 7;
+
+      // Tính phần trăm số buổi đã học
+      const sessionPercentage = totalSessions > 0 
+        ? (attendedSessions / totalSessions) * 100 
+        : 0;
+
+      // Áp dụng quy tắc hoàn tiền
+      let refundPercentage = 0;
+      let refundReason = "";
+
+      if (isBeforeOneWeek && attendedSessions < 4) {
+        // Trước 1 tuần và học ít hơn 4 buổi: 100%
+        refundPercentage = 100;
+        refundReason = `Hoàn 100% học phí vì yêu cầu hoàn tiền trước 1 tuần kể từ ngày bắt đầu lớp (${startDate.toLocaleDateString('vi-VN')}) và đã học ít hơn 4 buổi (đã học ${attendedSessions}/${totalSessions} buổi)`;
+      } else if (sessionPercentage < 50) {
+        // Sau tuần 1 đến < 50% số buổi: 50%
+        refundPercentage = 50;
+        refundReason = `Hoàn 50% học phí vì đã học dưới 50% số buổi của lớp (đã học ${attendedSessions}/${totalSessions} buổi, tương đương ${sessionPercentage.toFixed(1)}%)`;
+      } else {
+        // Sau 50% số buổi: 0%
+        refundPercentage = 0;
+        refundReason = `Không hoàn tiền vì đã học từ 50% số buổi trở lên (đã học ${attendedSessions}/${totalSessions} buổi, tương đương ${sessionPercentage.toFixed(1)}%)`;
+      }
+
+      const refundAmount = Math.round((paymentAmount * refundPercentage) / 100);
+
+      return {
+        refundAmount,
+        refundPercentage,
+        refundReason,
+        paymentAmount,
+        attendedSessions,
+        totalSessions,
+        sessionPercentage: sessionPercentage.toFixed(1),
+        isBeforeOneWeek,
+        daysDiff,
+      };
+    } catch (error) {
+      console.error("[calculateRefundAmount] Error:", error);
+      throw error;
+    }
+  }
+
   // Duyệt yêu cầu hoàn tiền (chuyển status từ pending sang approved)
   async approveRefund(refundId) {
     try {

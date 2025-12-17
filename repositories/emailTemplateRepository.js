@@ -298,7 +298,7 @@ const emailTemplateRepository = {
 
       params.push(templateId);
       const db = await connectDB();
-
+      await db.query("SET time_zone = '+07:00'");
       await db.query(
         `UPDATE email_template SET ${updateFields.join(
           ", "

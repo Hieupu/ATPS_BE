@@ -313,27 +313,72 @@ const classScheduleController = {
         });
       }
 
-      const sessions = payload.sessions || [];
-      const { startDate, endDate, scheduleDetail } = payload;
+      // Parse payload mới: sessions phải là object với update/create/delete/reschedule
+      const sessions = payload.sessions || {};
 
+      // Validate sessions format
+      if (
+        !sessions ||
+        typeof sessions !== "object" ||
+        Array.isArray(sessions)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Payload không hợp lệ: sessions phải là object với các trường update, create, delete, hoặc reschedule",
+        });
+      }
+
+      // Validate: Phải có ít nhất một trong các trường
+      const hasAnySessions =
+        (Array.isArray(sessions.update) && sessions.update.length > 0) ||
+        (Array.isArray(sessions.create) && sessions.create.length > 0) ||
+        (Array.isArray(sessions.delete) && sessions.delete.length > 0) ||
+        (Array.isArray(sessions.reschedule) && sessions.reschedule.length > 0);
+
+      if (!hasAnySessions) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Danh sách buổi học mới không được rỗng (phải có ít nhất một trong: update, create, delete, reschedule)",
+        });
+      }
+
+      // Parse metadata changes (nếu có)
+      const {
+        OpendatePlan,
+        EnddatePlan,
+        Numofsession,
+        InstructorID,
+        scheduleDetail,
+      } = payload;
+
+      // Gọi service với payload mới
       const result = await classCreationWizardService.updateClassSchedule({
         ClassID,
-        sessions,
-        startDate,
-        endDate,
-        scheduleDetail, // Logic mới: Truyền scheduleDetail để validate single timeslot pattern
+        sessions, // Object với update/create/delete/reschedule
+        OpendatePlan,
+        EnddatePlan,
+        Numofsession,
+        InstructorID,
+        scheduleDetail, // Schedule pattern detail (nếu có)
       });
 
       return res.json({
         success: true,
-        message: "Cập nhật lịch học chi tiết thành công",
+        message: "Cập nhật lịch học thành công",
         data: result,
       });
     } catch (error) {
       console.error("Error updating class schedule:", error);
-      return res.status(500).json({
+
+      // Trả error message rõ ràng với status code đúng
+      const status = error.status || 500;
+      const message = error.message || "Lỗi khi cập nhật lịch học chi tiết";
+
+      return res.status(status).json({
         success: false,
-        message: "Lỗi khi cập nhật lịch học chi tiết",
+        message: message,
         error: error.message,
       });
     }
@@ -460,6 +505,83 @@ const classScheduleController = {
       res.status(500).json({
         success: false,
         message: "Lỗi khi tìm ca rảnh của giảng viên",
+        error: error.message,
+      });
+    }
+  },
+
+  // Gợi ý ca học cho EDIT schedule (tách riêng để dễ chỉnh rule sau này)
+  findAvailableSlotsForEdit: async (req, res) => {
+    try {
+      console.log(
+        `[findAvailableSlotsForEdit] Request URL: ${req.originalUrl}`
+      );
+      console.log(`[findAvailableSlotsForEdit] Query params:`, req.query);
+      const {
+        InstructorID,
+        TimeslotID,
+        Day,
+        numSuggestions,
+        startDate,
+        excludeClassId,
+        ClassID,
+      } = req.query;
+
+      if (!InstructorID || !TimeslotID || !Day) {
+        console.log(
+          `[findAvailableSlotsForEdit] Thiếu tham số: InstructorID=${InstructorID}, TimeslotID=${TimeslotID}, Day=${Day}`
+        );
+        return res.status(400).json({
+          success: false,
+          message: "Thiếu tham số bắt buộc",
+        });
+      }
+
+      console.log(`[findAvailableSlotsForEdit] Gọi service với:`, {
+        InstructorID: parseInt(InstructorID),
+        TimeslotID: parseInt(TimeslotID),
+        Day: Day,
+        numSuggestions: numSuggestions ? parseInt(numSuggestions) : 5,
+        startDate,
+        excludeClassId: excludeClassId ? parseInt(excludeClassId) : null,
+        ClassID: ClassID ? parseInt(ClassID) : null,
+      });
+
+      const suggestions =
+        await classCreationWizardService.findAvailableSlotsForEdit({
+          InstructorID: parseInt(InstructorID),
+          TimeslotID: parseInt(TimeslotID),
+          Day: Day,
+          numSuggestions: numSuggestions ? parseInt(numSuggestions) : 5,
+          startDate,
+          excludeClassId: excludeClassId ? parseInt(excludeClassId) : null,
+          ClassID: ClassID ? parseInt(ClassID) : null,
+        });
+
+      console.log(
+        `[findAvailableSlotsForEdit] Service trả về ${suggestions.length} suggestions`
+      );
+
+      const response = {
+        success: true,
+        message: `Tìm thấy ${suggestions.length} gợi ý (EDIT)`,
+        data: {
+          suggestions: suggestions,
+          availableCount: suggestions.filter((s) => s.available).length,
+          busyCount: suggestions.filter((s) => !s.available).length,
+        },
+      };
+
+      console.log(
+        `[findAvailableSlotsForEdit] Response:`,
+        JSON.stringify(response, null, 2)
+      );
+      res.json(response);
+    } catch (error) {
+      console.error("Error finding available slots for edit:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi tìm ca phù hợp cho chỉnh sửa lịch",
         error: error.message,
       });
     }
