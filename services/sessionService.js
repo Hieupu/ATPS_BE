@@ -2,6 +2,7 @@ const sessionRepository = require("../repositories/sessionRepository");
 const classRepository = require("../repositories/classRepository");
 const timeslotRepository = require("../repositories/timeslotRepository");
 const lessonRepository = require("../repositories/lessonRepository");
+const zoomService = require("./zoomService");
 const {
   validateSessionData,
   validateInstructorLeave,
@@ -25,6 +26,8 @@ class SessionService {
       if (!classData || classData.length === 0) {
         throw new ServiceError("Lớp học không tồn tại", 404);
       }
+      const classInfo = classData[0];
+      const hasZoomMeeting = Boolean(classInfo?.ZoomID);
 
       // InstructorID từ request được ưu tiên (đã validate bắt buộc ở controller)
       // Fallback lấy từ Class chỉ là biện pháp phòng thủ
@@ -116,6 +119,25 @@ class SessionService {
             },
           },
         };
+      }
+
+      // Tạo Zoom occurrence nếu lớp có ZoomID
+      if (hasZoomMeeting) {
+        try {
+          const zoomUUID = await zoomService.createZoomOccurrence(
+            preparedSessionData.ClassID,
+            preparedSessionData.Date,
+            preparedSessionData.TimeslotID
+          );
+          if (zoomUUID) {
+            preparedSessionData.ZoomUUID = zoomUUID;
+          }
+        } catch (zoomError) {
+          console.error(
+            "[sessionService] Failed to create Zoom occurrence:",
+            zoomError?.response?.data || zoomError.message
+          );
+        }
       }
 
       // Tạo session
@@ -377,8 +399,14 @@ class SessionService {
    * @param {number} newTimeslotID - TimeslotID mới
    * @returns {Object} - Session đã được cập nhật
    */
-  async rescheduleSession(sessionId, newDate, newTimeslotID) {
+  async rescheduleSession(
+    sessionId,
+    newDate,
+    newTimeslotID,
+    options = { updateZoom: true }
+  ) {
     try {
+      const { updateZoom = true } = options;
       // Validate trạng thái lớp
       const session = await this.getSessionById(sessionId);
       if (!session) {
@@ -386,11 +414,12 @@ class SessionService {
       }
 
       const classData = await classRepository.findById(session.ClassID);
-      if (classData && classData.length > 0) {
+      const classInfo = classData && classData.length > 0 ? classData[0] : null;
+      if (classInfo) {
         const {
           validateClassStatusForEdit,
         } = require("../utils/classValidation");
-        validateClassStatusForEdit(classData[0].Status);
+        validateClassStatusForEdit(classInfo.Status);
       }
 
       // Validate reschedule
@@ -407,11 +436,35 @@ class SessionService {
         throw new ServiceError(msg, 400);
       }
 
-      // Update session
-      return await this.updateSession(sessionId, {
+      const updatePayload = {
         Date: newDate,
         TimeslotID: newTimeslotID,
-      });
+      };
+
+      const dateChanged = session.Date !== newDate;
+      const timeslotChanged = session.TimeslotID !== newTimeslotID;
+      const hasZoomMeeting = Boolean(classInfo?.ZoomID);
+
+      if (updateZoom && hasZoomMeeting && (dateChanged || timeslotChanged)) {
+        try {
+          const newZoomUUID = await zoomService.updateZoomOccurrence(
+            session.ZoomUUID,
+            session.ClassID,
+            newDate,
+            newTimeslotID
+          );
+          if (newZoomUUID) {
+            updatePayload.ZoomUUID = newZoomUUID;
+          }
+        } catch (zoomError) {
+          console.error(
+            "[sessionService] Failed to update Zoom occurrence:",
+            zoomError?.response?.data || zoomError.message
+          );
+        }
+      }
+
+      return await this.updateSession(sessionId, updatePayload);
     } catch (error) {
       throw error;
     }
@@ -870,6 +923,25 @@ class SessionService {
             continue;
           }
 
+          // Tạo Zoom occurrence nếu lớp có ZoomID
+          if (classData[0]?.ZoomID) {
+            try {
+              const zoomUUID = await zoomService.createZoomOccurrence(
+                preparedSession.ClassID,
+                preparedSession.Date,
+                preparedSession.TimeslotID
+              );
+              if (zoomUUID) {
+                preparedSession.ZoomUUID = zoomUUID;
+              }
+            } catch (zoomError) {
+              console.error(
+                "[sessionService] Failed to create Zoom occurrence (bulk):",
+                zoomError?.response?.data || zoomError.message
+              );
+            }
+          }
+
           // Thêm vào danh sách sessions hợp lệ
           validSessions.push({
             index: i + 1,
@@ -991,13 +1063,26 @@ class SessionService {
         await this.syncClassDates(classId);
       }
 
+      const totalRequested = sessionsData.length;
+      const totalCreated = createdSessions.length;
+      const totalConflicts = conflicts.length;
+
+      // Logic mới: nếu có bất kỳ conflict nào (không tạo đủ số buổi theo yêu cầu)
+      // thì coi là lỗi business, trả 409 để FE hiển thị lỗi và không coi là tạo đủ lịch.
+      if (totalConflicts > 0 || totalCreated < totalRequested) {
+        throw new ServiceError(
+          `Không thể tạo đủ buổi học. Đã tạo ${totalCreated}/${totalRequested} buổi, có ${totalConflicts} buổi bị xung đột.`,
+          409
+        );
+      }
+
       return {
         success: createdSessions,
-        conflicts: conflicts,
+        conflicts: [],
         summary: {
-          total: sessionsData.length,
-          created: createdSessions.length, // Đổi từ "success" sang "created" để match với yêu cầu
-          conflicts: conflicts.length,
+          total: totalRequested,
+          created: totalCreated,
+          conflicts: 0,
         },
       };
     } catch (error) {
@@ -1094,6 +1179,20 @@ class SessionService {
         instructorConflictQuery,
         instructorParams
       );
+
+      console.log(`[checkSessionConflictInfo] Instructor conflict check:`, {
+        InstructorID,
+        Date,
+        TimeslotID,
+        excludeClassId,
+        foundConflicts: instructorConflicts.length,
+        conflicts: instructorConflicts.map((c) => ({
+          SessionID: c.SessionID,
+          ClassID: c.ClassID,
+          className: c.className,
+          Date: c.Date,
+        })),
+      });
 
       if (instructorConflicts.length > 0) {
         const conflict = instructorConflicts[0];

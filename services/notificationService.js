@@ -35,38 +35,90 @@ async createRefundNotification(enrollmentId, refundId, action) {
   try {
     const db = await connectDB();
     
-    // Lấy thông tin enrollment để lấy AccID của learner
-    const [enrollmentRows] = await db.query(
-      `SELECT e.*, l.AccID 
+    // Lấy thông tin enrollment và tất cả AccID của admin trong một transaction
+    const [results] = await db.query(
+      `-- Lấy AccID của learner
+       SELECT ? as RefundID, l.AccID as LearnerAccID, 'learner' as Role
        FROM enrollment e 
        INNER JOIN learner l ON e.LearnerID = l.LearnerID 
-       WHERE e.EnrollmentID = ?`,
-      [enrollmentId]
+       WHERE e.EnrollmentID = ?
+       
+       UNION ALL
+       
+       -- Lấy tất cả AccID của admin active
+       SELECT ? as RefundID, a.AccID as LearnerAccID, 'admin' as Role
+       FROM admin a 
+       INNER JOIN account acc ON a.AccID = acc.AccID 
+       WHERE acc.Status = 'active'`,
+      [refundId, enrollmentId, refundId]
     );
     
-    if (enrollmentRows.length === 0) return;
+    if (results.length === 0) return;
     
-    const enrollment = enrollmentRows[0];
+    // Tách kết quả: phần tử đầu tiên là learner, các phần tử sau là admin
+    const learnerNotification = results.find(r => r.Role === 'learner');
+    const adminNotifications = results.filter(r => r.Role === 'admin');
+    
     const messages = {
-      'requested': `Yêu cầu hoàn tiền #${refundId} của bạn đã được gửi thành công và đang chờ xử lý.`,
-      'cancelled': `Yêu cầu hoàn tiền #${refundId} của bạn đã được hủy.`,
-      'approved': `Yêu cầu hoàn tiền #${refundId} của bạn đã được chấp nhận.`,
-      'rejected': `Yêu cầu hoàn tiền #${refundId} của bạn đã bị từ chối.`
+      'requested': {
+        learner: `Yêu cầu hoàn tiền #${refundId} của bạn đã được gửi thành công và đang chờ xử lý.`,
+        admin: `Có yêu cầu hoàn tiền mới #${refundId} từ học viên cần xử lý.`
+      },
+      'cancelled': {
+        learner: `Yêu cầu hoàn tiền #${refundId} của bạn đã được hủy.`,
+        admin: `Yêu cầu hoàn tiền #${refundId} đã bị hủy bởi học viên.`
+      },
+      'approved': {
+        learner: `Yêu cầu hoàn tiền #${refundId} của bạn đã được chấp nhận.`,
+        admin: `Yêu cầu hoàn tiền #${refundId} đã được phê duyệt.`
+      },
+      'rejected': {
+        learner: `Yêu cầu hoàn tiền #${refundId} của bạn đã bị từ chối.`,
+        admin: `Yêu cầu hoàn tiền #${refundId} đã bị từ chối.`
+      }
     };
 
-    const content = messages[action] || `Cập nhật trạng thái hoàn tiền #${refundId}`;
+    const messageSet = messages[action] || {
+      learner: `Cập nhật trạng thái hoàn tiền #${refundId}`,
+      admin: `Cập nhật trạng thái hoàn tiền #${refundId}`
+    };
 
-    // Tạo notification - BỎ CreatedDate
-    await db.query(
-      `INSERT INTO notification (AccID, Content, Type, Status) 
-       VALUES (?, ?, 'refund', 'unread')`,
-      [enrollment.AccID, content]
-    );
+    // Chuẩn bị tất cả notifications để insert một lần
+    const notificationsToInsert = [];
 
-    console.log(`Refund notification created for AccID: ${enrollment.AccID}, Action: ${action}`);
+    // Thêm notification cho learner
+    if (learnerNotification) {
+      notificationsToInsert.push([
+        learnerNotification.LearnerAccID,
+        messageSet.learner,
+        'refund',
+        'unread'
+      ]);
+    }
+
+    // Thêm notifications cho từng admin
+    adminNotifications.forEach(admin => {
+      notificationsToInsert.push([
+        admin.LearnerAccID,
+        messageSet.admin,
+        'refund_admin',
+        'unread'
+      ]);
+    });
+
+    // Insert tất cả notifications trong một query
+    if (notificationsToInsert.length > 0) {
+      await db.query(
+        `INSERT INTO notification (AccID, Content, Type, Status) 
+         VALUES ?`,
+        [notificationsToInsert]
+      );
+
+      console.log(`Created ${notificationsToInsert.length} notifications: 1 for learner, ${adminNotifications.length} for admins`);
+    }
+
   } catch (error) {
     console.error("Error creating refund notification:", error);
-    // Không throw error để không ảnh hưởng đến flow chính
   }
 }
 }

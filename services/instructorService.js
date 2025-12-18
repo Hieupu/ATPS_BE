@@ -334,27 +334,26 @@ class InstructorService {
         (x) => x.Date === dateStr && x.TimeslotID === timeslotId
       );
 
-      // HOLIDAY → khóa cứng (áp dụng cho cả fulltime và parttime)
-      if (block && block.Status === "Holiday") {
-        isLocked = true;
-        reasons.push({
-          type: "holiday",
-          message: `Ngày ${dateStr} là ngày nghỉ (HOLIDAY) - không thể dạy.`,
-        });
-        break;
-      }
+      // Từ yêu cầu mới: HOLIDAY không còn là khóa cứng.
+      // Các ngày HOLIDAY vẫn cho phép xếp lịch, buổi rơi vào ngày đó sẽ được xử lý SKIPPED/EXTENDED
+      // ở logic sinh lịch, nên ở đây không coi HOLIDAY là xung đột.
 
       // Kiểm tra session trùng timeslot
       const hasSession = sessions.some(
         (s) => s.Date === dateStr && s.TimeslotID === timeslotId
       );
 
+      // Tổng hợp trạng thái cho logic availability:
+      // - Holiday được coi như "Available" để không bị hard-block, sẽ auto bù ở bước sinh lịch.
+      const effectiveStatus =
+        block?.Status === "HOLIDAY" ? "AVAILABLE" : block?.Status;
+
       // FULLTIME logic
       if (instructorType === "fulltime") {
         // FULLTIME logic đặc biệt cho chủ nhật
         if (dow === 0) {
           // Chủ nhật: phải AVAILABLE
-          if (block?.Status !== "Available") {
+          if (effectiveStatus !== "AVAILABLE") {
             isLocked = true;
             reasons.push({
               type: "invalid_sunday",
@@ -386,7 +385,7 @@ class InstructorService {
       // PARTTIME logic
       else if (instructorType === "parttime") {
         // AVAILABLE là bắt buộc cho PARTTIME
-        if (!block || block.Status !== "Available") {
+        if (!block || effectiveStatus !== "AVAILABLE") {
           isLocked = true;
           reasons.push({
             type: "not_available",

@@ -5,6 +5,7 @@ class EmailLogRepository {
   async findAll(filters = {}) {
     try {
       const db = await connectDB();
+
       let query = `
         SELECT 
           el.*,
@@ -150,6 +151,7 @@ class EmailLogRepository {
   async create(logData) {
     try {
       const db = await connectDB();
+      await db.query("SET time_zone = '+07:00'");
       const {
         TemplateID,
         TemplateCode,

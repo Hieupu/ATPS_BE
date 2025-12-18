@@ -6,6 +6,7 @@ const logService = require("../services/logService");
 const notificationRepository = require("../repositories/notificationRepository");
 const instructorRepository = require("../repositories/instructorRepository");
 const accountRepository = require("../repositories/accountRepository");
+const zoomService = require("../services/zoomService");
 
 // Helper function để validate session data
 function validateSessionData(data) {
@@ -88,6 +89,58 @@ const classController = {
     }
   },
 
+  // Admin refresh Zoom meeting for a class (tạo mới ZoomID/Zoompass)
+  refreshZoomMeeting: async (req, res) => {
+    try {
+      const classId = req.params.classId;
+      if (!classId) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Thiếu classId" });
+      }
+
+      const classData = await classService.getClassById(classId);
+      if (!classData) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Lớp học không tồn tại" });
+      }
+
+      const topic = classData.Name || classData.ClassName || `Class ${classId}`;
+      const zoomMeeting = await zoomService.createZoomMeeting({ topic });
+      if (!zoomMeeting || !zoomMeeting.id) {
+        return res.status(500).json({
+          success: false,
+          message: "Không tạo được Zoom meeting",
+        });
+      }
+
+      // Cập nhật ZoomID/Zoompass vào class
+      await classService.updateClass(classId, {
+        ZoomID: zoomMeeting.id,
+        Zoompass: zoomMeeting.password || null,
+      });
+
+      res.json({
+        success: true,
+        message: "Tạo/refresh Zoom meeting thành công",
+        data: {
+          ZoomID: zoomMeeting.id,
+          Zoompass: zoomMeeting.password || null,
+          join_url: zoomMeeting.join_url || null,
+          start_url: zoomMeeting.start_url || null,
+          ZoomUUID: zoomMeeting.uuid || null,
+        },
+      });
+    } catch (error) {
+      console.error("[refreshZoomMeeting] Error:", error);
+      res.status(error.status || 500).json({
+        success: false,
+        message: error.message || "Lỗi khi tạo/refresh Zoom meeting",
+      });
+    }
+  },
+
   // Lấy thông tin lớp học theo ID
   getClassById: async (req, res) => {
     try {
@@ -125,6 +178,18 @@ const classController = {
   },
 
   // Cập nhật lớp học
+  /**
+   * Cập nhật metadata của lớp học (không ảnh hưởng đến sessions)
+   * 
+   * Endpoint: PUT /api/classes/:id
+   * 
+   * Lưu ý: 
+   * - Không cho phép cập nhật OpendatePlan, EnddatePlan, Numofsession, InstructorID
+   * - Các trường này phải được cập nhật qua endpoint /classes/:id/schedule/update
+   * 
+   * @param {Object} req - Request object
+   * @param {Object} res - Response object
+   */
   updateClass: async (req, res) => {
     try {
       const classId = req.params.classId || req.params.id;
@@ -134,6 +199,23 @@ const classController = {
         return res.status(400).json({
           success: false,
           message: "ClassID là bắt buộc",
+        });
+      }
+
+      // Validate: Không cho phép cập nhật schedule fields
+      const scheduleFields = ["OpendatePlan", "EnddatePlan", "Numofsession", "InstructorID"];
+      const hasScheduleFields = scheduleFields.some(
+        (field) => updateData[field] !== undefined && updateData[field] !== null
+      );
+
+      if (hasScheduleFields) {
+        const foundFields = scheduleFields.filter(
+          (field) => updateData[field] !== undefined && updateData[field] !== null
+        );
+        return res.status(400).json({
+          success: false,
+          message: `Không thể cập nhật các trường ảnh hưởng đến lịch học (${foundFields.join(", ")}) qua endpoint này. Vui lòng sử dụng endpoint /classes/${classId}/schedule/update để cập nhật lịch học.`,
+          error: "Schedule fields cannot be updated via this endpoint",
         });
       }
 
@@ -153,9 +235,14 @@ const classController = {
       });
     } catch (error) {
       console.error("Error updating class:", error);
-      res.status(500).json({
+
+      // Trả error message rõ ràng với status code đúng
+      const status = error.status || 500;
+      const message = error.message || "Lỗi khi cập nhật lớp học";
+
+      res.status(status).json({
         success: false,
-        message: "Lỗi khi cập nhật lớp học",
+        message: message,
         error: error.message,
       });
     }
@@ -548,7 +635,7 @@ const classController = {
         Name: className,
         InstructorID: InstructorID,
         OpendatePlan: opendatePlan,
-        Numofsession: numofsession,
+        // dbver7: Numofsession được tính từ Duration của course, không bắt buộc từ FE
         Maxstudent: maxstudent,
       };
 
@@ -559,11 +646,7 @@ const classController = {
           return true;
         }
         // Kiểm tra số: không được là 0 hoặc NaN
-        if (
-          field === "Numofsession" ||
-          field === "Maxstudent" ||
-          field === "InstructorID"
-        ) {
+        if (field === "Maxstudent" || field === "InstructorID") {
           const numValue = Number(value);
           if (isNaN(numValue) || numValue <= 0) {
             return true;
@@ -577,7 +660,6 @@ const classController = {
           "[classController] ERROR: Missing required fields:",
           missingFields
         );
-        
 
         // Tạo errors object cho từng field thiếu
         const errors = {};
@@ -614,18 +696,6 @@ const classController = {
         });
       }
 
-      // Validation Numofsession
-      const numofsessionValue = Number(numofsession);
-      if (isNaN(numofsessionValue) || numofsessionValue <= 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Số buổi dự kiến phải lớn hơn 0",
-          errors: {
-            Numofsession: "Số buổi dự kiến phải lớn hơn 0",
-          },
-        });
-      }
-
       // Validation sĩ số
       const maxstudentValue = Number(maxstudent);
       if (isNaN(maxstudentValue) || maxstudentValue <= 0) {
@@ -638,7 +708,6 @@ const classController = {
         });
       }
 
-
       const classData = await classService.createClass({
         Name: className,
         CourseID: CourseID || null,
@@ -646,7 +715,8 @@ const classController = {
         Fee: Fee || null,
         OpendatePlan: opendatePlan,
         EnddatePlan: EnddatePlan || null,
-        Numofsession: numofsessionValue,
+        // Numofsession sẽ được ClassService tính từ Duration của course (dbver7)
+        Numofsession: numofsession ? Number(numofsession) : undefined,
         Maxstudent: maxstudentValue,
         ZoomID: ZoomID || null,
         Zoompass: Zoompass || null,
@@ -1176,9 +1246,7 @@ const classController = {
               "Đã duyệt lớp học thành công. Lớp sẽ tự động chuyển sang ACTIVE khi đủ điều kiện.",
           },
         });
-      } else if (
-        Status === "ACTIVE" 
-      ) {
+      } else if (Status === "ACTIVE") {
         const updatedClass = await classService.updateClass(classId, {
           Status: "ACTIVE",
         });
@@ -1188,9 +1256,7 @@ const classController = {
           message: "Cập nhật status thành công",
           data: updatedClass,
         });
-      } else if (
-        Status === "CLOSE" 
-      ) {
+      } else if (Status === "CLOSE") {
         const updatedClass = await classService.updateClass(classId, {
           Status: "CLOSE",
         });
@@ -1201,7 +1267,6 @@ const classController = {
           data: updatedClass,
         });
       } else if (Status === "CANCEL") {
-
         const result = await classService.cancelClass(classId);
 
         return res.json({
