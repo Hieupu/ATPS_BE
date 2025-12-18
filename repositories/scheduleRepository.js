@@ -372,6 +372,7 @@ async getInstructorWeeklySchedule(instructorId, weekStartDate) {
       }
 
       schedule.push({
+        InstructorID: instructorId,
         TimeslotID: timeslot.TimeslotID,
         Day: timeslot.Day,
         StartTime: timeslot.StartTime,
