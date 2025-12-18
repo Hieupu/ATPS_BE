@@ -150,7 +150,7 @@ describe("authService - registerService", () => {
     expect(result).toEqual({ id: 124 });
   });
 
-  test("UTCID00 - khi không truyền phone thì tạo account với phone rỗng", async () => {
+  test("UTCID10 - khi không truyền phone thì tạo account với phone rỗng", async () => {
     accountRepository.findAccountByEmail.mockResolvedValue(null);
     bcrypt.hash.mockResolvedValue("hashedPassword");
     accountRepository.createAccount.mockResolvedValue(5);

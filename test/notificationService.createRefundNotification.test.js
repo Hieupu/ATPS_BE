@@ -26,18 +26,35 @@ describe("notificationService - createRefundNotification", () => {
     expect(mockQuery).toHaveBeenCalledTimes(1);
   });
 
-  test("UTCID02 - enrollment hợp lệ, action = requested -> tạo notification nội dung requested", async () => {
-    const enrollmentRows = [{ EnrollmentID: enrollmentId, AccID: 9 }];
+  test("UTCID02 - enrollment hợp lệ, action = requested", async () => {
+    const enrollmentRows = [
+      { RefundID: refundId, LearnerAccID: 9, Role: 'learner' },
+      { RefundID: refundId, LearnerAccID: 1, Role: 'admin' }
+    ];
+
     const mockQuery = setupDb(enrollmentRows);
 
-    await notificationService.createRefundNotification(enrollmentId, refundId, "requested");
+    await notificationService.createRefundNotification(
+      enrollmentId,
+      refundId,
+      "requested"
+    );
 
-    expect(mockQuery).toHaveBeenCalledTimes(2);
-    const insertCall = mockQuery.mock.calls[1];
-    expect(insertCall[0]).toContain("INSERT INTO notification");
-    expect(insertCall[1]).toEqual([
+    const insertCall = mockQuery.mock.calls.find(call =>
+      call[0].includes("INSERT INTO notification")
+    );
+
+    expect(insertCall).toBeDefined();
+
+    const insertedValues = insertCall[1][0];
+
+    const learnerNotification = insertedValues.find(row => row[0] === 9);
+
+    expect(learnerNotification).toEqual([
       9,
       `Yêu cầu hoàn tiền #${refundId} của bạn đã được gửi thành công và đang chờ xử lý.`,
+      'refund',
+      'unread'
     ]);
   });
 

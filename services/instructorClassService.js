@@ -207,7 +207,7 @@ const saveAttendanceService = async (
   const classObj = await instructorClassRepository.findById(classId);
   if (!classObj) throw new ServiceError("Lớp học không tồn tại", 404);
   if (classObj.InstructorID !== instructorId)
-    throw new ServiceError("Không có quyền", 403);
+    throw new ServiceError("Bạn không có quyền điểm danh lớp này", 403);
 
   const sessions = await instructorClassRosterRepository.getSessions(
     classId,

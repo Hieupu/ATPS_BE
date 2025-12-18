@@ -2,7 +2,8 @@ jest.mock("../repositories/profileRepository", () => ({
   findAccountById: jest.fn(),
   findInstructorByAccountId: jest.fn(),
   findLearnerByAccountId: jest.fn(),
-  findParentByAccountId: jest.fn(),
+  findStaffByAccountId: jest.fn(),
+  findAdminByAccountId: jest.fn(),
 }));
 
 const profileRepository = require("../repositories/profileRepository");
@@ -17,6 +18,7 @@ describe("profileService - getProfileByAccountId", () => {
     Gender: "M",
   };
 
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -29,7 +31,7 @@ describe("profileService - getProfileByAccountId", () => {
       .mockResolvedValueOnce({ instructorProfile: { field: "value" } });
 
     profileRepository.findLearnerByAccountId.mockResolvedValue(null);
-    profileRepository.findParentByAccountId.mockResolvedValue(null);
+    profileRepository.findStaffByAccountId.mockResolvedValue(null);
 
     const result = await profileService.getProfileByAccountId(1);
 
@@ -53,7 +55,7 @@ describe("profileService - getProfileByAccountId", () => {
     profileRepository.findLearnerByAccountId
       .mockResolvedValueOnce({ LearnerID: 20 })
       .mockResolvedValueOnce({ learnerProfile: { field: "value" } });
-    profileRepository.findParentByAccountId.mockResolvedValue(null);
+    profileRepository.findStaffByAccountId.mockResolvedValue(null);
 
     const result = await profileService.getProfileByAccountId(1);
 
@@ -70,14 +72,14 @@ describe("profileService - getProfileByAccountId", () => {
     });
   });
 
-  test("UTCID03 - account tồn tại, role parent, có dữ liệu parent -> trả về profile đầy đủ", async () => {
+  test("UTCID03 - account tồn tại, role staff, có dữ liệu staff -> trả về profile đầy đủ", async () => {
     profileRepository.findAccountById.mockResolvedValue(baseAccount);
 
     profileRepository.findInstructorByAccountId.mockResolvedValue(null);
     profileRepository.findLearnerByAccountId.mockResolvedValue(null);
-    profileRepository.findParentByAccountId
-      .mockResolvedValueOnce({ ParentID: 30 })
-      .mockResolvedValueOnce({ parentProfile: { field: "value" } });
+    profileRepository.findStaffByAccountId
+      .mockResolvedValueOnce({ StaffID: 30 })
+      .mockResolvedValueOnce({ staffProfile: { field: "value" } });
 
     const result = await profileService.getProfileByAccountId(1);
 
@@ -88,9 +90,9 @@ describe("profileService - getProfileByAccountId", () => {
         Email: "john@example.com",
         Phone: "0123456789",
         Gender: "M",
-        Role: "parent",
+        Role: "staff",
       },
-      parentProfile: { field: "value" },
+      staffProfile: { field: "value" },
     });
   });
 
@@ -101,7 +103,7 @@ describe("profileService - getProfileByAccountId", () => {
       .mockResolvedValueOnce({ InstructorID: 10 })
       .mockResolvedValueOnce({});
     profileRepository.findLearnerByAccountId.mockResolvedValue(null);
-    profileRepository.findParentByAccountId.mockResolvedValue(null);
+    profileRepository.findStaffByAccountId.mockResolvedValue(null);
 
     const result = await profileService.getProfileByAccountId(1);
 
@@ -124,7 +126,7 @@ describe("profileService - getProfileByAccountId", () => {
     profileRepository.findLearnerByAccountId
       .mockResolvedValueOnce({ LearnerID: 20 })
       .mockResolvedValueOnce({});
-    profileRepository.findParentByAccountId.mockResolvedValue(null);
+    profileRepository.findStaffByAccountId.mockResolvedValue(null);
 
     const result = await profileService.getProfileByAccountId(1);
 
@@ -140,13 +142,13 @@ describe("profileService - getProfileByAccountId", () => {
     });
   });
 
-  test("UTCID06 - account parent nhưng không có dữ liệu parent (chỉ account + role)", async () => {
+  test("UTCID06 - account staff nhưng không có dữ liệu staff (chỉ account + role)", async () => {
     profileRepository.findAccountById.mockResolvedValue(baseAccount);
 
     profileRepository.findInstructorByAccountId.mockResolvedValue(null);
     profileRepository.findLearnerByAccountId.mockResolvedValue(null);
-    profileRepository.findParentByAccountId
-      .mockResolvedValueOnce({ ParentID: 30 })
+    profileRepository.findStaffByAccountId
+      .mockResolvedValueOnce({ StaffID: 30 })
       .mockResolvedValueOnce({});
 
     const result = await profileService.getProfileByAccountId(1);
@@ -158,7 +160,7 @@ describe("profileService - getProfileByAccountId", () => {
         Email: "john@example.com",
         Phone: "0123456789",
         Gender: "M",
-        Role: "parent",
+        Role: "staff",
       },
     });
   });
@@ -172,11 +174,11 @@ describe("profileService - getProfileByAccountId", () => {
   });
 
   test("UTCID08 - account tồn tại nhưng không thuộc instructor/learner/parent -> ném lỗi role", async () => {
-    profileRepository.findAccountById.mockResolvedValue(baseAccount);
+    profileRepository.findAccountById.mockResolvedValue({...baseAccount, Role: "admin",});
 
     profileRepository.findInstructorByAccountId.mockResolvedValue(null);
     profileRepository.findLearnerByAccountId.mockResolvedValue(null);
-    profileRepository.findParentByAccountId.mockResolvedValue(null);
+    profileRepository.findStaffByAccountId.mockResolvedValue(null);
 
     await expect(profileService.getProfileByAccountId(1)).rejects.toThrow(
       "Role not found for this account"
