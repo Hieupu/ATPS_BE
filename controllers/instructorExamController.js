@@ -1,5 +1,4 @@
 const {
-  // Exam CRUD
   createExamService,
   updateExamService,
   getExamsService,
@@ -10,33 +9,28 @@ const {
   getArchivedExamsService,
   createFullExamService ,
 
-  // Exam Instances
   createExamInstanceService,
   updateExamInstanceService,
   deleteExamInstanceService,
   getExamInstancesService,
   checkAndUpdateInstanceStatusService,
 
-  // Section Management
   createExamSectionService,
   updateExamSectionService,
   deleteExamSectionService,
   getSectionsService,
   getSectionDetailService,
 
-  // Question Bank
   createQuestionService,
   getQuestionsService,
   getQuestionDetailService,
   updateQuestionService,
   deleteQuestionService,
 
-  // Section-Question Management
   addQuestionsToSectionService,
   removeQuestionFromSectionService,
   updateQuestionOrderService,
 
-  // Grading
   getExamResultsService,
   getLearnerSubmissionService,
   autoGradeExamService,
@@ -46,12 +40,7 @@ const {
 
 } = require("../services/instructorExamService");
 const instructorExamRepository = require("../repositories/instructorExamRepository");
-// ==================== EXAM CONTROLLERS ====================
 
-/**
- * Tạo exam mới (template)
- * POST /api/instructor/exams
- */
 const createExam = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -71,10 +60,6 @@ const createExam = async (req, res) => {
   }
 };
 
-/**
- * Cập nhật exam template
- * PUT /api/instructor/exams/:examId
- */
 const updateExam = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -95,10 +80,6 @@ const updateExam = async (req, res) => {
   }
 };
 
-/**
- * Lấy danh sách exams của instructor
- * GET /api/instructor/exams?status=Draft&type=Exam
- */
 const getExams = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -122,10 +103,6 @@ const getExams = async (req, res) => {
   }
 };
 
-/**
- * Lấy chi tiết exam với cấu trúc phân cấp
- * GET /api/instructor/exams/:examId
- */
 const getExamDetail = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -145,10 +122,6 @@ const getExamDetail = async (req, res) => {
   }
 };
 
-/**
- * Xóa exam (chuyển sang Archived)
- * DELETE /api/instructor/exams/:examId
- */
 const deleteExam = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -168,10 +141,6 @@ const deleteExam = async (req, res) => {
   }
 };
 
-/**
- * Lưu trữ exam
- * POST /api/instructor/exams/:examId/archive
- */
 const archiveExam = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -191,10 +160,6 @@ const archiveExam = async (req, res) => {
   }
 };
 
-/**
- * Khôi phục exam từ lưu trữ
- * POST /api/instructor/exams/:examId/unarchive
- */
 const unarchiveExam = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -214,10 +179,6 @@ const unarchiveExam = async (req, res) => {
   }
 };
 
-/**
- * Lấy danh sách exam đã lưu trữ
- * GET /api/instructor/exams/archived
- */
 const getArchivedExams = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -237,12 +198,6 @@ const getArchivedExams = async (req, res) => {
   }
 };
 
-// ==================== EXAM INSTANCE CONTROLLERS ====================
-
-/**
- * Tạo exam instance (phiên thi cụ thể)
- * POST /api/instructor/exams/:examId/instances
- */
 const createExamInstance = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -263,10 +218,7 @@ const createExamInstance = async (req, res) => {
   }
 };
 
-/**
- * Cập nhật exam instance
- * PUT /api/instructor/exams/:examId/instances/:instanceId
- */
+
 const updateExamInstance = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -287,10 +239,6 @@ const updateExamInstance = async (req, res) => {
   }
 };
 
-/**
- * Xóa exam instance
- * DELETE /api/instructor/exams/:examId/instances/:instanceId
- */
 const deleteExamInstance = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -310,10 +258,6 @@ const deleteExamInstance = async (req, res) => {
   }
 };
 
-/**
- * Lấy danh sách instances của exam
- * GET /api/instructor/exams/:examId/instances
- */
 const getExamInstances = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -354,7 +298,6 @@ const getClassesByCourse = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("getClassesByCourse ERROR:", error);
     return res.status(500).json({
       success: false,
       message: error.message || "Server error",
@@ -383,7 +326,6 @@ const getUnitByCourse = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("getUnitsByCourse ERROR:", error);
     return res.status(500).json({
       success: false,
       message: error.message,
@@ -392,17 +334,12 @@ const getUnitByCourse = async (req, res) => {
 };
 
 
-/**
- * Auto update exam instance status (Scheduled -> Open -> Closed)
- * POST /api/instructor/instances/check-status
- */
 const checkAndUpdateInstanceStatus = async (req, res) => {
   try {
     const result = await checkAndUpdateInstanceStatusService();
 
     res.status(200).json(result);
   } catch (error) {
-    console.error("❌ Controller: Check instance status error:", error);
     res.status(error.status || 500).json({
       success: false,
       message: error.message || "Failed to check instance status"
@@ -410,12 +347,6 @@ const checkAndUpdateInstanceStatus = async (req, res) => {
   }
 };
 
-// ==================== SECTION MANAGEMENT CONTROLLERS ====================
-
-/**
- * Tạo section mới
- * POST /api/instructor/exams/:examId/sections
- */
 const createExamSection = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -436,10 +367,6 @@ const createExamSection = async (req, res) => {
   }
 };
 
-/**
- * Cập nhật section
- * PUT /api/instructor/exams/:examId/sections/:sectionId
- */
 const updateExamSection = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -460,10 +387,6 @@ const updateExamSection = async (req, res) => {
   }
 };
 
-/**
- * Xóa section
- * DELETE /api/instructor/exams/:examId/sections/:sectionId
- */
 const deleteExamSection = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -483,10 +406,6 @@ const deleteExamSection = async (req, res) => {
   }
 };
 
-/**
- * Lấy danh sách sections
- * GET /api/instructor/exams/:examId/sections?hierarchical=true
- */
 const getSections = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -508,10 +427,6 @@ const getSections = async (req, res) => {
   }
 };
 
-/**
- * Lấy chi tiết section
- * GET /api/instructor/exams/:examId/sections/:sectionId
- */
 const getSectionDetail = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -531,12 +446,6 @@ const getSectionDetail = async (req, res) => {
   }
 };
 
-// ==================== QUESTION BANK CONTROLLERS ====================
-
-/**
- * Tạo câu hỏi mới
- * POST /api/instructor/questions
- */
 const createQuestion = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -556,10 +465,6 @@ const createQuestion = async (req, res) => {
   }
 };
 
-/**
- * Lấy danh sách câu hỏi
- * GET /api/instructor/questions?topic=Grammar&level=Easy&type=multiple_choice
- */
 const getQuestions = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -584,10 +489,6 @@ const getQuestions = async (req, res) => {
   }
 };
 
-/**
- * Lấy chi tiết câu hỏi
- * GET /api/instructor/questions/:questionId
- */
 const getQuestionDetail = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -607,10 +508,7 @@ const getQuestionDetail = async (req, res) => {
   }
 };
 
-/**
- * Cập nhật câu hỏi
- * PUT /api/instructor/questions/:questionId
- */
+
 const updateQuestion = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -631,10 +529,6 @@ const updateQuestion = async (req, res) => {
   }
 };
 
-/**
- * Xóa câu hỏi
- * DELETE /api/instructor/questions/:questionId
- */
 const deleteQuestion = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -654,13 +548,7 @@ const deleteQuestion = async (req, res) => {
   }
 };
 
-// ==================== SECTION-QUESTION MANAGEMENT ====================
 
-/**
- * Thêm câu hỏi vào section
- * POST /api/instructor/exams/:examId/sections/:sectionId/questions
- * Body: { questionIds: [1, 2, 3] }
- */
 const addQuestionsToSection = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -681,10 +569,6 @@ const addQuestionsToSection = async (req, res) => {
   }
 };
 
-/**
- * Xóa câu hỏi khỏi section
- * DELETE /api/instructor/exams/:examId/sections/:sectionId/questions/:questionId
- */
 const removeQuestionFromSection = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -704,11 +588,7 @@ const removeQuestionFromSection = async (req, res) => {
   }
 };
 
-/**
- * Cập nhật thứ tự câu hỏi trong section
- * PUT /api/instructor/exams/:examId/sections/:sectionId/questions/:questionId/order
- * Body: { orderIndex: 5 }
- */
+
 const updateQuestionOrder = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -735,12 +615,7 @@ const updateQuestionOrder = async (req, res) => {
   }
 };
 
-// ==================== GRADING CONTROLLERS ====================
 
-/**
- * Lấy danh sách kết quả thi theo instance
- * GET /api/instructor/instances/:instanceId/results
- */
 const getExamResults = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -761,10 +636,7 @@ const getExamResults = async (req, res) => {
   }
 };
 
-/**
- * Lấy bài thi của learner để chấm
- * GET /api/instructor/exams/:examId/learners/:learnerId/submission
- */
+
 const getLearnerSubmission = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -784,10 +656,7 @@ const getLearnerSubmission = async (req, res) => {
   }
 };
 
-/**
- * Chấm bài tự động
- * POST /api/instructor/exams/:examId/learners/:learnerId/auto-grade
- */
+
 const autoGradeExam = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -807,11 +676,7 @@ const autoGradeExam = async (req, res) => {
   }
 };
 
-/**
- * Chấm bài thủ công
- * POST /api/instructor/exams/:examId/learners/:learnerId/manual-grade
- * Body: { score, feedback }
- */
+
 const manualGradeExam = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -855,8 +720,6 @@ const importQuestionsExcelController = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Import Excel Error:", error);
-
     return res.status(500).json({
       success: false,
       message: error.message || "Lỗi import Excel",
@@ -930,19 +793,80 @@ const createFullExamController = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Create Full Exam Error:", err);
     return res.status(400).json({ 
       success: false, 
       message: err.message 
     });
   }
 };
+const openExamInstanceNow = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    const { examId, instanceId } = req.params;
+
+    const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+    if (!instructorId) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy giảng viên" });
+    }
+
+    const ownsExam = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+    if (!ownsExam) {
+      return res.status(403).json({ success: false, message: "Bạn không có quyền với bài thi này" });
+    }
+
+    const opened = await instructorExamRepository.openExamInstanceNow(instanceId);
+    if (!opened) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Không thể mở (đã mở rồi hoặc không tồn tại)" 
+      });
+    }
+
+    await instructorExamRepository.publishExam(examId);
+
+    res.status(200).json({
+      success: true,
+      message: "Đã mở bài thi ngay lập tức. Học viên có thể bắt đầu làm bài."
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || "Lỗi server" });
+  }
+};
 
 
-// ==================== EXPORTS ====================
+const closeExamInstanceNow = async (req, res) => {
+  try {
+    const instructorAccId = req.user.id;
+    const { examId, instanceId } = req.params;
+
+    const instructorId = await instructorExamRepository.getInstructorIdByAccId(instructorAccId);
+    if (!instructorId) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy giảng viên" });
+    }
+
+    const ownsExam = await instructorExamRepository.checkExamOwnership(examId, instructorId);
+    if (!ownsExam) {
+      return res.status(403).json({ success: false, message: "Bạn không có quyền với bài thi này" });
+    }
+
+    const closed = await instructorExamRepository.closeExamInstanceNow(instanceId);
+    if (!closed) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Không thể đóng (đã đóng rồi hoặc không tồn tại)" 
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Đã đóng bài thi ngay lập tức. Học viên không thể tiếp tục làm bài."
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message || "Lỗi server" });
+  }
+};
 
 module.exports = {
-  // Exam CRUD
   createExam,
   updateExam,
   getExams,
@@ -953,7 +877,6 @@ module.exports = {
   getArchivedExams,
   createFullExamController,
 
-  // Exam Instances
   createExamInstance,
   updateExamInstance,
   deleteExamInstance,
@@ -964,31 +887,29 @@ module.exports = {
   getInstructorCourses,
   getUnitByCourse,
 
-  // Section Management
   createExamSection,
   updateExamSection,
   deleteExamSection,
   getSections,
   getSectionDetail,
 
-  // Question Bank
   createQuestion,
   getQuestions,
   getQuestionDetail,
   updateQuestion,
   deleteQuestion,
 
-  // Section-Question Management
   addQuestionsToSection,
   removeQuestionFromSection,
   updateQuestionOrder,
 
-  // Grading
   getExamResults,
   getLearnerSubmission,
   autoGradeExam,
   manualGradeExam,
 
   importQuestionsExcelController,
-  createQuestionAndAssignToSection
+  createQuestionAndAssignToSection,
+  openExamInstanceNow,
+  closeExamInstanceNow
 };

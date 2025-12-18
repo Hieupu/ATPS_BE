@@ -1,8 +1,6 @@
 const connectDB = require("../config/db");
 
 class InstructorExamRepository {
-  // ==================== EXAM CRUD ====================
-
   async createExam(data) {
     const db = await connectDB();
     const sql = `
@@ -19,9 +17,6 @@ class InstructorExamRepository {
     return result.insertId;
   }
 
-  /**
-   * Cập nhật exam template
-   */
   async updateExam(examId, data) {
     const db = await connectDB();
     const sql = `
@@ -39,9 +34,6 @@ class InstructorExamRepository {
     return result.affectedRows > 0;
   }
 
-  /**
-   * Lấy danh sách exam của instructor
-   */
   async getExamsByInstructor(instructorId, filters = {}) {
     const db = await connectDB();
     let sql = `
@@ -75,9 +67,6 @@ class InstructorExamRepository {
     return rows;
   }
 
-  /**
-   * Lấy chi tiết exam
-   */
   async getExamById(examId) {
     const db = await connectDB();
     const sql = `
@@ -90,9 +79,7 @@ class InstructorExamRepository {
     return rows[0] || null;
   }
 
-  /**
-   * Xóa exam (soft delete -> Archived)
-   */
+
   async deleteExam(examId) {
     const db = await connectDB();
     const sql = `UPDATE exam SET Status = 'Archived' WHERE ExamID = ?`;
@@ -100,9 +87,6 @@ class InstructorExamRepository {
     return result.affectedRows > 0;
   }
 
-  /**
-   * Lưu trữ bài thi đã hoàn thành
-   */
   async archiveExam(examId) {
     const db = await connectDB();
     const sql = `UPDATE exam SET Status = 'Archived' WHERE ExamID = ?`;
@@ -110,9 +94,6 @@ class InstructorExamRepository {
     return result.affectedRows > 0;
   }
 
-  /**
-   * Khôi phục bài thi từ lưu trữ
-   */
   async unarchiveExam(examId) {
     const db = await connectDB();
     const sql = `UPDATE exam SET Status = 'Draft' WHERE ExamID = ? AND Status = 'Archived'`;
@@ -120,9 +101,6 @@ class InstructorExamRepository {
     return result.affectedRows > 0;
   }
 
-  /**
-   * Lấy danh sách bài thi đã lưu trữ
-   */
   async getArchivedExams(instructorId) {
     const db = await connectDB();
     const sql = `
@@ -141,23 +119,18 @@ class InstructorExamRepository {
     return rows;
   }
 
-  // ==================== EXAM INSTANCES MANAGEMENT ====================
-
-  /**
-   * Tạo exam instance (phiên thi cụ thể)
-   */
-async createExamInstance(data) {
+  async createExamInstance(data) {
     const db = await connectDB();
 
     const {
-        examId,
-        unitId,
-        classId,
-        startTime,
-        endTime,
-        isRandomQuestion,
-        isRandomAnswer,
-        attempt
+      examId,
+      unitId,
+      classId,
+      startTime,
+      endTime,
+      isRandomQuestion,
+      isRandomAnswer,
+      attempt
     } = data;
 
     const Status = "Scheduled";
@@ -166,79 +139,67 @@ async createExamInstance(data) {
     let classIds = [];
 
     if (Array.isArray(unitId)) {
-        unitIds = unitId;
+      unitIds = unitId;
     } else if (unitId != null) {
-        unitIds = [unitId];
+      unitIds = [unitId];
     }
 
     if (Array.isArray(classId)) {
-        classIds = classId;
+      classIds = classId;
     } else if (classId != null) {
-        classIds = [classId];
+      classIds = [classId];
     }
 
-    console.log("🔍 CREATE EXAM INSTANCE - NORMALIZED:");
-    console.log("  - unitIds:", unitIds, "isArray:", Array.isArray(unitIds));
-    console.log("  - classIds:", classIds, "isArray:", Array.isArray(classIds));
-
-    /** ---------------------- CASE 1: ASSIGNMENT (unitId là mảng) ---------------------- */
     if (unitIds.length > 0) {
-        for (const uid of unitIds) {
-            const sql = `
+      for (const uid of unitIds) {
+        const sql = `
                 INSERT INTO exam_instances 
                 (ExamId, UnitId, ClassId, StartTime, EndTime, isRandomQuestion, isRandomAnswer, Status, Attempt)
                 VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?)
             `;
 
-            const [res] = await db.query(sql, [
-                examId,
-                uid,
-                startTime || null,
-                endTime || null,
-                isRandomQuestion ? 1 : 0,
-                isRandomAnswer ? 1 : 0,
-                Status,
-                attempt || 1
-            ]);
+        const [res] = await db.query(sql, [
+          examId,
+          uid,
+          startTime || null,
+          endTime || null,
+          isRandomQuestion ? 1 : 0,
+          isRandomAnswer ? 1 : 0,
+          Status,
+          attempt || 1
+        ]);
 
-            resultIds.push(res.insertId);
-        }
-        return resultIds;
+        resultIds.push(res.insertId);
+      }
+      return resultIds;
     }
 
-    /** ---------------------- CASE 2: EXAM (classId là mảng) ---------------------- */
     if (classIds.length > 0) {
-        for (const cid of classIds) {
-            const sql = `
+      for (const cid of classIds) {
+        const sql = `
                 INSERT INTO exam_instances 
                 (ExamId, UnitId, ClassId, StartTime, EndTime, isRandomQuestion, isRandomAnswer, Status, Attempt)
                 VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)
             `;
 
-            const [res] = await db.query(sql, [
-                examId,
-                cid,
-                startTime || null,
-                endTime || null,
-                isRandomQuestion ? 1 : 0,
-                isRandomAnswer ? 1 : 0,
-                Status,
-                attempt || 1
-            ]);
+        const [res] = await db.query(sql, [
+          examId,
+          cid,
+          startTime || null,
+          endTime || null,
+          isRandomQuestion ? 1 : 0,
+          isRandomAnswer ? 1 : 0,
+          Status,
+          attempt || 1
+        ]);
 
-            resultIds.push(res.insertId);
-        }
-        return resultIds;
+        resultIds.push(res.insertId);
+      }
+      return resultIds;
     }
-
-    /** ---------------------- CASE 3: Sai format ---------------------- */
     throw new Error("Invalid instance payload: classId hoặc unitId phải là mảng");
-}
+  }
 
-
-  /**
-   * Cập nhật exam instance
-   */
   async updateExamInstance(instanceId, data) {
     const db = await connectDB();
     const sql = `
@@ -259,9 +220,6 @@ async createExamInstance(data) {
     return result.affectedRows > 0;
   }
 
-  /**
-   * Xóa exam instance
-   */
   async deleteExamInstance(instanceId) {
     const db = await connectDB();
     const sql = `DELETE FROM exam_instances WHERE InstanceId = ?`;
@@ -269,9 +227,6 @@ async createExamInstance(data) {
     return result.affectedRows > 0;
   }
 
-  /**
-   * Lấy danh sách instances của exam
-   */
   async getInstancesByExam(examId) {
     const db = await connectDB();
     const sql = `
@@ -291,9 +246,6 @@ async createExamInstance(data) {
     return rows;
   }
 
-  /**
-   * Lấy instance theo ID
-   */
   async getInstanceById(instanceId) {
     const db = await connectDB();
     const sql = `SELECT * FROM exam_instances WHERE InstanceId = ?`;
@@ -301,36 +253,7 @@ async createExamInstance(data) {
     return rows[0] || null;
   }
 
-  /**
-   * Auto update exam instance status (Scheduled -> Open -> Closed)
-   */
-  async autoUpdateInstanceStatus() {
-    const db = await connectDB();
-    await db.query("SET time_zone = '+07:00'");
 
-    // Scheduled -> Open
-    const [openResults] = await db.query(`
-      UPDATE exam_instances
-      SET Status = 'Open'
-      WHERE Status = 'Scheduled' AND StartTime <= NOW() AND EndTime > NOW()
-    `);
-
-    // Open -> Closed
-    const [closeResults] = await db.query(`
-      UPDATE exam_instances
-      SET Status = 'Closed'
-      WHERE Status = 'Open' AND EndTime <= NOW()
-    `);
-
-    return {
-      scheduledToOpen: openResults.affectedRows,
-      openToClosed: closeResults.affectedRows
-    };
-  }
-
-  /**
-   * Lấy danh sách classes có thể gán exam
-   */
   async getAvailableClassesByInstructor(instructorId) {
     const db = await connectDB();
     const sql = `
@@ -346,9 +269,6 @@ async createExamInstance(data) {
     return rows;
   }
 
-  /**
-   * Lấy danh sách units có thể gán exam
-   */
   async getAvailableUnitsByInstructor(instructorId) {
     const db = await connectDB();
     const sql = `
@@ -364,11 +284,6 @@ async createExamInstance(data) {
     return rows;
   }
 
-  // ==================== EXAM SECTION MANAGEMENT ====================
-
-  /**
-   * Tạo section mới (có thể là parent hoặc child section)
-   */
   async createExamSection(examId, sectionData) {
     const db = await connectDB();
     const sql = `
@@ -386,9 +301,6 @@ async createExamInstance(data) {
     return result.insertId;
   }
 
-  /**
-   * Cập nhật section
-   */
   async updateExamSection(sectionId, sectionData) {
     const db = await connectDB();
     const sql = `
@@ -407,13 +319,8 @@ async createExamInstance(data) {
     return result.affectedRows > 0;
   }
 
-  /**
-   * Xóa section (cascade delete child sections và questions)
-   */
   async deleteExamSection(sectionId) {
     const db = await connectDB();
-
-    // Xóa questions thuộc child sections
     await db.query(
       `DELETE eq FROM examquestion eq
        JOIN examsection es ON eq.SectionId = es.SectionId
@@ -421,20 +328,14 @@ async createExamInstance(data) {
       [sectionId]
     );
 
-    // Xóa questions thuộc section cha
     await db.query(`DELETE FROM examquestion WHERE SectionId = ?`, [sectionId]);
 
-    // Xóa child sections
     await db.query(`DELETE FROM examsection WHERE ParentSectionId = ?`, [sectionId]);
 
-    // Xóa section chính
     const [result] = await db.query(`DELETE FROM examsection WHERE SectionId = ?`, [sectionId]);
     return result.affectedRows > 0;
   }
 
-  /**
-   * Lấy section by ID
-   */
   async getSectionById(sectionId) {
     const db = await connectDB();
     const sql = `SELECT * FROM examsection WHERE SectionId = ?`;
@@ -442,9 +343,6 @@ async createExamInstance(data) {
     return rows[0] || null;
   }
 
-  /**
-   * Lấy danh sách parent sections của exam
-   */
   async getParentSectionsByExam(examId) {
     const db = await connectDB();
     const sql = `
@@ -463,9 +361,6 @@ async createExamInstance(data) {
     return rows;
   }
 
-  /**
-   * Lấy child sections của parent section
-   */
   async getChildSectionsByParent(parentSectionId) {
     const db = await connectDB();
     const sql = `
@@ -482,9 +377,6 @@ async createExamInstance(data) {
     return rows;
   }
 
-  /**
-   * Lấy cấu trúc phân cấp sections của exam
-   */
   async getSectionsHierarchyByExam(examId) {
     const parentSections = await this.getParentSectionsByExam(examId);
 
@@ -501,17 +393,12 @@ async createExamInstance(data) {
     return parentSections;
   }
 
-  /**
-   * Kiểm tra section có thuộc exam không
-   */
   async checkSectionBelongsToExam(sectionId, examId) {
     const db = await connectDB();
     const sql = `SELECT SectionId FROM examsection WHERE SectionId = ? AND ExamId = ?`;
     const [rows] = await db.query(sql, [sectionId, examId]);
     return rows.length > 0;
   }
-
-  // ==================== QUESTION MANAGEMENT ====================
 
   async createQuestion(data) {
     const db = await connectDB();
@@ -641,8 +528,6 @@ async createExamInstance(data) {
     return result.affectedRows > 0;
   }
 
-  // ==================== SECTION-QUESTION MANAGEMENT ====================
-
   async addQuestionToSection(sectionId, questionId, orderIndex) {
     const db = await connectDB();
     const sql = `
@@ -740,8 +625,7 @@ async createExamInstance(data) {
     return rows;
   }
   async getUnitByCourse(courseId) {
-    const db = await connectDB(); // ✔ thay pool bằng connectDB()
-
+    const db = await connectDB(); 
     const sql = `
       SELECT 
         UnitID,
@@ -777,10 +661,6 @@ async createExamInstance(data) {
     const [rows] = await db.query(sql, [courseId]);
     return rows;
   }
-
-
-
-  // ==================== EXAM RESULTS & GRADING ====================
 
   async getExamResultsByInstance(instanceId) {
     const db = await connectDB();
@@ -855,8 +735,6 @@ async createExamInstance(data) {
     return result.insertId || result.affectedRows;
   }
 
-  // ==================== HELPER METHODS ====================
-
   async checkExamOwnership(examId, instructorId) {
     const db = await connectDB();
     const sql = `SELECT ExamID FROM exam WHERE ExamID = ? AND InstructorID = ?`;
@@ -872,6 +750,75 @@ async createExamInstance(data) {
     );
     return rows.length > 0 ? rows[0].InstructorID : null;
   }
+  async autoUpdateInstanceStatus() {
+    const db = await connectDB();
+    const now = new Date();
+
+    const [openResult] = await db.query(`
+      UPDATE exam_instances 
+      SET Status = 'Open' 
+      WHERE Status = 'Scheduled' 
+        AND StartTime IS NOT NULL 
+        AND StartTime <= ?
+    `, [now]);
+
+    const [closeResult] = await db.query(`
+      UPDATE exam_instances 
+      SET Status = 'Closed' 
+      WHERE Status = 'Open' 
+        AND EndTime IS NOT NULL 
+        AND EndTime <= ?
+    `, [now]);
+
+    const [publishResult] = await db.query(`
+      UPDATE exam e
+      INNER JOIN exam_instances ei ON e.ExamID = ei.ExamId
+      SET e.Status = 'Published'
+      WHERE e.Status = 'Draft'
+        AND ei.Status = 'Open'
+    `);
+
+    return {
+      openedCount: openResult.affectedRows,
+      closedCount: closeResult.affectedRows,
+      publishedCount: publishResult.affectedRows
+    };
+  }
+  
+  async openExamInstanceNow(instanceId) {
+    const db = await connectDB();
+    const sql = `
+      UPDATE exam_instances 
+      SET Status = 'Open' 
+      WHERE InstanceId = ? AND Status IN ('Scheduled')
+    `;
+    const [result] = await db.query(sql, [instanceId]);
+    return result.affectedRows > 0;
+  }
+
+
+  async closeExamInstanceNow(instanceId) {
+    const db = await connectDB();
+    const sql = `
+      UPDATE exam_instances 
+      SET Status = 'Closed' 
+      WHERE InstanceId = ? AND Status = 'Open'
+    `;
+    const [result] = await db.query(sql, [instanceId]);
+    return result.affectedRows > 0;
+  }
+
+  async publishExam(examId) {
+    const db = await connectDB();
+    const sql = `
+      UPDATE exam 
+      SET Status = 'Published' 
+      WHERE ExamID = ? AND Status = 'Draft'
+    `;
+    const [result] = await db.query(sql, [examId]);
+    return result.affectedRows > 0;
+  }
+
 }
 
 module.exports = new InstructorExamRepository();
