@@ -1227,38 +1227,6 @@ const autoGradeExamService = async (instructorAccId, examId, learnerId) => {
   return { score: score.toFixed(2), message: "Chấm bài tự động thành công" };
 };
 
-const manualGradeExamService = async (
-  instructorAccId,
-  examId,
-  learnerId,
-  score,
-  feedback
-) => {
-  const instructorId = await instructorExamRepository.getInstructorIdByAccId(
-    instructorAccId
-  );
-  if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
-
-  const hasAccess = await instructorExamRepository.checkExamOwnership(
-    examId,
-    instructorId
-  );
-  if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
-
-  if (score < 0 || score > 100) {
-    throw new Error("Điểm phải từ 0 đến 100");
-  }
-
-  await instructorExamRepository.saveExamResult({
-    learnerId,
-    examId,
-    score,
-    feedback: feedback || "",
-  });
-
-  return { message: "Chấm bài thành công" };
-};
-
 const importQuestionsFromExcel = async (
   instructorAccId,
   examId,
@@ -1600,7 +1568,6 @@ module.exports = {
   getExamResultsService,
   getLearnerSubmissionService,
   autoGradeExamService,
-  manualGradeExamService,
 
   validateQuestionData,
   validateExamData,

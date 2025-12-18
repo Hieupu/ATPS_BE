@@ -38,7 +38,6 @@ const {
   getExamResults,
   getLearnerSubmission,
   autoGradeExam,
-  manualGradeExam,
 
   importQuestionsExcelController,
   openExamInstanceNow,
@@ -94,8 +93,6 @@ router.put("/exams/:examId/sections/:sectionId/questions/:questionId/order", upd
 router.get("/instances/:instanceId/results", getExamResults);
 router.get("/exams/:examId/learners/:learnerId/submission", getLearnerSubmission);
 router.post("/exams/:examId/learners/:learnerId/auto-grade", autoGradeExam);
-router.post("/exams/:examId/learners/:learnerId/manual-grade", manualGradeExam);
-
 
 router.post(
   "/exams/:examId/sections/:sectionId/questions/import",
