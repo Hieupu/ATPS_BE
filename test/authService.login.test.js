@@ -122,7 +122,7 @@ describe("authService - loginService", () => {
         id: 5,
         email: "a@gmail.com",
         Username: "John",
-        role: "unknown User",
+        role: "unknown",
       },
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
@@ -135,7 +135,7 @@ describe("authService - loginService", () => {
         id: 5,
         email: "a@gmail.com",
         username: "John",
-        role: "unknown User",
+        role: "unknown",
         ProfilePicture: null,
       },
     });

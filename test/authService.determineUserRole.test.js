@@ -73,6 +73,6 @@ describe("authService - determineUserRole", () => {
     connectDB.mockResolvedValue({ query: mockQuery });
 
     const role = await determineUserRole(6);
-    expect(role).toBe("unknown User");
+    expect(role).toBe("unknown");
   });
 });
