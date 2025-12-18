@@ -1,10 +1,18 @@
 const {
   getFullDashboardDataService,
 } = require("../services/instructorDashboardService");
+const courseRepository = require("../repositories/instructorCourseRepository");
 
 const getInstructorDashboardController = async (req, res) => {
   try {
-    const { instructorId } = req.params;
+    const accId = Number(req.user.id);
+    const instructorId = await courseRepository.findInstructorIdByAccountId(
+      accId
+    );
+
+    if (!instructorId) {
+      return res.status(400).json({ message: "Instructor không tồn tại" });
+    }
 
     if (!instructorId) {
       return res.status(400).json({
