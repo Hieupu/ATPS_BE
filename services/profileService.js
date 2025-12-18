@@ -29,7 +29,9 @@ class ProfileService {
 
     // Get role-specific data
     if (role === "instructor") {
-      const instructor = await profileRepository.findInstructorByAccountId(accountId);
+      const instructor = await profileRepository.findInstructorByAccountId(
+        accountId
+      );
       profileData = { ...profileData, ...instructor };
     } else if (role === "learner") {
       const learner = await profileRepository.findLearnerByAccountId(accountId);
@@ -37,8 +39,7 @@ class ProfileService {
     } else if (role === "admin") {
       const admin = await profileRepository.findAdminByAccountId(accountId);
       profileData = { ...profileData, ...admin };
-    }
-    else if (role === "staff") {
+    } else if (role === "staff") {
       const staff = await profileRepository.findStaffByAccountId(accountId);
       profileData = { ...profileData, ...staff };
     }
@@ -47,10 +48,14 @@ class ProfileService {
   }
 
   async determineRole(accountId) {
-    const instructor = await profileRepository.findInstructorByAccountId(accountId);
+    const instructor = await profileRepository.findInstructorByAccountId(
+      accountId
+    );
     if (instructor) return "instructor";
     const learner = await profileRepository.findLearnerByAccountId(accountId);
     if (learner) return "learner";
+    const staff = await profileRepository.findStaffByAccountId(accountId);
+    if (staff) return "staff";
     const admin = await profileRepository.findAdminByAccountId(accountId);
     if (admin) return "admin";
 
