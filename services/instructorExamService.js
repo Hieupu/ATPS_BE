@@ -1,7 +1,8 @@
 const instructorExamRepository = require("../repositories/instructorExamRepository");
 const XLSX = require("xlsx");
 const connectDB = require("../config/db");
-// ==================== CONSTANTS ====================
+
+
 const EXAM_STATUSES = ["Draft", "Published", "Archived"];
 const EXAM_TYPES = ["Assignment", "Exam"];
 const INSTANCE_STATUSES = [
@@ -22,7 +23,6 @@ const QUESTION_TYPES = [
 ];
 const QUESTION_LEVELS = ["Easy", "Medium", "Hard"];
 
-// ==================== VALIDATION HELPERS ====================
 
 function assertValidDateStr(dateStr, fieldName = "Date") {
   if (!dateStr) throw new Error(`${fieldName} là bắt buộc`);
@@ -34,24 +34,20 @@ function assertValidDateStr(dateStr, fieldName = "Date") {
 }
 
 function validateExamData(data) {
-  // Title
   if (!data.title || !data.title.trim()) {
     throw new Error("Tiêu đề bài thi là bắt buộc");
   }
 
-  // Description
   if (!data.description || !data.description.trim()) {
     throw new Error("Mô tả bài thi là bắt buộc");
   }
 
-  // Status
   if (data.status && !EXAM_STATUSES.includes(data.status)) {
     throw new Error(
       `Trạng thái không hợp lệ. Cho phép: ${EXAM_STATUSES.join(", ")}`
     );
   }
 
-  // Type
   if (data.type && !EXAM_TYPES.includes(data.type)) {
     throw new Error(
       `Loại bài thi không hợp lệ. Cho phép: ${EXAM_TYPES.join(", ")}`
@@ -62,7 +58,6 @@ function validateExamData(data) {
 }
 
 function validateInstanceData(data) {
-  // Nếu gán bài EXAM → bắt buộc nhập thời gian
   if (data.instanceType === "Exam") {
     const startTime = assertValidDateStr(data.startTime, "Thời gian bắt đầu");
     const endTime = assertValidDateStr(data.endTime, "Thời gian kết thúc");
@@ -72,7 +67,7 @@ function validateInstanceData(data) {
     }
   }
 
-  // Nếu Assignment → KHÔNG cần thời gian, nhưng nếu có thì validate
+  
   if (data.instanceType === "Assignment") {
     if (data.startTime && data.endTime) {
       const start = new Date(data.startTime);
@@ -87,7 +82,6 @@ function validateInstanceData(data) {
     }
   }
 
-  // Validate Unit / Class
   if (!data.classId && !data.unitId) {
     throw new Error("Phải gán cho Class hoặc Unit");
   }
@@ -95,7 +89,6 @@ function validateInstanceData(data) {
     throw new Error("Chỉ có thể gán cho Class HOẶC Unit, không thể cả hai");
   }
 
-  // Validate Attempt
   if (!data.attempt || data.attempt < 1) {
     throw new Error("Số lần làm bài phải ≥ 1");
   }
@@ -203,11 +196,6 @@ function validateQuestionData(data) {
   return data;
 }
 
-// ==================== EXAM SERVICES ====================
-
-/**
- * Tạo exam mới (template)
- */
 const createExamService = async (instructorAccId, data) => {
   validateExamData(data);
 
@@ -226,7 +214,6 @@ const createExamService = async (instructorAccId, data) => {
 
   const examId = await instructorExamRepository.createExam(examData);
 
-  // Tạo sections với cấu trúc phân cấp nếu có
   if (
     data.sections &&
     Array.isArray(data.sections) &&
@@ -235,7 +222,6 @@ const createExamService = async (instructorAccId, data) => {
     for (const parentSection of data.sections) {
       validateSectionData(parentSection);
 
-      // Tạo parent section
       const parentSectionId = await instructorExamRepository.createExamSection(
         examId,
         {
@@ -247,7 +233,6 @@ const createExamService = async (instructorAccId, data) => {
         }
       );
 
-      // Tạo child sections nếu có
       if (
         parentSection.childSections &&
         Array.isArray(parentSection.childSections)
@@ -263,8 +248,6 @@ const createExamService = async (instructorAccId, data) => {
               parentSectionId: parentSectionId,
               fileURL: childSection.fileURL || null,
             });
-
-          // Thêm questions vào child section
           const questionIds =
             childSection.questionIds || childSection.questions || [];
           if (questionIds && questionIds.length > 0) {
@@ -276,7 +259,6 @@ const createExamService = async (instructorAccId, data) => {
         }
       }
 
-      // Thêm questions trực tiếp vào parent section
       const parentQuestionIds =
         parentSection.questionIds || parentSection.questions || [];
       if (parentQuestionIds && parentQuestionIds.length > 0) {
@@ -295,9 +277,6 @@ const createExamService = async (instructorAccId, data) => {
   };
 };
 
-/**
- * Cập nhật exam template
- */
 const updateExamService = async (instructorAccId, examId, data) => {
   validateExamData(data);
 
@@ -321,17 +300,15 @@ const updateExamService = async (instructorAccId, examId, data) => {
 
   await instructorExamRepository.updateExam(examId, examData);
 
-  // Cập nhật sections nếu có
+
   if (Array.isArray(data.sections)) {
-    // Xóa tất cả sections cũ và tạo lại
+   
     const oldSections = await instructorExamRepository.getParentSectionsByExam(
       examId
     );
     for (const section of oldSections) {
       await instructorExamRepository.deleteExamSection(section.SectionId);
     }
-
-    // Tạo sections mới
     for (const parentSection of data.sections) {
       validateSectionData(parentSection);
 
@@ -387,9 +364,6 @@ const updateExamService = async (instructorAccId, examId, data) => {
   return { message: "Cập nhật bài thi thành công" };
 };
 
-/**
- * Lấy danh sách exams
- */
 const getExamsService = async (instructorAccId, filters = {}) => {
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
@@ -403,9 +377,6 @@ const getExamsService = async (instructorAccId, filters = {}) => {
   return exams;
 };
 
-/**
- * Lấy chi tiết exam với cấu trúc phân cấp sections
- */
 const getExamDetailService = async (instructorAccId, examId) => {
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
@@ -421,12 +392,10 @@ const getExamDetailService = async (instructorAccId, examId) => {
   const exam = await instructorExamRepository.getExamById(examId);
   if (!exam) throw new Error("Không tìm thấy bài thi");
 
-  // Lấy cấu trúc sections
   const sections = await instructorExamRepository.getSectionsHierarchyByExam(
     examId
   );
 
-  // Lấy danh sách instances
   const instances = await instructorExamRepository.getInstancesByExam(examId);
 
   return {
@@ -436,9 +405,6 @@ const getExamDetailService = async (instructorAccId, examId) => {
   };
 };
 
-/**
- * Xóa exam (chuyển sang Archived)
- */
 const deleteExamService = async (instructorAccId, examId) => {
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
@@ -455,9 +421,6 @@ const deleteExamService = async (instructorAccId, examId) => {
   return { message: "Xóa bài thi thành công" };
 };
 
-/**
- * Lưu trữ exam
- */
 const archiveExamService = async (instructorAccId, examId) => {
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
@@ -476,9 +439,6 @@ const archiveExamService = async (instructorAccId, examId) => {
   return { message: "Lưu trữ bài thi thành công" };
 };
 
-/**
- * Khôi phục exam từ lưu trữ
- */
 const unarchiveExamService = async (instructorAccId, examId) => {
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
@@ -497,9 +457,7 @@ const unarchiveExamService = async (instructorAccId, examId) => {
   return { message: "Khôi phục bài thi thành công" };
 };
 
-/**
- * Lấy danh sách exams đã lưu trữ
- */
+
 const getArchivedExamsService = async (instructorAccId) => {
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
@@ -510,11 +468,7 @@ const getArchivedExamsService = async (instructorAccId) => {
   return exams;
 };
 
-// ==================== EXAM INSTANCE SERVICES ====================
 
-/**
- * Tạo exam instance mới (phiên thi cụ thể)
- */
 const createExamInstanceService = async (instructorAccId, examId, data) => {
   validateInstanceData(data);
 
@@ -536,7 +490,6 @@ const createExamInstanceService = async (instructorAccId, examId, data) => {
     throw new Error("Không thể tạo instance cho bài thi đã Archived");
   }
 
-  // Chuẩn hóa classId & unitId
   let classIds = [];
   let unitIds = [];
 
@@ -608,38 +561,30 @@ const createExamInstanceService = async (instructorAccId, examId, data) => {
   throw new Error("Phải gán cho Class hoặc Unit để tạo instance");
 };
 
-/**
- * Cập nhật exam instance
- */
 const updateExamInstanceService = async (
   instructorAccId,
   examId,
   instanceId,
   data
 ) => {
-  // 1. VALIDATE INPUT
   validateInstanceUpdateData(data);
 
-  // 2. LẤY INSTRUCTOR ID
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
   );
   if (!instructorId) throw new Error("Không tìm thấy thông tin giảng viên");
 
-  // 3. KIỂM TRA QUYỀN SỞ HỮU
   const hasAccess = await instructorExamRepository.checkExamOwnership(
     examId,
     instructorId
   );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
-  // 4. LẤY INSTANCE HIỆN TẠI (CHỈ ĐỂ LẤY GIÁ TRỊ MẶC ĐỊNH)
   const instance = await instructorExamRepository.getInstanceById(instanceId);
   if (!instance) throw new Error("Không tìm thấy phiên thi");
   if (instance.ExamId != examId)
     throw new Error("Instance không thuộc exam này");
 
-  // 5. CHUẨN HÓA classId / unitId THÀNH MẢNG
   const classIds =
     data.classId != null
       ? Array.isArray(data.classId)
@@ -653,14 +598,11 @@ const updateExamInstanceService = async (
         ? data.unitId
         : [data.unitId]
       : [];
-
-  // 6. TRƯỜNG HỢP ĐỔI CLASS/UNIT → XÓA CŨ, TẠO MỚI
   if (classIds.length > 0 || unitIds.length > 0) {
     if (classIds.length > 0 && unitIds.length > 0) {
       throw new Error("Không thể update sang cả Class và Unit cùng lúc");
     }
 
-    // XÓA INSTANCE CŨ
     await instructorExamRepository.deleteExamInstance(instanceId);
 
     const newInstances = [];
@@ -691,8 +633,6 @@ const updateExamInstanceService = async (
       instances: newInstances,
     };
   }
-
-  // 7. TRƯỜNG HỢP CHỈ CẬP NHẬT THÔNG TIN THƯỜNG
   const instanceData = {
     startTime: data.startTime,
     endTime: data.endTime,
@@ -710,9 +650,6 @@ const updateExamInstanceService = async (
   };
 };
 
-/**
- * Xóa exam instance
- */
 const deleteExamInstanceService = async (
   instructorAccId,
   examId,
@@ -741,9 +678,6 @@ const deleteExamInstanceService = async (
   return { message: "Xóa phiên thi thành công" };
 };
 
-/**
- * Lấy danh sách instances của exam
- */
 const getExamInstancesService = async (instructorAccId, examId) => {
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
@@ -760,9 +694,6 @@ const getExamInstancesService = async (instructorAccId, examId) => {
   return instances;
 };
 
-/**
- * Lấy danh sách classes có thể gán
- */
 const getAvailableClassesService = async (instructorAccId) => {
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
@@ -776,9 +707,7 @@ const getAvailableClassesService = async (instructorAccId) => {
   return classes;
 };
 
-/**
- * Lấy danh sách units có thể gán
- */
+
 const getAvailableUnitsService = async (instructorAccId) => {
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
@@ -791,9 +720,6 @@ const getAvailableUnitsService = async (instructorAccId) => {
   return units;
 };
 
-/**
- * Auto update exam instance status
- */
 const checkAndUpdateInstanceStatusService = async () => {
   try {
     const result = await instructorExamRepository.autoUpdateInstanceStatus();
@@ -812,11 +738,7 @@ const checkAndUpdateInstanceStatusService = async () => {
   }
 };
 
-// ==================== SECTION MANAGEMENT SERVICES ====================
 
-/**
- * Tạo section mới
- */
 const createExamSectionService = async (
   instructorAccId,
   examId,
@@ -835,7 +757,6 @@ const createExamSectionService = async (
   );
   if (!hasAccess) throw new Error("Không có quyền truy cập bài thi này");
 
-  // Nếu có parentSectionId, kiểm tra parent có tồn tại không
   if (sectionData.parentSectionId) {
     const parentSection = await instructorExamRepository.getSectionById(
       sectionData.parentSectionId
@@ -870,9 +791,6 @@ const createExamSectionService = async (
   };
 };
 
-/**
- * Cập nhật section
- */
 const updateExamSectionService = async (
   instructorAccId,
   examId,
@@ -931,9 +849,6 @@ const updateExamSectionService = async (
   return { message: "Cập nhật section thành công" };
 };
 
-/**
- * Xóa section
- */
 const deleteExamSectionService = async (instructorAccId, examId, sectionId) => {
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
@@ -959,9 +874,6 @@ const deleteExamSectionService = async (instructorAccId, examId, sectionId) => {
   };
 };
 
-/**
- * Lấy danh sách sections
- */
 const getSectionsService = async (
   instructorAccId,
   examId,
@@ -984,9 +896,6 @@ const getSectionsService = async (
   return sections;
 };
 
-/**
- * Lấy chi tiết section
- */
 const getSectionDetailService = async (instructorAccId, examId, sectionId) => {
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
@@ -1022,11 +931,6 @@ const getSectionDetailService = async (instructorAccId, examId, sectionId) => {
   };
 };
 
-// ==================== QUESTION BANK SERVICES ====================
-
-/**
- * Tạo câu hỏi mới
- */
 const createQuestionService = async (instructorAccId, questionData) => {
   validateQuestionData(questionData);
 
@@ -1058,9 +962,6 @@ const createQuestionService = async (instructorAccId, questionData) => {
   return { questionId, message: "Tạo câu hỏi thành công" };
 };
 
-/**
- * Lấy danh sách câu hỏi
- */
 const getQuestionsService = async (instructorAccId, filters = {}) => {
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
@@ -1074,9 +975,6 @@ const getQuestionsService = async (instructorAccId, filters = {}) => {
   return questions;
 };
 
-/**
- * Lấy chi tiết câu hỏi
- */
 const getQuestionDetailService = async (instructorAccId, questionId) => {
   const question = await instructorExamRepository.getQuestionById(questionId);
   if (!question) throw new Error("Không tìm thấy câu hỏi");
@@ -1091,9 +989,6 @@ const getQuestionDetailService = async (instructorAccId, questionId) => {
   return question;
 };
 
-/**
- * Cập nhật câu hỏi
- */
 const updateQuestionService = async (instructorAccId, questionId, data) => {
   validateQuestionData(data);
 
@@ -1122,9 +1017,6 @@ const updateQuestionService = async (instructorAccId, questionId, data) => {
   return { message: "Cập nhật câu hỏi thành công" };
 };
 
-/**
- * Xóa câu hỏi
- */
 const deleteQuestionService = async (instructorAccId, questionId) => {
   const question = await instructorExamRepository.getQuestionById(questionId);
   if (!question) throw new Error("Không tìm thấy câu hỏi");
@@ -1140,11 +1032,6 @@ const deleteQuestionService = async (instructorAccId, questionId) => {
   return { message: "Xóa câu hỏi thành công" };
 };
 
-// ==================== SECTION-QUESTION MANAGEMENT ====================
-
-/**
- * Thêm câu hỏi vào section
- */
 const addQuestionsToSectionService = async (
   instructorAccId,
   examId,
@@ -1179,9 +1066,6 @@ const addQuestionsToSectionService = async (
   };
 };
 
-/**
- * Xóa câu hỏi khỏi section
- */
 const removeQuestionFromSectionService = async (
   instructorAccId,
   examId,
@@ -1213,9 +1097,7 @@ const removeQuestionFromSectionService = async (
   return { message: "Xóa câu hỏi khỏi section thành công" };
 };
 
-/**
- * Cập nhật thứ tự câu hỏi trong section
- */
+
 const updateQuestionOrderService = async (
   instructorAccId,
   examId,
@@ -1253,11 +1135,6 @@ const updateQuestionOrderService = async (
   return { message: "Cập nhật thứ tự câu hỏi thành công" };
 };
 
-// ==================== GRADING SERVICES ====================
-
-/**
- * Lấy kết quả thi theo instance
- */
 const getExamResultsService = async (instructorAccId, instanceId) => {
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
@@ -1280,9 +1157,7 @@ const getExamResultsService = async (instructorAccId, instanceId) => {
   return results;
 };
 
-/**
- * Lấy bài thi của learner để chấm
- */
+
 const getLearnerSubmissionService = async (
   instructorAccId,
   examId,
@@ -1307,9 +1182,6 @@ const getLearnerSubmissionService = async (
   return submission;
 };
 
-/**
- * Chấm bài tự động
- */
 const autoGradeExamService = async (instructorAccId, examId, learnerId) => {
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
@@ -1355,9 +1227,6 @@ const autoGradeExamService = async (instructorAccId, examId, learnerId) => {
   return { score: score.toFixed(2), message: "Chấm bài tự động thành công" };
 };
 
-/**
- * Chấm bài thủ công
- */
 const manualGradeExamService = async (
   instructorAccId,
   examId,
@@ -1560,18 +1429,15 @@ const importQuestionsFromExcel = async (
   };
 };
 const createFullExamService = async (instructorAccId, data) => {
-  // 1) Validate exam
+ 
   validateExamData(data.exam);
 
-  // 2) Validate instance
   validateInstanceData(data.instance);
 
   const instructorId = await instructorExamRepository.getInstructorIdByAccId(
     instructorAccId
   );
   if (!instructorId) throw new Error("Không tìm thấy giảng viên");
-
-  // --- Tạo exam ---
   const examId = await instructorExamRepository.createExam({
     title: data.exam.title,
     description: data.exam.description,
@@ -1580,7 +1446,6 @@ const createFullExamService = async (instructorAccId, data) => {
     instructorId
   });
 
-  // --- Tạo sections ---
   if (Array.isArray(data.sections)) {
     for (const parent of data.sections) {
       const parentId = await instructorExamRepository.createExamSection(
@@ -1594,7 +1459,6 @@ const createFullExamService = async (instructorAccId, data) => {
         }
       );
 
-      // Child sections
       if (Array.isArray(parent.childSections)) {
         for (const child of parent.childSections) {
           const childId = await instructorExamRepository.createExamSection(
@@ -1607,8 +1471,6 @@ const createFullExamService = async (instructorAccId, data) => {
               fileURL: child.fileURL || null,
             }
           );
-
-          // ✅ BƯỚC 1: TẠO CÂU HỎI MỚI (newQuestions)
           const createdQuestionIds = [];
 
           if (
@@ -1616,10 +1478,8 @@ const createFullExamService = async (instructorAccId, data) => {
             child.newQuestions.length > 0
           ) {
             for (const newQ of child.newQuestions) {
-              // Validate câu hỏi mới
               validateQuestionData(newQ);
 
-              // Chuẩn hóa correctAnswer cho matching
               let correctAnswer = newQ.correctAnswer;
               if (newQ.type === "matching") {
                 if (typeof correctAnswer !== "string") {
@@ -1627,7 +1487,6 @@ const createFullExamService = async (instructorAccId, data) => {
                 }
               }
 
-              // Tạo question
               const questionId = await instructorExamRepository.createQuestion({
                 content: newQ.content.trim(),
                 type: newQ.type,
@@ -1639,7 +1498,6 @@ const createFullExamService = async (instructorAccId, data) => {
                 point: newQ.point || 1,
               });
 
-              // Tạo options cho multiple_choice
               if (
                 newQ.type === "multiple_choice" &&
                 Array.isArray(newQ.options)
@@ -1654,10 +1512,9 @@ const createFullExamService = async (instructorAccId, data) => {
             }
           }
 
-          // ✅ BƯỚC 2: GẮN CÂU HỎI (cả có sẵn + mới tạo)
           const allQuestionIds = [
-            ...(child.questions || []), // Câu hỏi từ ngân hàng
-            ...createdQuestionIds, // Câu hỏi vừa tạo
+            ...(child.questions || []), 
+            ...createdQuestionIds, 
           ];
 
           if (allQuestionIds.length > 0) {
@@ -1669,7 +1526,6 @@ const createFullExamService = async (instructorAccId, data) => {
         }
       }
 
-      // Questions trực tiếp trong parent (nếu có)
       if (parent.questions?.length > 0) {
         await instructorExamRepository.addQuestionsToSection(
           parentId,
@@ -1679,7 +1535,6 @@ const createFullExamService = async (instructorAccId, data) => {
     }
   }
 
-  // --- Tạo instance ---
   const instancePayload = {
     examId,
     classId: data.instance.classId,
@@ -1704,7 +1559,6 @@ const createFullExamService = async (instructorAccId, data) => {
 };
 
 module.exports = {
-  // Exam CRUD
   createExamService,
   updateExamService,
   getExamsService,
@@ -1716,7 +1570,6 @@ module.exports = {
   createFullExamService,
   validateExamData,
 
-  // Exam Instances
   createExamInstanceService,
   updateExamInstanceService,
   deleteExamInstanceService,
@@ -1726,34 +1579,29 @@ module.exports = {
   checkAndUpdateInstanceStatusService,
   assertValidDateStr,
 
-  // Section Management
   createExamSectionService,
   updateExamSectionService,
   deleteExamSectionService,
   getSectionsService,
   getSectionDetailService,
 
-  // Question Bank
   createQuestionService,
   getQuestionsService,
   getQuestionDetailService,
   updateQuestionService,
   deleteQuestionService,
 
-  // Section-Question Management
   addQuestionsToSectionService,
   removeQuestionFromSectionService,
   updateQuestionOrderService,
   importQuestionsFromExcel,
   validateQuestionData,
 
-  // Grading
   getExamResultsService,
   getLearnerSubmissionService,
   autoGradeExamService,
   manualGradeExamService,
 
-  // Utils / validation
   validateQuestionData,
   validateExamData,
   assertValidDateStr,
