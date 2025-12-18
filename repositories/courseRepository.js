@@ -265,28 +265,29 @@ class CourseRepository {
 
       const [rows] = await db.query(
         `
-      SELECT 
-        c.CourseID,
-        c.Title,
-        c.Description,
-        c.Duration,
-        c.Image,
-        c.Level,
-        c.Status as CourseStatus,
-        ANY_VALUE(i.InstructorID) as InstructorID,
-        ANY_VALUE(i.FullName) as InstructorName,
-        ANY_VALUE(i.ProfilePicture) as InstructorAvatar,
-        ANY_VALUE(i.Major) as InstructorMajor,
-        (SELECT COUNT(*) FROM unit u WHERE u.CourseID = c.CourseID AND u.Status = 'VISIBLE') as UnitCount,
-        COUNT(DISTINCT cl.ClassID) as TotalClasses,
-        MAX(e.EnrollmentDate) as LastEnrollmentDate
-      FROM enrollment e
-      INNER JOIN class cl ON e.ClassID = cl.ClassID
-      INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
-      INNER JOIN course c ON cl.CourseID = c.CourseID
-      WHERE e.LearnerID = ? AND e.Status = 'enrolled'
-      GROUP BY c.CourseID
-      ORDER BY LastEnrollmentDate DESC
+         SELECT 
+  c.CourseID,
+  c.Title,
+  c.Description,
+  c.Duration,
+  c.Image,
+  c.Level,
+  c.Status as CourseStatus,
+  ANY_VALUE(i.InstructorID) as InstructorID,
+  ANY_VALUE(i.FullName) as InstructorName,
+  ANY_VALUE(i.ProfilePicture) as InstructorAvatar,
+  ANY_VALUE(i.Major) as InstructorMajor,
+  (SELECT COUNT(*) FROM unit u WHERE u.CourseID = c.CourseID AND u.Status = 'VISIBLE') as UnitCount,
+  COUNT(DISTINCT cl.ClassID) as TotalClasses,
+  MAX(e.EnrollmentDate) as LastEnrollmentDate
+FROM enrollment e
+INNER JOIN class cl ON e.ClassID = cl.ClassID
+INNER JOIN instructor i ON cl.InstructorID = i.InstructorID
+INNER JOIN course c ON cl.CourseID = c.CourseID
+WHERE e.LearnerID = ? AND e.Status = 'enrolled'
+GROUP BY c.CourseID
+HAVING COUNT(DISTINCT cl.ClassID) > 0
+ORDER BY LastEnrollmentDate DESC
       `,
         [learnerId]
       );
@@ -522,8 +523,8 @@ class CourseRepository {
       const db = await connectDB();
 
       // Main query - optimized
-    const [classes] = await db.query(
-  `SELECT 
+      const [classes] = await db.query(
+        `SELECT 
     cl.ClassID,
     cl.CourseID,
     cl.Name as ClassName,
@@ -556,9 +557,8 @@ class CourseRepository {
      cl.Opendate, cl.Enddate, cl.Numofsession, 
      i.InstructorID, i.FullName, enr.StudentCount
    ORDER BY cl.ClassID`,
-  [courseId]
-);
-
+        [courseId]
+      );
 
       // Check if there are any classes before processing
       if (!classes.length) {
