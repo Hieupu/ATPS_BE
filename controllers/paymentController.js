@@ -165,7 +165,7 @@ const createPaymentLink = async (req, res) => {
    COALESCE(cl.Fee, 0) as TuitionFee  -- Sửa: chỉ dùng cl.Fee
    FROM class cl 
    LEFT JOIN course c ON cl.CourseID = c.CourseID 
-   WHERE cl.ClassID = ? AND cl.Status IN ('active','pending','paid')`,
+   WHERE cl.ClassID = ? AND cl.Status IN ('active')`,
       [classID]
     );
     if (!classData.length)

@@ -5,15 +5,15 @@ const RESERVATION_EXPIRE_SECONDS = 120;
 
 class SlotReservationService {
   
-  // Tạo key cho slot reservation
-  getReservationKey(timeslotId, date) {
-    return `slot:${timeslotId}:${date}`;
+  // ⭐️ FIX: Thêm instructorId vào key để phân biệt từng instructor
+  getReservationKey(timeslotId, date, instructorId) {
+    return `slot:${instructorId}:${timeslotId}:${date}`;
   }
 
   // Giữ chỗ slot
-  async reserveSlot(timeslotId, date, userId) {
+  async reserveSlot(timeslotId, date, userId, instructorId) {
     try {
-      const key = this.getReservationKey(timeslotId, date);
+      const key = this.getReservationKey(timeslotId, date, instructorId);
       
       // Kiểm tra xem slot đã được giữ chưa
       const existingReservation = await redisClient.get(key);
@@ -28,6 +28,7 @@ class SlotReservationService {
             RESERVATION_EXPIRE_SECONDS, 
             JSON.stringify({
               userId,
+              instructorId,
               timeslotId,
               date,
               reservedAt: Date.now()
@@ -44,12 +45,13 @@ class SlotReservationService {
         };
       }
       
-      // Giữ slot mới với TTL 60 giây
+      // Giữ slot mới với TTL
       await redisClient.setEx(
         key, 
         RESERVATION_EXPIRE_SECONDS, 
         JSON.stringify({
           userId,
+          instructorId,
           timeslotId,
           date,
           reservedAt: Date.now()
@@ -64,9 +66,9 @@ class SlotReservationService {
   }
 
   // Hủy giữ chỗ slot
-  async releaseSlot(timeslotId, date, userId) {
+  async releaseSlot(timeslotId, date, userId, instructorId) {
     try {
-      const key = this.getReservationKey(timeslotId, date);
+      const key = this.getReservationKey(timeslotId, date, instructorId);
       const existingReservation = await redisClient.get(key);
       
       if (existingReservation) {
@@ -92,9 +94,9 @@ class SlotReservationService {
   }
 
   // Kiểm tra slot có đang được giữ không
-  async isSlotReserved(timeslotId, date) {
+  async isSlotReserved(timeslotId, date, instructorId) {
     try {
-      const key = this.getReservationKey(timeslotId, date);
+      const key = this.getReservationKey(timeslotId, date, instructorId);
       const reservation = await redisClient.get(key);
       
       if (reservation) {
@@ -102,6 +104,7 @@ class SlotReservationService {
         return {
           reserved: true,
           userId: data.userId,
+          instructorId: data.instructorId,
           reservedAt: data.reservedAt
         };
       }
@@ -125,6 +128,7 @@ class SlotReservationService {
           const data = JSON.parse(reservation);
           if (data.userId === userId) {
             userSlots.push({
+              instructorId: data.instructorId,
               timeslotId: data.timeslotId,
               date: data.date,
               reservedAt: data.reservedAt
@@ -140,7 +144,7 @@ class SlotReservationService {
     }
   }
 
-  // Hủy tất cả slot của user (khi thanh toán hoặc thoát)
+  // Hủy tất cả slot của user
   async releaseAllUserSlots(userId) {
     try {
       const keys = await redisClient.keys('slot:*');
