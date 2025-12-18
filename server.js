@@ -57,7 +57,8 @@ const payrollRoutes = require("./routes/payrollRoutes");
 const newsRoutes = require("./routes/newsRoutes");
 const instructorDashboardRouter = require("./routes/instructorDashboardRouter");
 const classService = require("./services/ClassService");
-const instructorExamRepository = require("./repositories/instructorExamRepository");
+const { startExamInstanceAutoUpdate } = require("./services/examInstanceCron");
+
 dotenv.config();
 const app = express();
 
@@ -244,6 +245,9 @@ console.log("[Cron Jobs] Đã khởi tạo scheduled tasks:");
 console.log(
   "[Cron Jobs] - Tự động cập nhật status lớp học: Mỗi ngày lúc 00:00 và mỗi giờ"
 );
+
+
+startExamInstanceAutoUpdate();
 
 const PORT = process.env.PORT || 9999;
 connectDB().then(() => {

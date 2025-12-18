@@ -482,25 +482,63 @@ class InstructorClassRosterRepository {
       const dateObj = new Date(newDate);
       const dayName = days[dateObj.getDay()];
 
-      const [result] = await connection.query(
-        `INSERT INTO session_change_request 
-         (SessionID, InstructorID, NewDate, NewTimeslotID, Reason, Status, CreatedDate) 
-         SELECT 
-            ?, -- sessionId
-            ?, -- instructorId
-            ?, -- newDate
-            (SELECT TimeslotID FROM timeslot WHERE StartTime = ? AND Day = ? LIMIT 1), -- Tự tìm ID
-            ?, -- reason
-            'PENDING', 
-            NOW()`,
-        [sessionId, instructorId, newDate, newStartTime, dayName, reason]
+      const [timeslotRows] = await connection.query(
+        `SELECT TimeslotID FROM timeslot WHERE StartTime = ? AND Day = ? LIMIT 1`,
+        [newStartTime, dayName]
       );
 
-      if (result.affectedRows === 0) {
+      if (timeslotRows.length === 0) {
         throw new Error(
-          "Không tìm thấy khung giờ cố định phù hợp (Sai giờ hoặc ngày)."
+          "Không tìm thấy khung giờ cố định phù hợp trong hệ thống (Sai giờ hoặc ngày)."
         );
       }
+      const newTimeslotId = timeslotRows[0].TimeslotID;
+
+      const [conflictRows] = await connection.query(
+        `
+        SELECT l.FullName, l.LearnerID
+        FROM session s_existing
+        JOIN enrollment e_existing ON s_existing.ClassID = e_existing.ClassID
+        JOIN learner l ON e_existing.LearnerID = l.LearnerID
+        WHERE s_existing.Date = ? 
+          AND s_existing.TimeslotID = ?
+          AND s_existing.SessionID != ? 
+          AND e_existing.LearnerID IN (
+              
+              SELECT e_current.LearnerID
+              FROM session s_current
+              JOIN enrollment e_current ON s_current.ClassID = e_current.ClassID
+              WHERE s_current.SessionID = ?
+          )
+        LIMIT 1;
+        `,
+        [newDate, newTimeslotId, sessionId, sessionId]
+      );
+
+      if (conflictRows.length > 0) {
+        const maxDisplay = 3;
+        const firstFewNames = conflictRows
+          .slice(0, maxDisplay)
+          .map((row) => row.FullName)
+          .join(", ");
+
+        let message = `Học viên ${firstFewNames}`;
+
+        if (conflictRows.length > maxDisplay) {
+          message += ` và ${conflictRows.length - maxDisplay} người khác`;
+        }
+
+        throw new Error(
+          `Không thể đổi lịch vì ${message} đã có lịch học khác vào khung giờ này.`
+        );
+      }
+
+      const [result] = await connection.query(
+        `INSERT INTO session_change_request 
+          (SessionID, InstructorID, NewDate, NewTimeslotID, Reason, Status, CreatedDate) 
+         VALUES (?, ?, ?, ?, ?, 'PENDING', NOW())`,
+        [sessionId, instructorId, newDate, newTimeslotId, reason]
+      );
 
       const newRequestId = result.insertId;
 

@@ -155,29 +155,31 @@ class InstructorDashboardRepository {
     const db = await connectDB();
 
     let sql = `
-    SELECT
-      e.ExamID,
-      e.Title,
-      e.Type,
-      c.ClassID,
-      c.Name AS ClassName,
-      COUNT(DISTINCT en.LearnerID) AS TotalLearners,
-      COUNT(DISTINCT CASE WHEN s.SubmissionID IS NOT NULL THEN s.LearnerID END) AS SubmittedCount,
-      COUNT(DISTINCT CASE WHEN s.Score IS NOT NULL THEN s.LearnerID END) AS GradedCount,
-      COUNT(DISTINCT CASE WHEN s.SubmissionID IS NOT NULL AND s.Score IS NULL THEN s.LearnerID END) AS UngradedCount,
-      DATE_FORMAT(ei.EndTime, '%Y-%m-%d') AS DueDate
-    FROM exam e
-    JOIN exam_instances ei ON e.ExamID = ei.ExamId
-    JOIN class c ON ei.ClassId = c.ClassID
-    LEFT JOIN enrollment en ON en.ClassID = c.ClassID
-    LEFT JOIN submission s ON s.ExamID = e.ExamID AND s.LearnerID = en.LearnerID
-    WHERE e.InstructorID = ?
-    GROUP BY e.ExamID, e.Title, e.Type, c.ClassID, c.Name, ei.EndTime
-    ORDER BY (UngradedCount > 0) DESC, ei.EndTime ASC
-  `;
+  SELECT
+    e.ExamID,
+    e.Title,
+    e.Type,
+    c.ClassID,
+    c.Name AS ClassName,
+    (SELECT COUNT(*) FROM enrollment en WHERE en.ClassID = c.ClassID) AS TotalLearners,
+
+    (SELECT COUNT(DISTINCT LearnerID) FROM (
+        SELECT LearnerID, ExamID FROM submission
+        UNION
+        SELECT LearnerID, ExamID FROM examresult
+    ) AS attempts WHERE attempts.ExamID = e.ExamID) AS SubmittedCount,
+
+    (SELECT COUNT(DISTINCT er.LearnerID) FROM examresult er WHERE er.ExamID = e.ExamID) AS GradedCount,
+    DATE_FORMAT(ei.EndTime, '%Y-%m-%d') AS DueDate
+  FROM exam e
+  JOIN exam_instances ei ON e.ExamID = ei.ExamId
+  JOIN class c ON ei.ClassId = c.ClassID
+  WHERE e.InstructorID = ?
+  GROUP BY e.ExamID, e.Title, e.Type, c.ClassID, c.Name, ei.EndTime
+  ORDER BY ei.EndTime ASC
+`;
 
     const params = [instructorId];
-
     if (Number.isInteger(limit)) {
       sql += ` LIMIT ?`;
       params.push(limit);
@@ -185,23 +187,27 @@ class InstructorDashboardRepository {
 
     const [rows] = await db.query(sql, params);
 
-    return rows.map((row) => ({
-      examId: row.ExamID,
-      title: row.Title,
-      type: row.Type?.toUpperCase() || "EXAM",
-      classId: row.ClassID,
-      className: row.ClassName,
-      dueDate: row.DueDate,
-      totalLearners: Number(row.TotalLearners),
-      submittedCount: Number(row.SubmittedCount),
-      gradedCount: Number(row.GradedCount),
-      ungradedCount: Number(row.UngradedCount),
-      progress:
-        row.TotalLearners > 0
-          ? Math.round((row.GradedCount / row.TotalLearners) * 100)
-          : 0,
-      status: row.UngradedCount === 0 ? "Đã chấm" : "Chưa chấm",
-    }));
+    return rows.map((row) => {
+      const total = Number(row.TotalLearners) || 0;
+      const graded = Number(row.GradedCount) || 0;
+      const submitted = Number(row.SubmittedCount) || 0;
+
+      return {
+        examId: row.ExamID,
+        title: row.Title,
+        type: row.Type?.toUpperCase() || "EXAM",
+        classId: row.ClassID,
+        className: row.ClassName,
+        dueDate: row.DueDate,
+        totalLearners: total,
+        submittedCount: submitted,
+        gradedCount: graded,
+
+        ungradedCount: Math.max(0, submitted - graded),
+        progress: total > 0 ? Math.round((graded / total) * 100) : 0,
+        status: submitted > 0 && submitted === graded ? "Đã chấm" : "Chưa chấm",
+      };
+    });
   }
 
   // 8. GET SUBMISSIONS
@@ -209,13 +215,14 @@ class InstructorDashboardRepository {
     const db = await connectDB();
 
     let sql = `SELECT 
-          s.SubmissionID, s.ExamID, s.LearnerID,
-          DATE_FORMAT(s.SubmissionDate, '%Y-%m-%d') as SubmittedAt,
-          s.Score
-        FROM submission s
-        JOIN exam e ON s.ExamID = e.ExamID
-        WHERE e.InstructorID = ?
-        ORDER BY s.SubmissionDate DESC`;
+        s.SubmissionID, s.ExamID, s.LearnerID,
+        DATE_FORMAT(s.SubmissionDate, '%Y-%m-%d') as SubmittedAt,
+        er.Score
+      FROM submission s
+      JOIN exam e ON s.ExamID = e.ExamID
+      LEFT JOIN examresult er ON s.ExamID = er.ExamID AND s.LearnerID = er.LearnerID
+      WHERE e.InstructorID = ?
+      ORDER BY s.SubmissionDate DESC`;
 
     const params = [instructorId];
 
@@ -235,25 +242,27 @@ class InstructorDashboardRepository {
     }));
   }
 
-  // 9. GET EXAM RESULTS (Thống kê điểm trung bình của các bài thi do Instructor tạo)
+  // 9. GET EXAM RESULTS
   async getExamResultsByInstructorId(instructorId) {
     const db = await connectDB();
     const [rows] = await db.query(
       `SELECT 
-          s.ExamID,
-          AVG(s.Score) as AverageScore,
-          MAX(s.SubmissionDate) as LatestSubmission
-       FROM submission s
-       JOIN exam e ON s.ExamID = e.ExamID
-       WHERE e.InstructorID = ?
-       GROUP BY s.ExamID`,
+        er.ExamID as examId,
+        er.LearnerID as learnerId,
+        er.Score as averageScore,
+        DATE_FORMAT(er.SubmissionDate, '%Y-%m-%d') as submittedAt
+     FROM examresult er
+     JOIN exam e ON er.ExamID = e.ExamID
+     WHERE e.InstructorID = ?
+     ORDER BY er.SubmissionDate ASC`,
       [instructorId]
     );
 
     return rows.map((row) => ({
-      examId: row.ExamID,
-      averageScore: Number(Number(row.AverageScore).toFixed(2)),
-      submittedAt: new Date(row.LatestSubmission).toISOString().split("T")[0],
+      examId: row.examId,
+      learnerId: row.learnerId,
+      averageScore: Number(row.averageScore),
+      submittedAt: row.submittedAt,
     }));
   }
 

@@ -268,14 +268,6 @@ const updateUnitService = async (unitId, data) => {
   const course = await courseRepository.findById(unit.CourseID);
   if (!course) throw new ServiceError("Course không tồn tại", 404);
 
-  // Chỉ cho sửa khi course đang DRAFT
-  if (upper(course.Status) !== "DRAFT") {
-    throw new ServiceError(
-      "Không thể sửa Unit khi course không ở trạng thái DRAFT",
-      400
-    );
-  }
-
   const patch = {
     Title: data?.Title !== undefined ? String(data.Title) : undefined,
     Description: data?.Description,
@@ -287,13 +279,32 @@ const updateUnitService = async (unitId, data) => {
       : undefined,
   };
 
+  const isCourseDraft = upper(course.Status) === "DRAFT";
+
+  if (!isCourseDraft) {
+    if (patch.Status) {
+      if (patch.Status !== "VISIBLE" && patch.Status !== "HIDDEN") {
+        throw new ServiceError(
+          "Khi Course đã duyệt, chỉ được cập nhật Status thành VISIBLE hoặc HIDDEN",
+          400
+        );
+      }
+    }
+
+    patch.Title = undefined;
+    patch.Description = undefined;
+    patch.Duration = undefined;
+    patch.OrderIndex = undefined;
+  }
+
   if (patch.Status && !ALLOWED_UNIT_STATUS.has(patch.Status)) {
     throw new ServiceError("Status không hợp lệ (VISIBLE|HIDDEN|DELETED)", 400);
   }
 
-  // Không gửi patch rỗng
   if (Object.values(patch).every((v) => v === undefined)) {
-    return { message: "Không có thay đổi để cập nhật" };
+    return {
+      message: "Không có thay đổi hợp lệ được cập nhật (Do Course đã Public)",
+    };
   }
 
   await unitRepository.update(unitId, patch);
@@ -391,16 +402,12 @@ const updateLessonService = async (lessonId, unitId, data, file) => {
   if (!unit) throw new ServiceError("Unit không tồn tại", 404);
 
   const course = await courseRepository.findById(unit.CourseID);
-  if (upper(course.Status) !== "DRAFT") {
-    throw new ServiceError(
-      "Không thể sửa Lesson khi course không ở trạng thái DRAFT",
-      400
-    );
-  }
+  if (!course) throw new ServiceError("Course không tồn tại", 404);
 
-  // Chuẩn bị patch
+  const isCourseDraft = upper(course.Status) === "DRAFT";
+
   let fileURL = data?.FileURL;
-  if (file) {
+  if (isCourseDraft && file) {
     fileURL = await uploadToCloudinary(file.buffer, "lessons");
   }
 
@@ -408,38 +415,41 @@ const updateLessonService = async (lessonId, unitId, data, file) => {
     Title: data?.Title,
     Duration:
       data?.Duration !== undefined ? toDecimal2(data.Duration, 0) : undefined,
-    Type: data?.Type
-      ? (function (t) {
-          const low = String(t).toLowerCase();
-          if (!ALLOWED_LESSON_TYPES.has(low)) {
-            throw new ServiceError(
-              "Type không hợp lệ (video|document|audio)",
-              400
-            );
-          }
-          return low;
-        })(data.Type)
-      : undefined,
+    Type: data?.Type ? String(data.Type).toLowerCase() : undefined,
     FileURL: fileURL,
     OrderIndex: Number.isInteger(data?.OrderIndex)
       ? data.OrderIndex
       : undefined,
-    Status: data?.Status
-      ? (function (s) {
-          const up = upper(s);
-          if (!ALLOWED_LESSON_STATUS.has(up)) {
-            throw new ServiceError(
-              "Status không hợp lệ (VISIBLE|HIDDEN|DELETED)",
-              400
-            );
-          }
-          return up;
-        })(data.Status)
-      : undefined,
+    Status: data?.Status ? upper(data.Status) : undefined,
   };
 
+  if (!isCourseDraft) {
+    if (patch.Status) {
+      if (patch.Status !== "VISIBLE" && patch.Status !== "HIDDEN") {
+        throw new ServiceError(
+          "Khi Course đã duyệt, chỉ được cập nhật Status thành VISIBLE hoặc HIDDEN",
+          400
+        );
+      }
+    }
+
+    patch.Title = undefined;
+    patch.Duration = undefined;
+    patch.Type = undefined;
+    patch.FileURL = undefined;
+    patch.OrderIndex = undefined;
+  }
+
+  if (patch.Type && !ALLOWED_LESSON_TYPES.has(patch.Type)) {
+    throw new ServiceError("Type không hợp lệ (video|document|audio)", 400);
+  }
+
+  if (patch.Status && !ALLOWED_LESSON_STATUS.has(patch.Status)) {
+    throw new ServiceError("Status không hợp lệ (VISIBLE|HIDDEN|DELETED)", 400);
+  }
+
   if (Object.values(patch).every((v) => v === undefined)) {
-    return { message: "Không có thay đổi để cập nhật" };
+    return { message: "Không có thay đổi hợp lệ được cập nhật" };
   }
 
   await lessonRepository.update(lessonId, unitId, patch);
@@ -505,34 +515,42 @@ const updateMaterialService = async (materialId, data, file) => {
   const material = await materialRepository.findById(materialId);
   if (!material) throw new ServiceError("Material không tồn tại", 404);
 
-  // Kiểm tra course của material
   const course = await courseRepository.findById(material.CourseID);
   if (!course) throw new ServiceError("Course không tồn tại", 404);
 
-  if (upper(course.Status) !== "DRAFT") {
-    throw new ServiceError(
-      "Không thể cập nhật Material khi course không ở trạng thái DRAFT",
-      400
-    );
+  const isCourseDraft = upper(course.Status) === "DRAFT";
+
+  let fileURL = data?.FileURL;
+  if (isCourseDraft && file) {
+    fileURL = await uploadToCloudinary(file.buffer, "materials");
   }
 
-  let fileURL = data?.FileURL ?? material.FileURL;
-  if (file) fileURL = await uploadToCloudinary(file.buffer, "materials");
-
-  // Chuẩn bị patch (chỉ các field repo cho phép)
   const patch = {
     Title: data?.Title !== undefined ? String(data.Title) : undefined,
     FileURL: fileURL,
     Status: data?.Status ? upper(data.Status) : undefined,
   };
 
+  if (!isCourseDraft) {
+    if (patch.Status) {
+      if (patch.Status !== "VISIBLE" && patch.Status !== "HIDDEN") {
+        throw new ServiceError(
+          "Khi Course đã duyệt, chỉ được cập nhật Status thành VISIBLE hoặc HIDDEN",
+          400
+        );
+      }
+    }
+
+    patch.Title = undefined;
+    patch.FileURL = undefined;
+  }
+
   if (patch.Status && !ALLOWED_MATERIAL_STATUS.has(patch.Status)) {
     throw new ServiceError("Status không hợp lệ (VISIBLE|HIDDEN|DELETED)", 400);
   }
 
-  // Không gửi patch rỗng
   if (Object.values(patch).every((v) => v === undefined)) {
-    return { message: "Không có thay đổi để cập nhật" };
+    return { message: "Không có thay đổi hợp lệ được cập nhật" };
   }
 
   await materialRepository.update(materialId, patch);

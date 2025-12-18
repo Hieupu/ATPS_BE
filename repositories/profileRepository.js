@@ -40,7 +40,7 @@ class ProfileRepository {
   }
   async findParentByAccountId(accountId) {
     const db = await connectDB();
-    const [rows] = await db.query("SELECT * FROM parent WHERE AccID = ?", [
+    const [rows] = await db.query("SELECT * FROM staff WHERE AccID = ?", [
       accountId,
     ]);
     return rows[0] || null; // Trả về null nếu không tìm thấy
@@ -162,7 +162,7 @@ class ProfileRepository {
     return result;
   }
 
-  async updateParent(accountId, data) {
+  async updateStaff(accountId, data) {
     const db = await connectDB();
 
     const updateFields = [];
@@ -192,11 +192,11 @@ class ProfileRepository {
     updateValues.push(accountId);
 
     const [result] = await db.query(
-      `UPDATE parent SET ${updateFields.join(", ")} WHERE AccID = ?`,
+      `UPDATE staff SET ${updateFields.join(", ")} WHERE AccID = ?`,
       updateValues
     );
 
-    console.log(`Updated parent: ${result.affectedRows} rows affected`);
+    console.log(`Updated staff: ${result.affectedRows} rows affected`);
     return result;
   }
 

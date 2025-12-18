@@ -158,21 +158,11 @@ const loginService = async (
 const determineUserRole = async (accountId) => {
   const db = await connectDB();
 
-  const [instructors] = await db.query(
-    "SELECT InstructorID FROM instructor WHERE AccID = ?",
-    [accountId]
-  );
+  const [instructors] = await db.query("SELECT InstructorID FROM instructor WHERE AccID = ?",[accountId]);
   if (instructors.length > 0) return "instructor";
-
-  const [learners] = await db.query(
-    "SELECT LearnerID FROM learner WHERE AccID = ?",
-    [accountId]
-  );
+  const [learners] = await db.query("SELECT LearnerID FROM learner WHERE AccID = ?",[accountId]);
   if (learners.length > 0) return "learner";
-  // Kiểm tra admin
-  const [admins] = await db.query("SELECT AdminID FROM admin WHERE AccID = ?", [
-    accountId,
-  ]);
+  const [admins] = await db.query("SELECT AdminID FROM admin WHERE AccID = ?", [accountId]);
   if (admins.length > 0) return "admin";
   const [staffs] = await db.query("SELECT StaffID FROM staff WHERE AccID = ?", [
     accountId,

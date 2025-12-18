@@ -1,23 +1,27 @@
 // controllers/slotReservationController.js
 const slotReservationService = require('../services/slotReservationService');
 
-
 class SlotReservationController {
   
   // Giữ chỗ slot
   async reserveSlot(req, res) {
     try {
-      const { timeslotId, date } = req.body;
-      const userId = req.user.id; // Từ verifyToken middleware
+      const { timeslotId, date, instructorId } = req.body; // ⭐️ Thêm instructorId
+      const userId = req.user.id;
       
-      if (!timeslotId || !date) {
+      if (!timeslotId || !date || !instructorId) {
         return res.status(400).json({
           success: false,
-          message: 'TimeslotId và date là bắt buộc'
+          message: 'TimeslotId, date và instructorId là bắt buộc'
         });
       }
       
-      const result = await slotReservationService.reserveSlot(timeslotId, date, userId);
+      const result = await slotReservationService.reserveSlot(
+        timeslotId, 
+        date, 
+        userId, 
+        instructorId // ⭐️ Truyền instructorId
+      );
       
       if (result.success) {
         return res.status(200).json({
@@ -43,17 +47,22 @@ class SlotReservationController {
   // Hủy giữ chỗ slot
   async releaseSlot(req, res) {
     try {
-      const { timeslotId, date } = req.body;
+      const { timeslotId, date, instructorId } = req.body; // ⭐️ Thêm instructorId
       const userId = req.user.id;
       
-      if (!timeslotId || !date) {
+      if (!timeslotId || !date || !instructorId) {
         return res.status(400).json({
           success: false,
-          message: 'TimeslotId và date là bắt buộc'
+          message: 'TimeslotId, date và instructorId là bắt buộc'
         });
       }
       
-      const result = await slotReservationService.releaseSlot(timeslotId, date, userId);
+      const result = await slotReservationService.releaseSlot(
+        timeslotId, 
+        date, 
+        userId, 
+        instructorId // ⭐️ Truyền instructorId
+      );
       
       return res.status(200).json({
         success: true,
@@ -72,16 +81,20 @@ class SlotReservationController {
   // Kiểm tra trạng thái slot
   async checkSlotStatus(req, res) {
     try {
-      const { timeslotId, date } = req.query;
+      const { timeslotId, date, instructorId } = req.query; // ⭐️ Thêm instructorId
       
-      if (!timeslotId || !date) {
+      if (!timeslotId || !date || !instructorId) {
         return res.status(400).json({
           success: false,
-          message: 'TimeslotId và date là bắt buộc'
+          message: 'TimeslotId, date và instructorId là bắt buộc'
         });
       }
       
-      const result = await slotReservationService.isSlotReserved(timeslotId, date);
+      const result = await slotReservationService.isSlotReserved(
+        timeslotId, 
+        date, 
+        instructorId // ⭐️ Truyền instructorId
+      );
       
       return res.status(200).json({
         success: true,

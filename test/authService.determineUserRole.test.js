@@ -38,7 +38,8 @@ describe("authService - determineUserRole", () => {
       .fn()
       .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([[]])
-      .mockResolvedValueOnce([[{ AdminID: 4 }]]);
+      .mockResolvedValueOnce([[{ AdminID: 4 }]])
+      .mockResolvedValue([[]]);
 
     connectDB.mockResolvedValue({ query: mockQuery });
 
@@ -46,16 +47,32 @@ describe("authService - determineUserRole", () => {
     expect(role).toBe("admin");
   });
 
-  test("UTCID04 - không phải instructor, learner, admin -> trả về 'unknown'", async () => {
+  test("UTCID04 - accountId là staff -> trả về 'staff'", async () => {
     const mockQuery = jest
       .fn()
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[{ StaffID: 5 }]])
+      .mockResolvedValue([[]]);
+
+    connectDB.mockResolvedValue({ query: mockQuery });
+
+    const role = await determineUserRole(5);
+    expect(role).toBe("staff");
+  });
+
+  test("UTCID05 - không phải instructor, learner, admin, staff -> trả về 'unknown User'", async () => {
+    const mockQuery = jest
+      .fn()
+      .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([[]])
       .mockResolvedValueOnce([[]]);
 
     connectDB.mockResolvedValue({ query: mockQuery });
 
-    const role = await determineUserRole(5);
-    expect(role).toBe("unknown");
+    const role = await determineUserRole(6);
+    expect(role).toBe("unknown User");
   });
 });
