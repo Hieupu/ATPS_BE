@@ -3,6 +3,8 @@ const jwt = require("jsonwebtoken");
 const connectDB = require("../config/db");
 const accountRepository = require("../repositories/accountRepository");
 const instructorRepository = require("../repositories/instructorRepository");
+const staffRepository = require("../repositories/staffRepository");
+const adminRepository = require("../repositories/adminRepository");
 require("dotenv").config();
 
 const courseRepository = require("../repositories/instructorCourseRepository");
@@ -27,6 +29,22 @@ const getLearnerById = async (accId) => {
   return learner;
 };
 
+const getStaffById = async (accId) => {
+  const staff = await staffRepository.findById(accId);
+  if (!staff) {
+    throw new Error("Staff không tồn tại");
+  }
+  return staff;
+};
+
+const getAdminById = async (accId) => {
+  const admin = await adminRepository.findById(accId);
+  if (!admin) {
+    throw new Error("Admin không tồn tại");
+  }
+  return admin;
+};
+
 class ServiceError extends Error {
   constructor(message, status = 400) {
     super(message);
@@ -41,7 +59,6 @@ const loginService = async (
   provider = "local",
   rememberMe = false
 ) => {
-  
   const user = await accountRepository.findAccountByEmail(email);
 
   if (!user) {
@@ -53,7 +70,7 @@ const loginService = async (
     }
     throw new ServiceError("Email hoặc mật khẩu không chính xác", 401);
   }
-  
+
   const userProvider = user.Provider.toLowerCase();
   const loginProvider = provider.toLowerCase();
 
@@ -103,6 +120,12 @@ const loginService = async (
   } else if (role === "learner") {
     const learner = await getLearnerById(user.AccID);
     profilePicture = learner?.ProfilePicture || null;
+  } else if (role === "staff") {
+    const staff = await staffRepository.findById(user.AccID);
+    profilePicture = staff?.ProfilePicture || null;
+  } else if (role === "admin") {
+    const admin = await adminRepository.findById(user.AccID);
+    profilePicture = admin?.ProfilePicture || null;
   }
 
   const expiresIn = rememberMe ? "30d" : "1h";
@@ -135,22 +158,16 @@ const loginService = async (
 const determineUserRole = async (accountId) => {
   const db = await connectDB();
 
-  const [instructors] = await db.query(
-    "SELECT InstructorID FROM instructor WHERE AccID = ?",
-    [accountId]
-  );
+  const [instructors] = await db.query("SELECT InstructorID FROM instructor WHERE AccID = ?",[accountId]);
   if (instructors.length > 0) return "instructor";
-
-  const [learners] = await db.query(
-    "SELECT LearnerID FROM learner WHERE AccID = ?",
-    [accountId]
-  );
+  const [learners] = await db.query("SELECT LearnerID FROM learner WHERE AccID = ?",[accountId]);
   if (learners.length > 0) return "learner";
-  // Kiểm tra admin
-  const [admins] = await db.query("SELECT AdminID FROM admin WHERE AccID = ?", [
+  const [admins] = await db.query("SELECT AdminID FROM admin WHERE AccID = ?", [accountId]);
+  if (admins.length > 0) return "admin";
+  const [staffs] = await db.query("SELECT StaffID FROM staff WHERE AccID = ?", [
     accountId,
   ]);
-  if (admins.length > 0) return "admin";
+  if (staffs.length > 0) return "staff";
   return "unknown";
 };
 

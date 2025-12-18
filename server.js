@@ -221,21 +221,6 @@ app.use((err, req, res, next) => {
 });
 
 
-cron.schedule(
-  "0 0 * * *",
-  async () => {
-    try {
-      const result = await classService.autoUpdateClassStatus();
-    } catch (error) {
-      console.error("[Cron Job] Lỗi khi tự động cập nhật status:", error);
-    }
-  },
-  {
-    scheduled: true,
-    timezone: "Asia/Ho_Chi_Minh",
-  }
-);
-
 
 cron.schedule(
   "0 * * * *",

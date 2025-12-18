@@ -95,4 +95,12 @@ router.get(
   enrollmentController.getAvailableClasses
 );
 
+// Admin: Đổi lớp cho học viên
+router.post(
+  "/admin/change-class",
+  verifyToken,
+  authorizeFeature("admin"),
+  enrollmentController.changeClass
+);
+
 module.exports = router;

@@ -1199,6 +1199,43 @@ async function updateClassSchedule(params) {
     throw new ServiceError("Lớp học không tồn tại", 404);
   }
 
+  // Notify when admin postpones planned start date for an ACTIVE class
+  // Requirement: when admin updates an ACTIVE class and moves OpendatePlan later,
+  // notify learners (if any), instructor, and staff creator.
+  try {
+    const oldOpendatePlan = classData.OpendatePlan || classData.opendatePlan;
+    const newOpendatePlan = OpendatePlan;
+    const classStatus = classData.Status || classData.status;
+    const isActiveClass = classStatus === "ACTIVE";
+    const oldD = oldOpendatePlan ? new Date(oldOpendatePlan) : null;
+    const newD = newOpendatePlan ? new Date(newOpendatePlan) : null;
+    const isPostponed =
+      oldOpendatePlan &&
+      newOpendatePlan &&
+      oldD &&
+      newD &&
+      !Number.isNaN(oldD.getTime()) &&
+      !Number.isNaN(newD.getTime()) &&
+      newD.getTime() > oldD.getTime();
+
+    if (isActiveClass && isPostponed) {
+      const notificationService = require("./notificationService");
+      await notificationService.notifyClassStartDatePostponed({
+        classId: ClassID,
+        className: classData.Name,
+        newOpendatePlan: newOpendatePlan,
+        instructorId: classData.InstructorID,
+        createdByStaffId: classData.CreatedByStaffID,
+      });
+    }
+  } catch (notifError) {
+    console.error(
+      "[updateClassSchedule] Failed to notifyClassStartDatePostponed:",
+      notifError?.message || notifError
+    );
+    // Don't throw to avoid breaking main flow
+  }
+
   // 1. Cập nhật metadata nếu có (OpendatePlan, Numofsession, InstructorID)
   // Lưu ý: Không gọi classService.updateClass() vì nó không cho phép cập nhật schedule fields
   // Thay vào đó, cập nhật trực tiếp qua repository
@@ -1959,6 +1996,16 @@ async function analyzeBlockedDays(params) {
 
     const totalWeeks = Math.ceil(Numofsession / sessionsPerWeek);
 
+    console.log("[analyzeBlockedDays] INPUT", {
+      InstructorID,
+      OpendatePlan,
+      Numofsession,
+      DaysOfWeek,
+      TimeslotsByDay,
+      sessionsPerWeek,
+      totalWeeks,
+    });
+
     // Tính ngày kết thúc dự kiến (xấp xỉ)
     const startDate = new Date(OpendatePlan);
     const endDate = new Date(startDate);
@@ -1986,6 +2033,41 @@ async function analyzeBlockedDays(params) {
 
     const teachingStats = buildConflictStats(teachingSchedules);
 
+    console.log("[analyzeBlockedDays] RAW BLOCKS", {
+      OTHER_count: relevantBlocks.length,
+      SESSION_count: teachingSchedules.length,
+    });
+
+    // Chuẩn bị meta timeslot cho pattern đang xét (TimeslotsByDay)
+    const timeslotMetaMap = new Map();
+    const patternTimeslotIds = new Set();
+    DaysOfWeek.forEach((dow) => {
+      const tsForDay = TimeslotsByDay[dow] || [];
+      tsForDay.forEach((id) => {
+        const normId = normalizeTimeslotId(id);
+        patternTimeslotIds.add(normId);
+      });
+    });
+
+    for (const normId of patternTimeslotIds) {
+      const numericId = Number(normId);
+      try {
+        const ts =
+          !Number.isNaN(numericId) && numericId > 0
+            ? await timeslotRepository.findById(numericId)
+            : await timeslotRepository.findById(normId);
+        if (ts) {
+          timeslotMetaMap.set(normId, ts);
+        }
+      } catch (e) {
+        console.warn(
+          "[analyzeBlockedDays] Warning: cannot load timeslot meta for",
+          normId,
+          e?.message
+        );
+      }
+    }
+
     // Phân tích từng ngày trong tuần và từng timeslot
     for (const dayOfWeek of DaysOfWeek) {
       const dayTimeslots = TimeslotsByDay[dayOfWeek] || [];
@@ -1995,7 +2077,26 @@ async function analyzeBlockedDays(params) {
 
       // Kiểm tra từng timeslot trong ngày
       for (const timeslotId of dayTimeslots) {
-        const slotKey = buildSlotKey(dayOfWeek, timeslotId);
+        const normTsId = normalizeTimeslotId(timeslotId);
+        const tsMeta = timeslotMetaMap.get(normTsId);
+
+        let slotKeyPart;
+        if (
+          tsMeta &&
+          (tsMeta.StartTime || tsMeta.startTime) &&
+          (tsMeta.EndTime || tsMeta.endTime)
+        ) {
+          const startKey = normalizeTimeToKey(
+            tsMeta.StartTime || tsMeta.startTime
+          );
+          const endKey = normalizeTimeToKey(tsMeta.EndTime || tsMeta.endTime);
+          slotKeyPart = `${startKey}-${endKey}`;
+        } else {
+          // Fallback: dùng TimeslotID nếu không có giờ
+          slotKeyPart = `TSID:${normTsId}`;
+        }
+
+        const slotKey = buildSlotKey(dayOfWeek, slotKeyPart);
 
         // Đếm số buổi bận cho timeslot này
         const manualCount = manualStats.counts.get(slotKey) || 0;
@@ -2021,6 +2122,17 @@ async function analyzeBlockedDays(params) {
           isBlocked: totalBusyCount > 0, // Logic mới: > 0 là blocked (không cho trùng)
           blockedDates,
         };
+
+        console.log("[analyzeBlockedDays] SLOT ANALYSIS", {
+          dayOfWeek,
+          timeslotId,
+          slotKey,
+          manualCount,
+          sessionCount,
+          totalBusyCount,
+          isBlocked: totalBusyCount > 0,
+          blockedDates,
+        });
       }
 
       // Nếu có timeslot bị khóa, lưu vào blockedDays
@@ -2066,7 +2178,7 @@ function buildConflictStats(entries = []) {
   const dates = new Map();
 
   entries.forEach((entry) => {
-    if (!entry || entry.TimeslotID === undefined || entry.TimeslotID === null) {
+    if (!entry) {
       return;
     }
 
@@ -2077,7 +2189,30 @@ function buildConflictStats(entries = []) {
 
     const dateString = formatDate(dateObj);
     const dayOfWeek = dateObj.getDay();
-    const key = buildSlotKey(dayOfWeek, entry.TimeslotID);
+
+    // Ưu tiên dùng StartTime/EndTime để gom xung đột theo khoảng giờ,
+    // tránh trường hợp nhiều TimeslotID khác nhau nhưng cùng giờ học.
+    const rawStart = entry.StartTime || entry.startTime;
+    const rawEnd = entry.EndTime || entry.endTime;
+
+    let slotKeyPart;
+    if (rawStart && rawEnd) {
+      const startKey = normalizeTimeToKey(rawStart);
+      const endKey = normalizeTimeToKey(rawEnd);
+      if (startKey && endKey) {
+        slotKeyPart = `${startKey}-${endKey}`;
+      }
+    }
+
+    // Fallback: nếu không có giờ, gom theo TimeslotID như cũ
+    if (!slotKeyPart) {
+      if (entry.TimeslotID === undefined || entry.TimeslotID === null) {
+        return;
+      }
+      slotKeyPart = `TSID:${normalizeTimeslotId(entry.TimeslotID)}`;
+    }
+
+    const key = buildSlotKey(dayOfWeek, slotKeyPart);
 
     counts.set(key, (counts.get(key) || 0) + 1);
 
@@ -2112,8 +2247,26 @@ function collectConflictDates(slotKeys, manualDatesMap, sessionDatesMap) {
   return combined.slice(0, 10);
 }
 
-function buildSlotKey(dayOfWeek, timeslotId) {
-  return `${dayOfWeek}_${normalizeTimeslotId(timeslotId)}`;
+function buildSlotKey(dayOfWeek, slotKeyPart) {
+  return `${dayOfWeek}_${String(slotKeyPart ?? "").trim()}`;
+}
+
+function normalizeTimeToKey(value) {
+  if (!value) return "";
+  const str = String(value).trim();
+
+  // Cắt bỏ phần ngày / timezone / mili-giây nếu có (ví dụ: "HH:MM:SS.000Z", "HH:MM:SS +07:00")
+  const mainPart = str.split(/[T\s+]/)[0]; // lấy phần trước khoảng trắng / 'T' / '+'
+
+  // Tìm pattern HH:MM hoặc H:MM trong mainPart
+  const match = /(\d{1,2}):(\d{2})/.exec(mainPart);
+  if (!match) {
+    return str.trim();
+  }
+
+  const hh = match[1].padStart(2, "0");
+  const mm = match[2].padStart(2, "0");
+  return `${hh}:${mm}`;
 }
 
 function normalizeTimeslotId(value) {
@@ -2252,6 +2405,14 @@ async function searchTimeslots(params) {
         // Logic mới: Suggest ngày khi TẤT CẢ timeslots đều AVAILABLE (không trùng)
         // 1. availableSlots === totalSlots (tất cả ca đều không trùng)
         // 2. totalSlots >= minRequiredSlots (đủ số ca đã chọn)
+        console.log("[searchTimeslots] CANDIDATE", {
+          dateString,
+          dayOfWeekNum,
+          availableSlots,
+          totalSlots,
+          minRequiredSlots,
+        });
+
         if (
           availableSlots === totalSlots &&
           totalSlots >= minRequiredSlots &&

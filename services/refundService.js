@@ -1,6 +1,8 @@
 const refundRepository = require("../repositories/refundRepository");
 const enrollmentRepository = require("../repositories/enrollmentRepository");
 const paymentRepository = require("../repositories/paymentRepository");
+const notificationService = require("../services/notificationService");
+const classRepository = require("../repositories/classRepository");
 
 class ServiceError extends Error {
   constructor(message, status = 400) {
@@ -111,7 +113,56 @@ class RefundService {
       const safeUpdate = { ...updateData };
       delete safeUpdate.TargetClassID;
 
-      return await refundRepository.update(refundId, safeUpdate);
+      const updatedRefund = await refundRepository.update(refundId, safeUpdate);
+
+      // Nếu admin duyệt chuyển lớp (classapproved) và FE gửi kèm TargetClassID
+      if (
+        updateData &&
+        typeof updateData.Status === "string" &&
+        updateData.Status.toLowerCase() === "classapproved" &&
+        updateData.TargetClassID &&
+        existingRefund.EnrollmentID
+      ) {
+        try {
+          // Lấy thông tin lớp cũ và lớp mới để hiển thị trong notification
+          const oldClassData = await classRepository.findById(
+            existingRefund.ClassID
+          );
+          const newClassData = await classRepository.findById(
+            updateData.TargetClassID
+          );
+
+          const oldClassCoreName =
+            (Array.isArray(oldClassData) && oldClassData[0]?.Name) ||
+            existingRefund.ClassName ||
+            "";
+          const newClassCoreName =
+            (Array.isArray(newClassData) && newClassData[0]?.Name) || "";
+
+          const oldClassLabel = existingRefund.ClassID
+            ? `${oldClassCoreName || "Lớp cũ"}`
+            : oldClassCoreName || `Lớp ${existingRefund.ClassID || ""}`;
+
+          const newClassLabel = updateData.TargetClassID
+            ? `${newClassCoreName || "Lớp mới"}`
+            : newClassCoreName || `Lớp ${updateData.TargetClassID}`;
+
+          // Tạo notification in-app cho học viên
+          await notificationService.createClassChangeNotification(
+            existingRefund.EnrollmentID,
+            oldClassLabel,
+            newClassLabel
+          );
+        } catch (notifyError) {
+          // Không block flow updateRefund nếu tạo thông báo lỗi
+          console.error(
+            "[updateRefund] Error creating class change notification:",
+            notifyError
+          );
+        }
+      }
+
+      return updatedRefund;
     } catch (error) {
       throw error;
     }
@@ -157,10 +208,10 @@ class RefundService {
       const paymentAmount = payment[0].Amount || 0;
 
       // Lấy ngày bắt đầu lớp (ưu tiên Opendate, nếu không có thì dùng OpendatePlan)
-      const classStartDate = classInfo.Opendate 
-        ? new Date(classInfo.Opendate) 
-        : classInfo.OpendatePlan 
-        ? new Date(classInfo.OpendatePlan) 
+      const classStartDate = classInfo.Opendate
+        ? new Date(classInfo.Opendate)
+        : classInfo.OpendatePlan
+        ? new Date(classInfo.OpendatePlan)
         : null;
 
       if (!classStartDate) {
@@ -194,9 +245,8 @@ class RefundService {
       const isBeforeOneWeek = daysDiff < 7;
 
       // Tính phần trăm số buổi đã học
-      const sessionPercentage = totalSessions > 0 
-        ? (attendedSessions / totalSessions) * 100 
-        : 0;
+      const sessionPercentage =
+        totalSessions > 0 ? (attendedSessions / totalSessions) * 100 : 0;
 
       // Áp dụng quy tắc hoàn tiền
       let refundPercentage = 0;
@@ -205,15 +255,21 @@ class RefundService {
       if (isBeforeOneWeek && attendedSessions < 4) {
         // Trước 1 tuần và học ít hơn 4 buổi: 100%
         refundPercentage = 100;
-        refundReason = `Hoàn 100% học phí vì yêu cầu hoàn tiền trước 1 tuần kể từ ngày bắt đầu lớp (${startDate.toLocaleDateString('vi-VN')}) và đã học ít hơn 4 buổi (đã học ${attendedSessions}/${totalSessions} buổi)`;
+        refundReason = `Hoàn 100% học phí vì yêu cầu hoàn tiền trước 1 tuần kể từ ngày bắt đầu lớp (${startDate.toLocaleDateString(
+          "vi-VN"
+        )}) và đã học ít hơn 4 buổi (đã học ${attendedSessions}/${totalSessions} buổi)`;
       } else if (sessionPercentage < 50) {
         // Sau tuần 1 đến < 50% số buổi: 50%
         refundPercentage = 50;
-        refundReason = `Hoàn 50% học phí vì đã học dưới 50% số buổi của lớp (đã học ${attendedSessions}/${totalSessions} buổi, tương đương ${sessionPercentage.toFixed(1)}%)`;
+        refundReason = `Hoàn 50% học phí vì đã học dưới 50% số buổi của lớp (đã học ${attendedSessions}/${totalSessions} buổi, tương đương ${sessionPercentage.toFixed(
+          1
+        )}%)`;
       } else {
         // Sau 50% số buổi: 0%
         refundPercentage = 0;
-        refundReason = `Không hoàn tiền vì đã học từ 50% số buổi trở lên (đã học ${attendedSessions}/${totalSessions} buổi, tương đương ${sessionPercentage.toFixed(1)}%)`;
+        refundReason = `Không hoàn tiền vì đã học từ 50% số buổi trở lên (đã học ${attendedSessions}/${totalSessions} buổi, tương đương ${sessionPercentage.toFixed(
+          1
+        )}%)`;
       }
 
       const refundAmount = Math.round((paymentAmount * refundPercentage) / 100);

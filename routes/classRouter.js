@@ -1,6 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const { verifyToken, authorizeFeature } = require("../middlewares/middware");
+const {
+  verifyToken,
+  authorizeFeature,
+  authorizeRole,
+} = require("../middlewares/middware");
 const {
   validateAnalyzeBlockedDays,
   validateSearchTimeslots,
@@ -8,25 +12,26 @@ const {
 const classController = require("../controllers/classController");
 const classScheduleController = require("../controllers/classScheduleController");
 
-// Admin APIs
+// Admin & Staff APIs
 router.get(
   "/",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"), // Cho phép cả admin và staff
   classController.getClassesDetails
 );
 
 router.get(
   "/details",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"), // Cho phép cả admin và staff
   classController.getClassesDetails
 );
 
+// Tạo lớp - Chỉ Staff mới có quyền (admin bị block trong controller)
 router.post(
   "/",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeFeature("staff"),
   classController.createClass
 );
 
@@ -45,7 +50,7 @@ router.get(
 router.post(
   "/instructor/analyze-blocked-days",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"),
   validateAnalyzeBlockedDays,
   classScheduleController.analyzeBlockedDays
 );
@@ -54,7 +59,7 @@ router.post(
 router.post(
   "/search-timeslots",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"),
   validateSearchTimeslots,
   classScheduleController.searchTimeslots
 );
@@ -63,21 +68,21 @@ router.post(
 router.post(
   "/timeslot-lock-reasons",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"),
   classScheduleController.getTimeslotLockReasons
 );
 
 router.get(
   "/:classId",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"),
   classController.getClassById
 );
 
 router.put(
   "/:classId",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeFeature(["admin", "staff"]), // Cho phép cả admin và staff, nhưng controller sẽ kiểm tra quyền chi tiết
   classController.updateClass
 );
 
@@ -108,7 +113,7 @@ router.get(
 router.get(
   "/instructor/leave",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"),
   classScheduleController.listInstructorLeaves
 );
 router.post(
@@ -203,13 +208,8 @@ router.get("/:classId/enrollments", classController.getClassEnrollments);
 // WORKFLOW 4 BƯỚC - CLASS MANAGEMENT ROUTES
 // =====================================================
 
-// Bước 1: Admin tạo lớp
-router.post(
-  "/",
-  verifyToken,
-  authorizeFeature("admin"),
-  classController.createClass
-);
+// Bước 1: Staff tạo lớp (Admin không còn quyền tạo lớp)
+// Route này đã được định nghĩa ở trên, không cần duplicate
 
 // Bước 2: Gửi lớp cho giảng viên
 router.post(
@@ -227,7 +227,31 @@ router.put(
   classController.updateClassStatus
 );
 
-// Bước 3: Admin kiểm duyệt
+// Staff gửi lớp để duyệt (DRAFT → PENDING)
+router.post(
+  "/:classId/submit-for-approval",
+  verifyToken,
+  authorizeFeature("staff"),
+  classController.submitClassForApproval
+);
+
+// Admin từ chối lớp (PENDING → DRAFT) với lý do
+router.post(
+  "/:classId/reject",
+  verifyToken,
+  authorizeFeature("admin"),
+  classController.rejectClass
+);
+
+// Admin chuyển lớp APPROVED/ACTIVE về DRAFT với lý do (chưa có học viên)
+router.post(
+  "/:classId/revert-to-draft",
+  verifyToken,
+  authorizeFeature("admin"),
+  classController.revertClassToDraft
+);
+
+// Bước 3: Admin kiểm duyệt (PENDING → APPROVED)
 router.post(
   "/:classId/review",
   verifyToken,
@@ -278,7 +302,7 @@ router.post(
 router.post(
   "/:classId/schedule/update",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"),
   classScheduleController.updateClassSchedule
 );
 
@@ -286,7 +310,7 @@ router.post(
 router.get(
   "/instructor/available-slots/edit",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"),
   classScheduleController.findAvailableSlotsForEdit
 );
 
@@ -352,7 +376,7 @@ router.post(
 router.post(
   "/check-learner-conflicts",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"),
   classScheduleController.checkLearnerConflicts
 );
 

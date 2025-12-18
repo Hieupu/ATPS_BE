@@ -45,6 +45,7 @@ class ClassService {
         // Numofsession sẽ được tính từ Duration của course (dbver7)
         Numofsession: data.Numofsession || 0,
         Maxstudent: data.Maxstudent || 0,
+        CreatedByStaffID: data.CreatedByStaffID || null, // Thêm CreatedByStaffID
       };
 
       // Nếu DB yêu cầu ZoomID NOT NULL: tạo meeting mặc định khi thiếu
@@ -163,9 +164,10 @@ class ClassService {
     }
   }
 
-  async getAllClasses() {
+  async getAllClasses(options = {}) {
     try {
-      const classes = await classRepository.findAll();
+      // options có thể chứa: { userRole, staffID }
+      const classes = await classRepository.findAll(options);
       return classes;
     } catch (error) {
       throw error;
@@ -192,10 +194,10 @@ class ClassService {
 
   /**
    * Cập nhật metadata của lớp học (không ảnh hưởng đến sessions)
-   * 
+   *
    * Lưu ý: Các trường ảnh hưởng đến schedule (OpendatePlan, EnddatePlan, Numofsession, InstructorID)
    * không được phép cập nhật qua endpoint này. Phải sử dụng updateClassSchedule().
-   * 
+   *
    * @param {number} id - ClassID
    * @param {Object} data - Dữ liệu cập nhật
    * @returns {Object} Class đã được cập nhật
@@ -967,7 +969,7 @@ class ClassService {
           const refundData = {
             RequestDate: currentDate,
             Reason: `Lớp học ${classInfo.Name} (ClassID: ${classId}) đã bị hủy`,
-            Status: "classpending",
+            Status: "pending",
             EnrollmentID: enrollment.EnrollmentID,
           };
 

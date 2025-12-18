@@ -1,6 +1,8 @@
 const enrollmentRepository = require("../repositories/enrollmentRepository");
 const learnerRepository = require("../repositories/learnerRepository");
 const courseRepository = require("../repositories/courseRepository");
+const classRepository = require("../repositories/classRepository");
+const notificationService = require("../services/notificationService");
 
 class ServiceError extends Error {
   constructor(message, status = 400) {
@@ -123,6 +125,105 @@ class EnrollmentService {
     try {
       const enrollments = await enrollmentRepository.findByClassId(classId);
       return enrollments;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async findByLearnerAndClass(learnerId, classId) {
+    try {
+      const row = await enrollmentRepository.findOneByLearnerAndClass(
+        learnerId,
+        classId
+      );
+      return row || null;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Đổi lớp cho học viên (admin flow)
+   * - Không xử lý thanh toán, chỉ đổi Enrollment.ClassID
+   * - Tạo notification in-app cho học viên thông báo đổi lớp
+   */
+  async changeClassForLearner({ learnerId, fromClassId, toClassId }) {
+    try {
+      if (!learnerId || !fromClassId || !toClassId) {
+        throw new ServiceError(
+          "LearnerID, fromClassId và toClassId là bắt buộc",
+          400
+        );
+      }
+
+      if (String(fromClassId) === String(toClassId)) {
+        throw new ServiceError(
+          "Lớp mới phải khác lớp hiện tại khi đổi lớp cho học viên",
+          400
+        );
+      }
+
+      // Tìm enrollment hiện tại
+      const currentEnrollment = await this.findByLearnerAndClass(
+        learnerId,
+        fromClassId
+      );
+      if (!currentEnrollment) {
+        throw new ServiceError(
+          "Không tìm thấy đăng ký của học viên cho lớp hiện tại",
+          404
+        );
+      }
+
+      // Kiểm tra lớp mới tồn tại
+      const newClassData = await classRepository.findById(toClassId);
+      if (!newClassData || newClassData.length === 0) {
+        throw new ServiceError("Lớp mới không tồn tại", 404);
+      }
+
+      // Không cho đăng ký trùng
+      const existsInTarget = await enrollmentRepository.checkEnrollmentExists(
+        learnerId,
+        toClassId
+      );
+      if (existsInTarget) {
+        throw new ServiceError(
+          "Học viên đã đăng ký lớp mục tiêu, không thể đổi lớp trùng",
+          400
+        );
+      }
+
+      // Lấy thông tin lớp cũ và lớp mới (tên + ID) để log / notification
+      const oldClassData = await classRepository.findById(fromClassId);
+      const oldClassCoreName =
+        (Array.isArray(oldClassData) && oldClassData[0]?.Name) || "";
+      const newClassCoreName =
+        (Array.isArray(newClassData) && newClassData[0]?.Name) || "";
+
+      const oldClassLabel = ` ${oldClassCoreName || "Lớp cũ"}`;
+      const newClassLabel = `${newClassCoreName || "Lớp mới"}`;
+
+      // Đổi ClassID của enrollment hiện tại sang lớp mới
+      const updatedEnrollment = await enrollmentRepository.update(
+        currentEnrollment.EnrollmentID,
+        { ClassID: toClassId }
+      );
+
+      // Tạo notification cho học viên (không block nếu lỗi)
+      try {
+        await notificationService.createClassChangeNotification(
+          currentEnrollment.EnrollmentID,
+          oldClassLabel,
+          newClassLabel
+        );
+      } catch (notifyError) {
+        console.error(
+          "[changeClassForLearner] Error creating class change notification:",
+          notifyError
+        );
+      }
+
+      return updatedEnrollment;
     } catch (error) {
       throw error;
     }

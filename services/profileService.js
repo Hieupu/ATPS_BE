@@ -14,7 +14,6 @@ class ProfileService {
     const account = await profileRepository.findAccountById(accountId);
     if (!account) throw new ServiceError("Account not found", 404);
 
-    // Xác định role bằng cách kiểm tra accountId có trong bảng nào
     const role = await this.determineRole(accountId);
 
     let profileData = {
@@ -30,9 +29,7 @@ class ProfileService {
 
     // Get role-specific data
     if (role === "instructor") {
-      const instructor = await profileRepository.findInstructorByAccountId(
-        accountId
-      );
+      const instructor = await profileRepository.findInstructorByAccountId(accountId);
       profileData = { ...profileData, ...instructor };
     } else if (role === "learner") {
       const learner = await profileRepository.findLearnerByAccountId(accountId);
@@ -40,26 +37,22 @@ class ProfileService {
     } else if (role === "admin") {
       const admin = await profileRepository.findAdminByAccountId(accountId);
       profileData = { ...profileData, ...admin };
-    } else if (role === "parent") {
-      const parent = await profileRepository.findParentByAccountId(accountId);
-      profileData = { ...profileData, ...parent };
+    }
+    else if (role === "staff") {
+      const staff = await profileRepository.findStaffByAccountId(accountId);
+      profileData = { ...profileData, ...staff };
     }
 
     return profileData;
   }
 
   async determineRole(accountId) {
-    const instructor = await profileRepository.findInstructorByAccountId(
-      accountId
-    );
+    const instructor = await profileRepository.findInstructorByAccountId(accountId);
     if (instructor) return "instructor";
-
     const learner = await profileRepository.findLearnerByAccountId(accountId);
     if (learner) return "learner";
     const admin = await profileRepository.findAdminByAccountId(accountId);
     if (admin) return "admin";
-    const parent = await profileRepository.findParentByAccountId(accountId);
-    if (parent) return "parent";
 
     throw new ServiceError("Role not found for this account", 404);
   }
@@ -104,8 +97,8 @@ class ProfileService {
         await profileRepository.updateInstructor(accountId, profileData);
       } else if (role === "learner") {
         await profileRepository.updateLearner(accountId, profileData);
-      } else if (role === "parent") {
-        await profileRepository.updateParent(accountId, profileData);
+      } else if (role === "staff") {
+        await profileRepository.updateStaff(accountId, profileData);
       }
     }
 

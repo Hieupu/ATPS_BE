@@ -160,9 +160,28 @@ class ZoomService {
       });
       return true;
     } catch (error) {
+      const zoomData = error?.response?.data;
+      const code = zoomData?.code;
+      const message = zoomData?.message || error.message;
+
+      // Nếu thiếu scope xóa meeting (code 4711 hoặc thông báo tương tự)
+      // → log cảnh báo nhẹ và bỏ qua, không block flow (cho cả admin & staff)
+      if (
+        code === 4711 ||
+        (typeof message === "string" &&
+          message.includes("does not contain scopes") &&
+          message.includes("meeting:delete"))
+      ) {
+        console.warn(
+          "[zoomService] Skip delete occurrence due to insufficient scopes:",
+          zoomData || message
+        );
+        return false;
+      }
+
       console.error(
         "[zoomService] Failed to delete occurrence:",
-        error?.response?.data || error.message
+        zoomData || message
       );
       return false;
     }

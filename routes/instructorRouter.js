@@ -1,7 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
-const { verifyToken, authorizeFeature } = require("../middlewares/middware");
+const {
+  verifyToken,
+  authorizeFeature,
+  authorizeRole,
+} = require("../middlewares/middware");
 const instructorController = require("../controllers/admininstructorController");
 const publicInstructorController = require("../controllers/instructorController");
 
@@ -64,6 +68,30 @@ router.get("/featured", publicInstructorController.getFeaturedInstructors);
 router.get("/public", publicInstructorController.getAllInstructors);
 router.get("/public/:id", publicInstructorController.getInstructorById);
 router.get("/", publicInstructorController.getAllInstructors);
+
+// Admin & Staff routes with sub-paths - MUST come BEFORE /:id to avoid route conflicts
+router.get(
+  "/:id/courses",
+  verifyToken,
+  authorizeRole("admin", "staff"),
+  instructorController.getInstructorWithCourses
+);
+
+router.get(
+  "/:id/schedule",
+  verifyToken,
+  authorizeRole("admin", "staff"),
+  instructorController.getInstructorSchedule
+);
+
+router.get(
+  "/:id/statistics",
+  verifyToken,
+  authorizeFeature("admin"),
+  instructorController.getInstructorStatistics
+);
+
+// Public route for getting instructor by ID - MUST come AFTER sub-path routes
 router.get("/:id", publicInstructorController.getInstructorById);
 
 // =====================================================
@@ -125,27 +153,6 @@ router.delete(
   verifyToken,
   authorizeFeature("admin"),
   instructorController.deleteInstructor
-);
-
-router.get(
-  "/:id/courses",
-  verifyToken,
-  authorizeFeature("admin"),
-  instructorController.getInstructorWithCourses
-);
-
-router.get(
-  "/:id/schedule",
-  verifyToken,
-  authorizeFeature("admin"),
-  instructorController.getInstructorSchedule
-);
-
-router.get(
-  "/:id/statistics",
-  verifyToken,
-  authorizeFeature("admin"),
-  instructorController.getInstructorStatistics
 );
 
 // Check timeslot availability

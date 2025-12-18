@@ -316,11 +316,13 @@ async function rescheduleSession(sessionId, newSchedule) {
     );
   }
 
-  // Cập nhật session
-  const updated = await sessionService.updateSession(sessionId, {
-    Date: newSchedule.Date,
-    TimeslotID: newSchedule.TimeslotID,
-  });
+  // Use dedicated reschedule function (handles Zoom update + notifications)
+  const updated = await sessionService.rescheduleSession(
+    sessionId,
+    newSchedule.Date,
+    newSchedule.TimeslotID,
+    { updateZoom: true }
+  );
 
   return updated;
 }

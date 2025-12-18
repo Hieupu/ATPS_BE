@@ -179,6 +179,20 @@ class EnrollmentRepository {
     const [rows] = await pool.execute(query, [learnerId, classId]);
     return rows.length > 0;
   }
+
+  async findOneByLearnerAndClass(learnerId, classId) {
+    const pool = await connectDB();
+    const query = `
+      SELECT 
+        e.*
+      FROM enrollment e
+      WHERE e.LearnerID = ? AND e.ClassID = ?
+      LIMIT 1
+    `;
+
+    const [rows] = await pool.execute(query, [learnerId, classId]);
+    return rows[0] || null;
+  }
 }
 
 module.exports = new EnrollmentRepository();

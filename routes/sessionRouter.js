@@ -24,7 +24,7 @@ router.get(
 router.post(
   "/",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"),
   validateSession,
   sessionController.createSession
 );
@@ -41,7 +41,7 @@ router.get(
 router.post(
   "/bulk",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"),
   validateBulkSessions,
   sessionController.createBulkSessions
 );
@@ -134,7 +134,7 @@ router.put(
 router.put(
   "/:sessionId/reschedule",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"),
   classScheduleController.rescheduleSession
 );
 
