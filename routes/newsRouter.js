@@ -4,9 +4,12 @@ const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
 const newsController = require("../controllers/newsController");
-const { verifyToken, authorizeFeature } = require("../middlewares/middware");
+const {
+  verifyToken,
+  authorizeFeature,
+  authorizeRole,
+} = require("../middlewares/middware");
 router.use(verifyToken);
-router.use(authorizeFeature("admin"));
 
 const uploadDir = path.join(__dirname, "..", "public", "assets", "news");
 fs.mkdirSync(uploadDir, { recursive: true });
@@ -37,37 +40,44 @@ const upload = multer({
   },
 });
 
-// Upload image cho tin tức
+// Upload image cho tin tức (admin + staff)
 router.post(
   "/upload",
+  authorizeRole("admin", "staff"),
   upload.single("image"),
   newsController.uploadImage
 );
 
-// Tạo tin tức mới
-router.post("/", newsController.createNews);
+router.post("/", authorizeRole("admin", "staff"), newsController.createNews);
 
-// Lấy tất cả tin tức
-router.get("/", newsController.getAllNews);
+router.get("/", authorizeRole("admin", "staff"), newsController.getAllNews);
 
-// Lấy tin tức theo trạng thái
-router.get("/status", newsController.getNewsByStatus);
+router.get(
+  "/status",
+  authorizeRole("admin", "staff"),
+  newsController.getNewsByStatus
+);
 
-// Lấy tin tức theo ID
-router.get("/:id", newsController.getNewsById);
+// Lấy tin tức theo ID (admin + staff)
+router.get("/:id", authorizeRole("admin", "staff"), newsController.getNewsById);
 
-// Cập nhật tin tức
-router.put("/:id", newsController.updateNews);
+// Cập nhật tin tức (admin + staff)
+router.put("/:id", authorizeRole("admin", "staff"), newsController.updateNews);
 
-// Xóa tin tức
-router.delete("/:id", newsController.deleteNews);
+router.delete("/:id", authorizeFeature("staff"), newsController.deleteNews);
 
-// Duyệt tin tức
-router.post("/:id/approve", newsController.approveNews);
+// Duyệt tin tức (chỉ admin)
+router.post(
+  "/:id/approve",
+  authorizeFeature("admin"),
+  newsController.approveNews
+);
 
-// Từ chối tin tức
-router.post("/:id/reject", newsController.rejectNews);
+// Từ chối tin tức (chỉ admin)
+router.post(
+  "/:id/reject",
+  authorizeFeature("admin"),
+  newsController.rejectNews
+);
 
 module.exports = router;
-
-

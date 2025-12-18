@@ -67,7 +67,28 @@ const classController = {
         instructorId = "",
       } = req.query;
 
-      const classes = await classService.getAllClasses();
+      // Lấy role và staffID từ req.user
+      const userRole = req.user?.role;
+      const accID = req.user?.AccID;
+      let staffID = null;
+
+      // Nếu là staff, lấy StaffID từ AccID
+      if (userRole === "staff" && accID) {
+        const staffRepository = require("../repositories/staffRepository");
+        try {
+          const staff = await staffRepository.findByAccID(accID);
+          if (staff && staff.StaffID) {
+            staffID = staff.StaffID;
+          }
+        } catch (staffError) {
+          console.error("[getClassesDetails] Error finding staff:", staffError);
+        }
+      }
+
+      const classes = await classService.getAllClasses({
+        userRole,
+        staffID,
+      });
 
       res.json({
         success: true,
@@ -180,13 +201,13 @@ const classController = {
   // Cập nhật lớp học
   /**
    * Cập nhật metadata của lớp học (không ảnh hưởng đến sessions)
-   * 
+   *
    * Endpoint: PUT /api/classes/:id
-   * 
-   * Lưu ý: 
+   *
+   * Lưu ý:
    * - Không cho phép cập nhật OpendatePlan, EnddatePlan, Numofsession, InstructorID
    * - Các trường này phải được cập nhật qua endpoint /classes/:id/schedule/update
-   * 
+   *
    * @param {Object} req - Request object
    * @param {Object} res - Response object
    */
@@ -194,6 +215,8 @@ const classController = {
     try {
       const classId = req.params.classId || req.params.id;
       const updateData = req.body;
+      const userRole = req.user?.role;
+      const accID = req.user?.AccID;
 
       if (!classId) {
         return res.status(400).json({
@@ -202,19 +225,74 @@ const classController = {
         });
       }
 
+      // Kiểm tra lớp tồn tại
+      const classData = await classService.getClassById(classId);
+      if (!classData) {
+        return res.status(404).json({
+          success: false,
+          message: "Lớp học không tồn tại",
+        });
+      }
+
+      // Kiểm tra quyền chỉnh sửa cho Staff
+      if (userRole === "staff") {
+        // Cho phép staff HỦY DUYỆT: chuyển từ PENDING -> DRAFT
+        const isCancelPendingRequest =
+          classData.Status === "PENDING" &&
+          updateData &&
+          updateData.Status === "DRAFT" &&
+          // Chỉ được phép gửi đúng trường Status trong request này
+          Object.keys(updateData).every((key) => key === "Status");
+
+        // Staff CHỈ được:
+        // - Chỉnh sửa lớp DRAFT do mình tạo
+        // - Hoặc hủy duyệt lớp PENDING do mình tạo (PENDING -> DRAFT, chỉ field Status)
+        if (!isCancelPendingRequest && classData.Status !== "DRAFT") {
+          return res.status(403).json({
+            success: false,
+            message: "Staff chỉ có thể chỉnh sửa lớp ở trạng thái DRAFT",
+          });
+        }
+
+        // Kiểm tra lớp có phải do staff này tạo không
+        const staffRepository = require("../repositories/staffRepository");
+        let staffID = null;
+        if (accID) {
+          const staff = await staffRepository.findByAccID(accID);
+          if (staff && staff.StaffID) {
+            staffID = staff.StaffID;
+          }
+        }
+
+        if (!staffID || classData.CreatedByStaffID !== staffID) {
+          return res.status(403).json({
+            success: false,
+            message: "Bạn chỉ có thể chỉnh sửa lớp do mình tạo",
+          });
+        }
+      }
+
       // Validate: Không cho phép cập nhật schedule fields
-      const scheduleFields = ["OpendatePlan", "EnddatePlan", "Numofsession", "InstructorID"];
+      const scheduleFields = [
+        "OpendatePlan",
+        "EnddatePlan",
+        "Numofsession",
+        "InstructorID",
+      ];
       const hasScheduleFields = scheduleFields.some(
         (field) => updateData[field] !== undefined && updateData[field] !== null
       );
 
       if (hasScheduleFields) {
         const foundFields = scheduleFields.filter(
-          (field) => updateData[field] !== undefined && updateData[field] !== null
+          (field) =>
+            updateData[field] !== undefined && updateData[field] !== null
         );
         return res.status(400).json({
           success: false,
-          message: `Không thể cập nhật các trường ảnh hưởng đến lịch học (${foundFields.join(", ")}) qua endpoint này. Vui lòng sử dụng endpoint /classes/${classId}/schedule/update để cập nhật lịch học.`,
+          message: `Không thể cập nhật các trường ảnh hưởng đến lịch học (${foundFields.join(
+            ", "
+          )}) qua endpoint này. Vui lòng sử dụng endpoint /classes/${classId}/schedule/update để cập nhật lịch học.`,
           error: "Schedule fields cannot be updated via this endpoint",
         });
       }
@@ -600,6 +678,24 @@ const classController = {
       console.log("[classController] Request method:", req.method);
       console.log("[classController] Request URL:", req.originalUrl);
       console.log("[classController] Request headers:", req.headers);
+
+      // Kiểm tra quyền: Chỉ Staff mới có quyền tạo lớp
+      const userRole = req.user?.role;
+      if (userRole === "admin") {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Admin không còn quyền tạo lớp. Chỉ Staff mới có quyền tạo lớp.",
+        });
+      }
+
+      if (userRole !== "staff") {
+        return res.status(403).json({
+          success: false,
+          message: "Chỉ Staff mới có quyền tạo lớp.",
+        });
+      }
+
       // Log request body để debug (có thể xóa sau)
       console.log(
         "[classController] Create Class Request Body:",
@@ -708,6 +804,31 @@ const classController = {
         });
       }
 
+      // Lấy StaffID từ AccID
+      const staffRepository = require("../repositories/staffRepository");
+      const accID = req.user?.AccID;
+      let createdByStaffID = null;
+
+      if (accID) {
+        try {
+          const staff = await staffRepository.findByAccID(accID);
+          if (staff && staff.StaffID) {
+            createdByStaffID = staff.StaffID;
+            console.log(
+              "[classController] Found StaffID:",
+              createdByStaffID,
+              "for AccID:",
+              accID
+            );
+          } else {
+            console.warn("[classController] Staff not found for AccID:", accID);
+          }
+        } catch (staffError) {
+          console.error("[classController] Error finding staff:", staffError);
+          // Không block việc tạo lớp nếu không tìm thấy staff, nhưng log warning
+        }
+      }
+
       const classData = await classService.createClass({
         Name: className,
         CourseID: CourseID || null,
@@ -721,6 +842,7 @@ const classController = {
         ZoomID: ZoomID || null,
         Zoompass: Zoompass || null,
         Status: "DRAFT",
+        CreatedByStaffID: createdByStaffID, // Thêm CreatedByStaffID
       });
 
       console.log(
@@ -977,7 +1099,269 @@ const classController = {
     }
   },
 
-  // Bước 3: Admin kiểm duyệt lớp
+  // Staff gửi lớp để duyệt (DRAFT → PENDING)
+  submitClassForApproval: async (req, res) => {
+    try {
+      const { classId } = req.params;
+      const userRole = req.user?.role;
+      const accID = req.user?.AccID;
+
+      // Kiểm tra quyền: Chỉ Staff mới có quyền gửi duyệt
+      if (userRole !== "staff") {
+        return res.status(403).json({
+          success: false,
+          message: "Chỉ Staff mới có quyền gửi lớp để duyệt.",
+        });
+      }
+
+      // Kiểm tra lớp tồn tại
+      const classData = await classService.getClassById(classId);
+      if (!classData) {
+        return res.status(404).json({
+          success: false,
+          message: "Lớp học không tồn tại",
+        });
+      }
+
+      // Kiểm tra Status phải là DRAFT
+      if (classData.Status !== "DRAFT") {
+        return res.status(400).json({
+          success: false,
+          message: "Chỉ có thể gửi duyệt lớp ở trạng thái DRAFT",
+        });
+      }
+
+      // Kiểm tra quyền: Staff chỉ có thể gửi duyệt lớp do mình tạo
+      const staffRepository = require("../repositories/staffRepository");
+      let staffID = null;
+      if (accID) {
+        const staff = await staffRepository.findByAccID(accID);
+        if (staff && staff.StaffID) {
+          staffID = staff.StaffID;
+        }
+      }
+
+      if (!staffID || classData.CreatedByStaffID !== staffID) {
+        return res.status(403).json({
+          success: false,
+          message: "Bạn chỉ có thể gửi duyệt lớp do mình tạo",
+        });
+      }
+
+      // Kiểm tra lớp đã tạo đủ số buổi chưa
+      const sessionRepository = require("../repositories/sessionRepository");
+      const sessions = await sessionRepository.findByClassId(classId);
+
+      const expectedSessions =
+        classData.Numofsession || classData.numofsession || 0;
+      const actualSessionsCount = Array.isArray(sessions) ? sessions.length : 0;
+
+      if (expectedSessions > 0 && actualSessionsCount < expectedSessions) {
+        return res.status(400).json({
+          success: false,
+          error: true,
+          message: `Lớp học chưa có đủ số buổi theo kế hoạch. Số buổi dự kiến: ${expectedSessions}, số buổi đã tạo: ${actualSessionsCount}. Vui lòng tạo đủ ${expectedSessions} buổi học trước khi gửi duyệt.`,
+          code: "INSUFFICIENT_SESSIONS",
+          details: {
+            classId,
+            expectedSessions,
+            actualSessions: actualSessionsCount,
+            missingSessions: expectedSessions - actualSessionsCount,
+          },
+        });
+      }
+
+      // Cập nhật Status: DRAFT → PENDING
+      const updatedClass = await classService.updateClass(classId, {
+        Status: "PENDING",
+      });
+
+      // Gửi notification đến toàn bộ admin
+      try {
+        const adminRepository = require("../repositories/adminRepository");
+        const notificationRepository = require("../repositories/notificationRepository");
+        const allAdmins = await adminRepository.findAll();
+
+        if (Array.isArray(allAdmins) && allAdmins.length > 0) {
+          const notificationContent = `Lớp học "${classData.Name}" đang chờ duyệt. Vui lòng kiểm tra và duyệt lớp.`;
+
+          // Tạo notification cho từng admin
+          await Promise.all(
+            allAdmins.map(async (admin) => {
+              if (admin.AccID) {
+                try {
+                  await notificationRepository.create({
+                    AccID: admin.AccID,
+                    Content: notificationContent,
+                    Type: "class",
+                    Status: "unread",
+                  });
+                } catch (notifError) {
+                  console.error(
+                    `[submitClassForApproval] Error creating notification for admin ${admin.AccID}:`,
+                    notifError
+                  );
+                  // Không throw để không ảnh hưởng đến flow chính
+                }
+              }
+            })
+          );
+        }
+      } catch (notifError) {
+        console.error(
+          "[submitClassForApproval] Error sending notifications to admins:",
+          notifError
+        );
+        // Không throw để không ảnh hưởng đến flow chính
+      }
+
+      // Ghi log
+      if (accID) {
+        const logService = require("../services/logService");
+        await logService.logAction({
+          action: "Yêu cầu duyệt lớp học",
+          accId: accID,
+          detail: `ClassID: ${classId}, ClassName: ${classData.Name}`,
+        });
+      }
+
+      res.json({
+        success: true,
+        message:
+          "Đã gửi yêu cầu duyệt lớp thành công. Lớp sẽ được duyệt bởi admin.",
+        data: {
+          ClassID: classId,
+          Status: "PENDING",
+        },
+      });
+    } catch (error) {
+      console.error("Error submitting class for approval:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi gửi yêu cầu duyệt lớp",
+        error: error.message,
+      });
+    }
+  },
+
+  // Admin chuyển lớp từ APPROVED/ACTIVE về DRAFT với lý do,
+  // chỉ cho phép khi lớp chưa có học viên, và gửi notification cho staff tạo lớp
+  revertClassToDraft: async (req, res) => {
+    try {
+      const { classId } = req.params;
+      const { reason } = req.body;
+      const userRole = req.user?.role;
+      const adminAccID = req.user?.AccID;
+
+      if (userRole !== "admin") {
+        return res.status(403).json({
+          success: false,
+          message: "Chỉ admin mới có quyền chuyển lớp về trạng thái Nháp.",
+        });
+      }
+
+      const finalReason = (reason || "").trim();
+      if (!finalReason) {
+        return res.status(400).json({
+          success: false,
+          message: "Vui lòng nhập lý do khi chuyển lớp về trạng thái Nháp.",
+        });
+      }
+
+      // Lấy thông tin lớp
+      const classData = await classService.getClassById(classId);
+      if (!classData) {
+        return res.status(404).json({
+          success: false,
+          message: "Lớp học không tồn tại",
+        });
+      }
+
+      const currentStatus = classData.Status;
+      if (currentStatus !== "APPROVED" && currentStatus !== "ACTIVE") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Chỉ có thể chuyển về Nháp đối với lớp ở trạng thái ĐÃ DUYỆT hoặc ĐANG TUYỂN SINH.",
+        });
+      }
+
+      // Kiểm tra lớp chưa có học viên
+      const enrollmentRepository = require("../repositories/enrollmentRepository");
+      const enrollments = await enrollmentRepository.findByClassId(classId);
+      if (Array.isArray(enrollments) && enrollments.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Không thể chuyển lớp về trạng thái Nháp vì đã có học viên trong lớp.",
+          code: "HAS_ENROLLMENTS",
+          details: {
+            classId,
+            enrollmentCount: enrollments.length,
+          },
+        });
+      }
+
+      // Cập nhật Status: APPROVED/ACTIVE → DRAFT
+      const updatedClass = await classService.updateClass(classId, {
+        Status: "DRAFT",
+      });
+
+      // Gửi notification tới staff tạo lớp (nếu có)
+      const staffRepository = require("../repositories/staffRepository");
+      const notificationRepository = require("../repositories/notificationRepository");
+
+      const staff =
+        classData.CreatedByStaffID != null
+          ? await staffRepository.findById(classData.CreatedByStaffID)
+          : null;
+
+      if (staff && staff.AccID) {
+        try {
+          const notificationContent = `Lớp "${classData.Name}" đã được admin chuyển về trạng thái Nháp. Lý do: ${finalReason}. Vui lòng xem lại và cập nhật thông tin lớp nếu cần.`;
+
+          await notificationRepository.create({
+            AccID: staff.AccID,
+            Content: notificationContent,
+            Type: "class",
+            Status: "unread",
+          });
+        } catch (notifError) {
+          console.error(
+            "[revertClassToDraft] Error creating notification for staff:",
+            notifError
+          );
+          // Không throw để không ảnh hưởng đến flow chính
+        }
+      }
+
+      // Ghi log
+      if (adminAccID) {
+        const logService = require("../services/logService");
+        await logService.logAction({
+          action: "REVERT_CLASS_TO_DRAFT",
+          accId: adminAccID,
+          detail: `ClassID: ${classId}, ClassName: ${classData.Name}, Reason: ${finalReason}`,
+        });
+      }
+
+      res.json({
+        success: true,
+        message:
+          "Đã chuyển lớp về trạng thái Nháp thành công và gửi thông báo cho nhân viên phụ trách.",
+        data: updatedClass,
+      });
+    } catch (error) {
+      console.error("Error reverting class to draft:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi chuyển lớp về trạng thái Nháp",
+        error: error.message,
+      });
+    }
+  },
+
+  // Bước 3: Admin kiểm duyệt lớp (PENDING → APPROVED)
   reviewClass: async (req, res) => {
     try {
       const { classId } = req.params;
@@ -1000,38 +1384,73 @@ const classController = {
         });
       }
 
-      if (classData.Status !== "DRAFT") {
+      // Kiểm tra Status phải là PENDING (hoặc DRAFT cho backward compatibility)
+      if (classData.Status !== "PENDING" && classData.Status !== "DRAFT") {
         return res.status(400).json({
           success: false,
-          message: "Lớp học không ở trạng thái DRAFT",
+          message: "Lớp học không ở trạng thái PENDING hoặc DRAFT",
         });
       }
 
       // Cập nhật status
       const updateData = {
-        Status: action === "APPROVE" ? "APPROVED" : "DRAFT",
+        Status: action === "APPROVE" ? "APPROVED" : "DRAFT", // Nếu reject, chuyển về DRAFT để staff chỉnh sửa
         AdminFeedback: adminFeedback || null,
       };
 
       const updatedClass = await classService.updateClass(classId, updateData);
 
-      // Lấy thông tin giảng viên để gửi notification
-      const instructor = await instructorRepository.findById(
-        classData.InstructorID
-      );
+      // Notification rules:
+      // - REJECT: notify staff (creator), NOT instructor
+      // - APPROVE: notify BOTH staff (creator) and instructor
+      const staffRepository = require("../repositories/staffRepository");
 
-      // Tạo notification cho giảng viên (chỉ khi REJECT)
-      if (action === "REJECT" && instructor && instructor.AccID) {
+      const staff =
+        classData.CreatedByStaffID != null
+          ? await staffRepository.findById(classData.CreatedByStaffID)
+          : null;
+
+      const instructor =
+        classData.InstructorID != null
+          ? await instructorRepository.findById(classData.InstructorID)
+          : null;
+
+      if (action === "REJECT") {
         const notificationContent = adminFeedback
-          ? `Lớp học "${classData.Name}" bị từ chối với lý do: ${adminFeedback}`
-          : `Lớp học "${classData.Name}" bị từ chối. Vui lòng chỉnh sửa và gửi lại.`;
+          ? `Lớp "${classData.Name}" bị từ chối với lý do: ${adminFeedback}`
+          : `Lớp "${classData.Name}" bị từ chối.`;
 
-        await notificationRepository.create({
-          Content: notificationContent,
-          Type: "class_rejected",
-          Status: "unread",
-          AccID: instructor.AccID,
-        });
+        if (staff?.AccID) {
+          await notificationRepository.create({
+            Content: notificationContent,
+            Type: "class_rejected",
+            Status: "unread",
+            AccID: staff.AccID,
+          });
+        }
+      }
+
+      if (action === "APPROVE") {
+        const notificationContent = `Lớp "${classData.Name}" đã được admin duyệt. Vui lòng xem lại lịch dạy học để nắm thông tin cập nhật mới nhất.`;
+        const notificationContentStaff = `Lớp "${classData.Name}" đã được admin duyệt`;
+
+        if (staff?.AccID) {
+          await notificationRepository.create({
+            Content: notificationContentStaff,
+            Type: "class_approved",
+            Status: "unread",
+            AccID: staff.AccID,
+          });
+        }
+
+        if (instructor?.AccID) {
+          await notificationRepository.create({
+            Content: notificationContent,
+            Type: "class_approved",
+            Status: "unread",
+            AccID: instructor.AccID,
+          });
+        }
       }
 
       // Ghi log (chỉ khi có adminAccID)
@@ -1054,6 +1473,96 @@ const classController = {
       res.status(500).json({
         success: false,
         message: "Lỗi khi kiểm duyệt lớp",
+        error: error.message,
+      });
+    }
+  },
+
+  // Admin từ chối lớp (PENDING → DRAFT) với lý do và gửi notification đến instructor
+  rejectClass: async (req, res) => {
+    try {
+      const { classId } = req.params;
+      const { reason, adminFeedback } = req.body;
+      const adminAccID = req.user?.AccID;
+
+      const finalReason = (adminFeedback || reason || "").trim();
+      if (!finalReason) {
+        return res.status(400).json({
+          success: false,
+          message: "Vui lòng nhập lý do từ chối",
+        });
+      }
+
+      // Kiểm tra lớp tồn tại
+      const classData = await classService.getClassById(classId);
+      if (!classData) {
+        return res.status(404).json({
+          success: false,
+          message: "Lớp học không tồn tại",
+        });
+      }
+
+      // Kiểm tra Status phải là PENDING
+      if (classData.Status !== "PENDING") {
+        return res.status(400).json({
+          success: false,
+          message: "Chỉ có thể từ chối lớp ở trạng thái PENDING",
+        });
+      }
+
+      // Cập nhật Status: PENDING → DRAFT
+      const updatedClass = await classService.updateClass(classId, {
+        Status: "DRAFT",
+      });
+
+      // Gửi notification đến staff (người tạo lớp), KHÔNG gửi cho giảng viên
+      const staffRepository = require("../repositories/staffRepository");
+      const staff =
+        classData.CreatedByStaffID != null
+          ? await staffRepository.findById(classData.CreatedByStaffID)
+          : null;
+
+      if (staff && staff.AccID) {
+        try {
+          const notificationRepository = require("../repositories/notificationRepository");
+          const notificationContent = `Lớp "${classData.Name}" bị từ chối với lý do: ${finalReason}. Vui lòng xem lại lịch học để nắm thông tin cập nhật mới nhất.`;
+
+          await notificationRepository.create({
+            AccID: staff.AccID,
+            Content: notificationContent,
+            Type: "class",
+            Status: "unread",
+          });
+        } catch (notifError) {
+          console.error(
+            "[rejectClass] Error creating notification for staff:",
+            notifError
+          );
+          // Không throw để không ảnh hưởng đến flow chính
+        }
+      }
+
+      // Ghi log
+      if (adminAccID) {
+        const logService = require("../services/logService");
+        await logService.logAction({
+          action: "REJECT_CLASS",
+          accId: adminAccID,
+          detail: `ClassID: ${classId}, ClassName: ${classData.Name}, Reason: ${finalReason}`,
+        });
+      }
+
+      res.json({
+        success: true,
+        message:
+          "Đã từ chối lớp học thành công. Lớp đã được chuyển về trạng thái DRAFT.",
+        data: updatedClass,
+      });
+    } catch (error) {
+      console.error("Error rejecting class:", error);
+      res.status(500).json({
+        success: false,
+        message: "Lỗi khi từ chối lớp học",
         error: error.message,
       });
     }

@@ -1,21 +1,18 @@
 const express = require("express");
 const router = express.Router();
 const promotionController = require("../controllers/promotionController");
-const { verifyToken, authorizeFeature } = require("../middlewares/middware");
+const {
+  verifyToken,
+  authorizeFeature,
+  authorizeRole,
+} = require("../middlewares/middware");
+
+// Kiểm tra promotion có hợp lệ không (public endpoint - không cần auth)
+router.get("/validate/:code", promotionController.validatePromotion);
+
+// Các route còn lại yêu cầu auth (admin hoặc staff)
 router.use(verifyToken);
-router.use(authorizeFeature("admin"));
-// Tất cả routes đều yêu cầu authentication và authorization (admin)
-// Trừ route validate/:code là public
-router.use(async (req, res, next) => {
-  // Bỏ qua auth cho route validate (public)
-  if (req.path.startsWith("/validate/")) {
-    return next();
-  }
-  // Áp dụng auth cho các route khác
-  await verifyToken(req, res, () => {
-    authorizeFeature("admin")(req, res, next);
-  });
-});
+router.use(authorizeRole("admin", "staff"));
 
 // Tạo promotion mới
 router.post("/", promotionController.createPromotion);

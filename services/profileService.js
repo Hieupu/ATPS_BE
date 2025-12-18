@@ -40,7 +40,13 @@ class ProfileService {
     } else if (role === "admin") {
       const admin = await profileRepository.findAdminByAccountId(accountId);
       profileData = { ...profileData, ...admin };
-    } else if (role === "parent") {
+    }
+    else if (role === "staff") {
+      const staff = await profileRepository.findStaffByAccountId(accountId);
+      profileData = { ...profileData, ...staff };
+    }
+
+    else if (role === "parent") {
       const parent = await profileRepository.findParentByAccountId(accountId);
       profileData = { ...profileData, ...parent };
     }
@@ -58,6 +64,8 @@ class ProfileService {
     if (learner) return "learner";
     const admin = await profileRepository.findAdminByAccountId(accountId);
     if (admin) return "admin";
+    const staff = await profileRepository.findStaffByAccountId(accountId);
+    if (staff) return "staff";
     const parent = await profileRepository.findParentByAccountId(accountId);
     if (parent) return "parent";
 

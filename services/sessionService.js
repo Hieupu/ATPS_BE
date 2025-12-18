@@ -464,7 +464,27 @@ class SessionService {
         }
       }
 
-      return await this.updateSession(sessionId, updatePayload);
+      const updated = await this.updateSession(sessionId, updatePayload);
+
+      // Notify learners when the session date is changed successfully
+      if (dateChanged) {
+        try {
+          const notificationService = require("./notificationService");
+          await notificationService.notifyClassSessionRescheduled({
+            classId: session.ClassID,
+            className: classInfo?.Name,
+            oldDate: session.Date,
+            newDate: newDate,
+          });
+        } catch (notifError) {
+          console.error(
+            "[sessionService] Failed to notifyClassSessionRescheduled:",
+            notifError?.message || notifError
+          );
+        }
+      }
+
+      return updated;
     } catch (error) {
       throw error;
     }

@@ -33,7 +33,13 @@ class NewsRepository {
   // Lấy tất cả tin tức
   async findAll(options = {}) {
     try {
-      const { page = 1, limit = 10, status = null, search = "" } = options;
+      const {
+        page = 1,
+        limit = 10,
+        status = null,
+        search = "",
+        staffID = null,
+      } = options;
 
       // Đảm bảo page và limit là số nguyên hợp lệ
       let validPage = 1;
@@ -81,6 +87,11 @@ class NewsRepository {
         params.push(status);
       }
 
+      if (staffID) {
+        query += ` AND n.StaffID = ?`;
+        params.push(staffID);
+      }
+
       if (search) {
         query += ` AND (n.Title LIKE ? OR n.Content LIKE ?)`;
         params.push(`%${search}%`, `%${search}%`);
@@ -100,7 +111,7 @@ class NewsRepository {
   // Đếm tổng số tin tức
   async count(options = {}) {
     try {
-      const { status = null, search = "" } = options;
+      const { status = null, search = "", staffID = null } = options;
 
       let query = `SELECT COUNT(*) as total FROM news WHERE 1=1`;
       const params = [];
@@ -108,6 +119,11 @@ class NewsRepository {
       if (status) {
         query += ` AND Status = ?`;
         params.push(status);
+      }
+
+      if (staffID) {
+        query += ` AND StaffID = ?`;
+        params.push(staffID);
       }
 
       if (search) {

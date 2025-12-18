@@ -1,5 +1,7 @@
 const Enrollment = require("../models/enrollment");
 const Course = require("../models/course");
+const enrollmentService = require("../services/enrollmentService");
+const classService = require("../services/ClassService");
 
 const enrollmentController = {
   // Enroll lớp học (Admin API)
@@ -348,6 +350,39 @@ const enrollmentController = {
         success: false,
         message: "Lỗi khi lấy danh sách lớp",
         error: error.message,
+      });
+    }
+  },
+
+  // Đổi lớp cho học viên (Admin API)
+  changeClass: async (req, res) => {
+    try {
+      const { learnerId, fromClassId, toClassId } = req.body;
+
+      if (!learnerId || !fromClassId || !toClassId) {
+        return res.status(400).json({
+          success: false,
+          message: "LearnerID, fromClassId và toClassId là bắt buộc",
+        });
+      }
+
+      const updated = await enrollmentService.changeClassForLearner({
+        learnerId,
+        fromClassId,
+        toClassId,
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Đổi lớp cho học viên thành công",
+        data: updated,
+      });
+    } catch (error) {
+      console.error("Error changing class for learner:", error);
+      const status = error.status || 500;
+      return res.status(status).json({
+        success: false,
+        message: error.message || "Lỗi khi đổi lớp cho học viên",
       });
     }
   },

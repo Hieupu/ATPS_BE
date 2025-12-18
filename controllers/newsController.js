@@ -6,8 +6,26 @@ const newsController = {
   createNews: async (req, res) => {
     try {
       const newsData = req.body;
-      const staffId = req.user?.StaffID || newsData.StaffID; // Lấy từ auth middleware hoặc body
+      const role = req.user?.role;
+      const accID = req.user?.AccID;
       const adminAccID = req.user ? req.user.AccID : null;
+
+      let staffId = null;
+
+      if (role === "staff" && accID) {
+        const staffRepository = require("../repositories/staffRepository");
+        const staff = await staffRepository.findByAccID(accID);
+        if (!staff || !staff.StaffID) {
+          return res.status(400).json({
+            success: false,
+            message: "Không tìm thấy thông tin Staff cho tài khoản hiện tại",
+          });
+        }
+        staffId = staff.StaffID;
+      } else if (role === "admin") {
+        // Admin phải truyền StaffID rõ ràng (người phụ trách tin)
+        staffId = newsData.StaffID;
+      }
 
       if (!staffId) {
         return res.status(400).json({
@@ -18,6 +36,40 @@ const newsController = {
 
       newsData.StaffID = staffId;
       const newNews = await newsService.createNews(newsData);
+
+      // Nếu staff tạo tin → gửi notification tới tất cả admin
+      if (role === "staff") {
+        try {
+          const adminRepository = require("../repositories/adminRepository");
+          const notificationService = require("../services/notificationService");
+          const staffRepository = require("../repositories/staffRepository");
+
+          const [allAdmins, staff] = await Promise.all([
+            adminRepository.findAll(),
+            staffRepository.findById(staffId),
+          ]);
+
+          const adminAccIds =
+            allAdmins?.map((a) => a.AccID).filter(Boolean) || [];
+
+          if (adminAccIds.length > 0) {
+            const staffName = staff?.FullName || `Staff #${staffId}`;
+            const title = newNews?.Title || "tin tức mới";
+            const content = `Nhân viên "${staffName}" đã tạo tin tức mới "${title}" và đang chờ duyệt. Vui lòng vào mục Quản lý Tin tức để xem chi tiết.`;
+
+            await notificationService.createBulk({
+              accIds: adminAccIds,
+              content,
+              type: "news",
+            });
+          }
+        } catch (notifError) {
+          console.error(
+            "[newsController.createNews] Error sending notifications to admins:",
+            notifError
+          );
+        }
+      }
 
       // Ghi log CREATE_NEWS
       if (adminAccID && newNews?.NewsID) {
@@ -47,6 +99,8 @@ const newsController = {
   getAllNews: async (req, res) => {
     try {
       const { page = 1, limit = 10, status, search } = req.query;
+      const role = req.user?.role;
+      const accID = req.user?.AccID;
 
       const options = {
         page: parseInt(page),
@@ -54,6 +108,28 @@ const newsController = {
         status: status || null,
         search: search || "",
       };
+
+      // Nếu là staff → chỉ lấy tin của chính staff đó
+      if (role === "staff" && accID) {
+        const staffRepository = require("../repositories/staffRepository");
+        const staff = await staffRepository.findByAccID(accID);
+        if (staff && staff.StaffID) {
+          options.staffID = staff.StaffID;
+        } else {
+          // Không có staff mapping → trả về rỗng
+          return res.json({
+            success: true,
+            message: "Lấy danh sách tin tức thành công",
+            data: [],
+            pagination: {
+              total: 0,
+              page: parseInt(page),
+              limit: parseInt(limit),
+              totalPages: 0,
+            },
+          });
+        }
+      }
 
       const result = await newsService.getAllNews(options);
 
@@ -208,6 +284,30 @@ const newsController = {
       const adminAccID = req.user ? req.user.AccID : null;
       const updatedNews = await newsService.approveNews(id);
 
+       // Gửi notification tới staff tạo tin
+      try {
+        const staffRepository = require("../repositories/staffRepository");
+        const notificationService = require("../services/notificationService");
+
+        if (updatedNews?.StaffID) {
+          const staff = await staffRepository.findById(updatedNews.StaffID);
+          if (staff?.AccID) {
+            const title = updatedNews.Title || "tin tức";
+            const content = `Tin tức "${title}" của bạn đã được admin duyệt và sẽ hiển thị cho học viên.`;
+            await notificationService.create({
+              accId: staff.AccID,
+              content,
+              type: "news",
+            });
+          }
+        }
+      } catch (notifError) {
+        console.error(
+          "[newsController.approveNews] Error sending notification to staff:",
+          notifError
+        );
+      }
+
       // Ghi log APPROVE_NEWS
       if (adminAccID && updatedNews?.NewsID) {
         await logService.logAction({
@@ -224,7 +324,11 @@ const newsController = {
       });
     } catch (error) {
       console.error("Error approving news:", error);
-      const statusCode = error.message.includes("Không tìm thấy") || error.message.includes("Chỉ có thể") ? 400 : 500;
+      const statusCode =
+        error.message.includes("Không tìm thấy") ||
+        error.message.includes("Chỉ có thể")
+          ? 400
+          : 500;
       res.status(statusCode).json({
         success: false,
         message: error.message,
@@ -237,7 +341,17 @@ const newsController = {
   rejectNews: async (req, res) => {
     try {
       const { id } = req.params;
+      const { reason } = req.body;
       const adminAccID = req.user ? req.user.AccID : null;
+
+      const finalReason = (reason || "").trim();
+      if (!finalReason) {
+        return res.status(400).json({
+          success: false,
+          message: "Vui lòng nhập lý do từ chối tin tức",
+        });
+      }
+
       const updatedNews = await newsService.rejectNews(id);
 
       // Ghi log REJECT_NEWS
@@ -245,8 +359,32 @@ const newsController = {
         await logService.logAction({
           action: "REJECT_NEWS",
           accId: adminAccID,
-          detail: `NewsID: ${updatedNews.NewsID}, Title: ${updatedNews.Title}`,
+          detail: `NewsID: ${updatedNews.NewsID}, Title: ${updatedNews.Title}, Reason: ${finalReason}`,
         });
+      }
+
+      // Gửi notification tới staff tạo tin với lý do từ chối
+      try {
+        const staffRepository = require("../repositories/staffRepository");
+        const notificationService = require("../services/notificationService");
+
+        if (updatedNews?.StaffID) {
+          const staff = await staffRepository.findById(updatedNews.StaffID);
+          if (staff?.AccID) {
+            const title = updatedNews.Title || "tin tức";
+            const content = `Tin tức "${title}" của bạn đã bị admin từ chối. Lý do: ${finalReason}`;
+            await notificationService.create({
+              accId: staff.AccID,
+              content,
+              type: "news",
+            });
+          }
+        }
+      } catch (notifError) {
+        console.error(
+          "[newsController.rejectNews] Error sending notification to staff:",
+          notifError
+        );
       }
 
       res.json({
@@ -256,7 +394,11 @@ const newsController = {
       });
     } catch (error) {
       console.error("Error rejecting news:", error);
-      const statusCode = error.message.includes("Không tìm thấy") || error.message.includes("Chỉ có thể") ? 400 : 500;
+      const statusCode =
+        error.message.includes("Không tìm thấy") ||
+        error.message.includes("Chỉ có thể")
+          ? 400
+          : 500;
       res.status(statusCode).json({
         success: false,
         message: error.message,
@@ -298,5 +440,3 @@ const newsController = {
 };
 
 module.exports = newsController;
-
-

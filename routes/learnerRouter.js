@@ -1,6 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const { verifyToken, authorizeFeature } = require("../middlewares/middware");
+const {
+  verifyToken,
+  authorizeFeature,
+  authorizeRole,
+} = require("../middlewares/middware");
 const learnerController = require("../controllers/learnerController");
 
 // =====================================================
@@ -62,11 +66,11 @@ router.get(
 // ADMIN APIs - MUST come after public and learner routes
 // =====================================================
 
-// Admin CRUD routes
+// Admin & Staff CRUD routes
 router.get(
   "/",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"),
   learnerController.getAllLearners
 );
 

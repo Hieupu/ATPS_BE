@@ -1,16 +1,19 @@
 const express = require("express");
 const router = express.Router();
-const { verifyToken, authorizeFeature } = require("../middlewares/middware");
+const {
+  verifyToken,
+  authorizeFeature,
+  authorizeRole,
+} = require("../middlewares/middware");
 const timeslotController = require("../controllers/timeslotController");
 
-// Admin APIs
+// Admin & Staff APIs
 router.get(
   "/",
   verifyToken,
-  authorizeFeature("admin"),
+  authorizeRole("admin", "staff"),
   timeslotController.getAllTimeslots
 );
-
 
 // ✅ Distinct time ranges API - Phải đặt TRƯỚC route /:timeslotId để tránh bị match nhầm
 router.get(

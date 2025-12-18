@@ -15,14 +15,15 @@ class ClassRepository {
       EnddatePlan,
       Numofsession,
       Maxstudent,
+      CreatedByStaffID, // Thêm CreatedByStaffID
     } = classData;
 
     const query = `
       INSERT INTO \`class\` (
         Name, CourseID, InstructorID, Status, ZoomID, Zoompass, Fee, 
         OpendatePlan, Opendate, EnddatePlan, Enddate,
-        Numofsession,Maxstudent
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        Numofsession, Maxstudent, CreatedByStaffID
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     const [result] = await pool.execute(query, [
@@ -39,6 +40,7 @@ class ClassRepository {
       null, // Enddate sẽ được sync từ session
       Numofsession || 0,
       Maxstudent || 0,
+      CreatedByStaffID || null, // Thêm CreatedByStaffID
     ]);
 
     return result;
@@ -56,11 +58,13 @@ class ClassRepository {
         co.Description as courseDescription,
         i.FullName as instructorName,
         i.Major as instructorMajor,
-        COUNT(e.EnrollmentID) as currentLearners
+        COUNT(e.EnrollmentID) as currentLearners,
+        s.FullName as createdByStaffName
       FROM class c
       LEFT JOIN course co ON c.CourseID = co.CourseID
       LEFT JOIN instructor i ON c.InstructorID = i.InstructorID
       LEFT JOIN enrollment e ON c.ClassID = e.ClassID AND e.Status = 'Enrolled'
+      LEFT JOIN staff s ON c.CreatedByStaffID = s.StaffID
       WHERE c.ClassID = ?
       GROUP BY c.ClassID
     `;
@@ -69,21 +73,38 @@ class ClassRepository {
     return rows;
   }
 
-  async findAll() {
+  async findAll(options = {}) {
     const pool = await connectDB();
-    const query = `
+    const { userRole, staffID } = options;
+
+    let query = `
       SELECT 
         c.*,
         co.Title as courseTitle,
         co.Description as courseDescription,
-        i.FullName as instructorName
+        i.FullName as instructorName,
+        s.FullName as createdByStaffName
       FROM \`class\` c
       LEFT JOIN course co ON c.CourseID = co.CourseID
       LEFT JOIN instructor i ON c.InstructorID = i.InstructorID
-      ORDER BY c.ClassID DESC
+      LEFT JOIN staff s ON c.CreatedByStaffID = s.StaffID
+      WHERE 1=1
     `;
 
-    const [rows] = await pool.execute(query);
+    // Filter theo role:
+    // - Admin: Không hiển thị DRAFT (vì DRAFT chỉ là bản nháp của staff)
+    // - Staff: CHỈ hiển thị các lớp do mình tạo (CreatedByStaffID = staffID)
+    if (userRole === "admin") {
+      query += ` AND c.Status != 'DRAFT'`;
+    } else if (userRole === "staff" && staffID) {
+      // Staff CHỈ thấy các lớp do mình tạo
+      query += ` AND c.CreatedByStaffID = ?`;
+    }
+
+    query += ` ORDER BY c.ClassID DESC`;
+
+    const params = userRole === "staff" && staffID ? [staffID] : [];
+    const [rows] = await pool.execute(query, params);
     return rows;
   }
 

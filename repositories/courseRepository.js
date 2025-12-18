@@ -924,7 +924,7 @@ class CourseRepository {
         WHERE Status = 'enrolled'
         GROUP BY ClassID
       ) e ON cl.ClassID = e.ClassID
-      WHERE c.Status IN ('PUBLISHED', 'APPROVED', 'Open')
+      WHERE c.Status IN ('PUBLISHED', 'APPROVED')
       GROUP BY c.CourseID, c.Title, c.Description, c.Duration, c.Image, c.Level, i.FullName, i.ProfilePicture
       ORDER BY TotalEnrollments DESC, MaxEnrollment DESC
       LIMIT 6
