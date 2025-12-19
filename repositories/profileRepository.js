@@ -41,46 +41,32 @@ class ProfileRepository {
 
   async updateAccount(accountId, data) {
     const db = await connectDB();
-
     const updateFields = [];
     const updateValues = [];
-
     if (data.Username !== undefined) {
       updateFields.push("Username = ?");
       updateValues.push(data.Username);
     }
-
     if (data.Phone !== undefined) {
       updateFields.push("Phone = ?");
       updateValues.push(data.Phone);
     }
-
     if (data.Gender !== undefined) {
       updateFields.push("Gender = ?");
       updateValues.push(data.Gender);
     }
-
-    if (updateFields.length === 0) {
-      return;
-    }
-
+    if (updateFields.length === 0) return;
     updateValues.push(accountId);
-
-    const [result] = await db.query(
+    return await db.query(
       `UPDATE account SET ${updateFields.join(", ")} WHERE AccID = ?`,
       updateValues
     );
-
-    console.log(`Updated account: ${result.affectedRows} rows affected`);
-    return result;
   }
 
   async updateInstructor(accountId, data) {
     const db = await connectDB();
-
     const updateFields = [];
     const updateValues = [];
-
     if (data.FullName !== undefined) {
       updateFields.push("FullName = ?");
       updateValues.push(data.FullName);
@@ -101,28 +87,18 @@ class ProfileRepository {
       updateFields.push("Major = ?");
       updateValues.push(data.Major);
     }
-
-    if (updateFields.length === 0) {
-      return;
-    }
-
+    if (updateFields.length === 0) return;
     updateValues.push(accountId);
-
-    const [result] = await db.query(
+    return await db.query(
       `UPDATE instructor SET ${updateFields.join(", ")} WHERE AccID = ?`,
       updateValues
     );
-
-    console.log(`Updated instructor: ${result.affectedRows} rows affected`);
-    return result;
   }
 
   async updateLearner(accountId, data) {
     const db = await connectDB();
-
     const updateFields = [];
     const updateValues = [];
-
     if (data.FullName !== undefined) {
       updateFields.push("FullName = ?");
       updateValues.push(data.FullName);
@@ -139,25 +115,40 @@ class ProfileRepository {
       updateFields.push("Address = ?");
       updateValues.push(data.Address);
     }
-
-    if (updateFields.length === 0) {
-      return;
-    }
-
+    if (updateFields.length === 0) return;
     updateValues.push(accountId);
-
-    const [result] = await db.query(
+    return await db.query(
       `UPDATE learner SET ${updateFields.join(", ")} WHERE AccID = ?`,
       updateValues
     );
-
-    console.log(`Updated learner: ${result.affectedRows} rows affected`);
-    return result;
   }
 
   async updateStaff(accountId, data) {
     const db = await connectDB();
+    const updateFields = [];
+    const updateValues = [];
+    if (data.FullName !== undefined) {
+      updateFields.push("FullName = ?");
+      updateValues.push(data.FullName);
+    }
+    if (data.DateOfBirth !== undefined) {
+      updateFields.push("DateOfBirth = ?");
+      updateValues.push(data.DateOfBirth);
+    }
+    if (data.Address !== undefined) {
+      updateFields.push("Address = ?");
+      updateValues.push(data.Address);
+    }
+    if (updateFields.length === 0) return;
+    updateValues.push(accountId);
+    return await db.query(
+      `UPDATE staff SET ${updateFields.join(", ")} WHERE AccID = ?`,
+      updateValues
+    );
+  }
 
+  async updateAdmin(accountId, data) {
+    const db = await connectDB();
     const updateFields = [];
     const updateValues = [];
 
@@ -169,28 +160,18 @@ class ProfileRepository {
       updateFields.push("DateOfBirth = ?");
       updateValues.push(data.DateOfBirth);
     }
-    if (data.Job !== undefined) {
-      updateFields.push("Job = ?");
-      updateValues.push(data.Job);
-    }
     if (data.Address !== undefined) {
       updateFields.push("Address = ?");
       updateValues.push(data.Address);
     }
 
-    if (updateFields.length === 0) {
-      return;
-    }
+    if (updateFields.length === 0) return;
 
     updateValues.push(accountId);
-
-    const [result] = await db.query(
-      `UPDATE staff SET ${updateFields.join(", ")} WHERE AccID = ?`,
+    return await db.query(
+      `UPDATE admin SET ${updateFields.join(", ")} WHERE AccID = ?`,
       updateValues
     );
-
-    console.log(`Updated staff: ${result.affectedRows} rows affected`);
-    return result;
   }
 
   async updatePassword(accountId, hashedPassword) {
