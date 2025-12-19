@@ -12,7 +12,10 @@ describe("notificationService - createRefundNotification", () => {
   });
 
   function setupDb(enrollmentRows) {
-    const mockQuery = jest.fn().mockResolvedValueOnce([enrollmentRows]).mockResolvedValueOnce([{}]);
+    const mockQuery = jest
+      .fn()
+      .mockResolvedValueOnce([enrollmentRows])
+      .mockResolvedValueOnce([{}]);
     connectDB.mockResolvedValue({ query: mockQuery });
     return mockQuery;
   }
@@ -21,15 +24,19 @@ describe("notificationService - createRefundNotification", () => {
     const mockQuery = jest.fn().mockResolvedValueOnce([[]]);
     connectDB.mockResolvedValue({ query: mockQuery });
 
-    await notificationService.createRefundNotification(enrollmentId, refundId, "requested");
+    await notificationService.createRefundNotification(
+      enrollmentId,
+      refundId,
+      "requested"
+    );
 
     expect(mockQuery).toHaveBeenCalledTimes(1);
   });
 
   test("UTCID02 - enrollment hợp lệ, action = requested", async () => {
     const enrollmentRows = [
-      { RefundID: refundId, LearnerAccID: 9, Role: 'learner' },
-      { RefundID: refundId, LearnerAccID: 1, Role: 'admin' }
+      { RefundID: refundId, LearnerAccID: 9, Role: "learner" },
+      { RefundID: refundId, LearnerAccID: 1, Role: "admin" },
     ];
 
     const mockQuery = setupDb(enrollmentRows);
@@ -40,7 +47,7 @@ describe("notificationService - createRefundNotification", () => {
       "requested"
     );
 
-    const insertCall = mockQuery.mock.calls.find(call =>
+    const insertCall = mockQuery.mock.calls.find((call) =>
       call[0].includes("INSERT INTO notification")
     );
 
@@ -48,54 +55,122 @@ describe("notificationService - createRefundNotification", () => {
 
     const insertedValues = insertCall[1][0];
 
-    const learnerNotification = insertedValues.find(row => row[0] === 9);
+    const learnerNotification = insertedValues.find((row) => row[0] === 9);
 
     expect(learnerNotification).toEqual([
       9,
       `Yêu cầu hoàn tiền #${refundId} của bạn đã được gửi thành công và đang chờ xử lý.`,
-      'refund',
-      'unread'
+      "refund",
+      "unread",
     ]);
   });
 
-  test("UTCID03 - enrollment hợp lệ, action = approved -> tạo notification nội dung approved", async () => {
-    const enrollmentRows = [{ EnrollmentID: enrollmentId, AccID: 9 }];
-    const mockQuery = setupDb(enrollmentRows);
+  test("UTCID03 - enrollment hợp lệ, action = approved -> tạo notification approved", async () => {
+    const selectRows = [
+      { RefundID: refundId, LearnerAccID: 17, Role: "learner" },
+      { RefundID: refundId, LearnerAccID: 1, Role: "admin" },
+      { RefundID: refundId, LearnerAccID: 2, Role: "admin" },
+    ];
 
-    await notificationService.createRefundNotification(enrollmentId, refundId, "approved");
+    const mockQuery = setupDb(selectRows);
+
+    await notificationService.createRefundNotification(
+      enrollmentId,
+      refundId,
+      "approved"
+    );
 
     const insertCall = mockQuery.mock.calls[1];
+
     expect(insertCall[1]).toEqual([
-      9,
-      `Yêu cầu hoàn tiền #${refundId} của bạn đã được chấp nhận.`,
+      [
+        [
+          17,
+          `Yêu cầu hoàn tiền #${refundId} của bạn đã được chấp nhận.`,
+          "refund",
+          "unread",
+        ],
+        [
+          1,
+          `Yêu cầu hoàn tiền #${refundId} đã được phê duyệt.`,
+          "refund_admin",
+          "unread",
+        ],
+        [
+          2,
+          `Yêu cầu hoàn tiền #${refundId} đã được phê duyệt.`,
+          "refund_admin",
+          "unread",
+        ],
+      ],
     ]);
   });
 
-  test("UTCID04 - enrollment hợp lệ, action = cancelled -> tạo notification nội dung cancelled", async () => {
-    const enrollmentRows = [{ EnrollmentID: enrollmentId, AccID: 9 }];
-    const mockQuery = setupDb(enrollmentRows);
+  test("UTCID04 - enrollment hợp lệ, action = cancelled -> tạo notification cancelled", async () => {
+    const selectRows = [
+      { RefundID: refundId, LearnerAccID: 17, Role: "learner" },
+      { RefundID: refundId, LearnerAccID: 1, Role: "admin" },
+    ];
 
-    await notificationService.createRefundNotification(enrollmentId, refundId, "cancelled");
+    const mockQuery = setupDb(selectRows);
+
+    await notificationService.createRefundNotification(
+      enrollmentId,
+      refundId,
+      "cancelled"
+    );
 
     const insertCall = mockQuery.mock.calls[1];
+
     expect(insertCall[1]).toEqual([
-      9,
-      `Yêu cầu hoàn tiền #${refundId} của bạn đã được hủy.`,
+      [
+        [
+          17,
+          `Yêu cầu hoàn tiền #${refundId} của bạn đã được hủy.`,
+          "refund",
+          "unread",
+        ],
+        [
+          1,
+          `Yêu cầu hoàn tiền #${refundId} đã bị hủy bởi học viên.`,
+          "refund_admin",
+          "unread",
+        ],
+      ],
     ]);
   });
 
-  test("UTCID05 - enrollment hợp lệ, action = rejected -> tạo notification nội dung rejected", async () => {
-    const enrollmentRows = [{ EnrollmentID: enrollmentId, AccID: 9 }];
-    const mockQuery = setupDb(enrollmentRows);
+  test("UTCID05 - enrollment hợp lệ, action = rejected -> tạo notification rejected", async () => {
+    const selectRows = [
+      { RefundID: refundId, LearnerAccID: 17, Role: "learner" },
+      { RefundID: refundId, LearnerAccID: 1, Role: "admin" },
+    ];
 
-    await notificationService.createRefundNotification(enrollmentId, refundId, "rejected");
+    const mockQuery = setupDb(selectRows);
+
+    await notificationService.createRefundNotification(
+      enrollmentId,
+      refundId,
+      "rejected"
+    );
 
     const insertCall = mockQuery.mock.calls[1];
+
     expect(insertCall[1]).toEqual([
-      9,
-      `Yêu cầu hoàn tiền #${refundId} của bạn đã bị từ chối.`,
+      [
+        [
+          17,
+          `Yêu cầu hoàn tiền #${refundId} của bạn đã bị từ chối.`,
+          "refund",
+          "unread",
+        ],
+        [
+          1,
+          `Yêu cầu hoàn tiền #${refundId} đã bị từ chối.`,
+          "refund_admin",
+          "unread",
+        ],
+      ],
     ]);
   });
 });
-
-

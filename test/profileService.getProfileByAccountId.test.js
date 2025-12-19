@@ -18,7 +18,6 @@ describe("profileService - getProfileByAccountId", () => {
     Gender: "M",
   };
 
-
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -174,7 +173,10 @@ describe("profileService - getProfileByAccountId", () => {
   });
 
   test("UTCID08 - account tồn tại nhưng không thuộc instructor/learner/parent -> ném lỗi role", async () => {
-    profileRepository.findAccountById.mockResolvedValue({...baseAccount, Role: "admin",});
+    profileRepository.findAccountById.mockResolvedValue({
+      ...baseAccount,
+      Role: "admin",
+    });
 
     profileRepository.findInstructorByAccountId.mockResolvedValue(null);
     profileRepository.findLearnerByAccountId.mockResolvedValue(null);
