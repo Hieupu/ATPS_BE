@@ -3,6 +3,7 @@ const { createUploader } = require("../config/multer");
 const allowedMimes = [
   "image/",
   "video/",
+  "audio/",
   "application/pdf",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
