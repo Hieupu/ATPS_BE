@@ -104,7 +104,6 @@ class ZoomService {
 
     try {
       // Add occurrence by updating meeting? Zoom API không hỗ trợ thêm occurrence trực tiếp cho meeting đã tồn tại
-      // Tạm thời: tạo meeting mới cho occurrence này và trả về occurrence_id (ZoomUUID)
       const res = await this.requestWithRetry({
         url: `${this.zoomApiBase}/users/me/meetings`,
         method: "POST",
@@ -115,8 +114,11 @@ class ZoomService {
           duration: durationMinutes || 120,
           timezone: "Asia/Ho_Chi_Minh",
           settings: {
+            join_before_host: false,
+            mute_upon_entry: true,
             waiting_room: false,
-            join_before_host: true,
+            approval_type: 0,
+            auto_recording: "cloud",
           },
         },
         headers: { Authorization: `Bearer ${accessToken}` },
@@ -254,13 +256,16 @@ class ZoomService {
         method: "POST",
         data: {
           topic,
-          type: 2, // scheduled
+          type: 2,
           start_time,
           duration,
           timezone: "Asia/Ho_Chi_Minh",
           settings: {
+            join_before_host: false,
+            mute_upon_entry: true,
             waiting_room: false,
-            join_before_host: true,
+            approval_type: 0,
+            auto_recording: "cloud",
           },
         },
         headers: { Authorization: `Bearer ${accessToken}` },

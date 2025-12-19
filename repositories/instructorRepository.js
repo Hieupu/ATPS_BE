@@ -80,12 +80,8 @@ class InstructorRepository {
                  a.Email, a.Username, a.Phone, a.Status, a.Gender
         ORDER BY i.InstructorID DESC`
       );
-      // Chuẩn hóa Certificates thành mảng và fee về số
-      // Map AccountStatus và AccountGender thành Status và Gender để frontend dễ sử dụng
       return rows.map((row) => {
-        // Parse certificate statuses
-        // "Đã có" khi có ít nhất một chứng chỉ APPROVED
-        // "Chưa có" khi không có chứng chỉ nào, hoặc chỉ có PENDING/REJECTED
+
         let hasApprovedCertificate = false;
         if (row.CertificateStatuses) {
           const statuses = row.CertificateStatuses.split("|");
@@ -94,10 +90,10 @@ class InstructorRepository {
         
         return {
           ...row,
-          Status: row.AccountStatus, // Map từ AccountStatus
-          Gender: row.AccountGender, // Map từ AccountGender
+          Status: row.AccountStatus, 
+          Gender: row.AccountGender,
           Certificates: row.Certificates ? row.Certificates.split("|") : [],
-          HasApprovedCertificate: hasApprovedCertificate, // Có chứng chỉ đã duyệt hay không
+          HasApprovedCertificate: hasApprovedCertificate, 
           InstructorFee: Number(row.InstructorFee) || 0,
         };
       });
@@ -232,11 +228,10 @@ class InstructorRepository {
 
       const total = countRows?.[0]?.total || 0;
 
-      // SỬA LẠI: KHÔNG nhân 1000 nữa, dùng trực tiếp giá trị từ database
       const processedItems = items.map((item) => ({
         ...item,
         Certificates: item.Certificates ? item.Certificates.split("|") : [],
-        InstructorFee: Number(item.InstructorFee) || 0, // Giữ nguyên giá trị VND từ database
+        InstructorFee: Number(item.InstructorFee) || 0, 
       }));
 
       console.log("Filtered instructors count:", items.length);
@@ -400,8 +395,8 @@ class InstructorRepository {
 
       return {
         ...instructor,
-        Status: instructor.AccountStatus, // Map từ AccountStatus
-        Gender: instructor.AccountGender, // Map từ AccountGender
+        Status: instructor.AccountStatus, 
+        Gender: instructor.AccountGender, 
         Courses: courseRows,
         Certificates: certRows,
       };
@@ -633,8 +628,6 @@ class InstructorRepository {
       "CV",
       "Major",
       "InstructorFee",
-      // AccID không được update qua đây (phải thông qua account)
-      // Email, Phone không có trong bảng instructor (nằm trong account)
     ];
 
     // Lọc chỉ các trường hợp lệ
@@ -677,7 +670,7 @@ class InstructorRepository {
     return rows.length > 0;
   }
 
-  // Lấy giảng viên kèm danh sách khóa học (courses) - dbver5
+  // Lấy giảng viên kèm danh sách khóa học (courses) 
   async findByIdWithCourses(instructorId) {
     const query = `
       SELECT 
@@ -704,24 +697,13 @@ class InstructorRepository {
     );
     const db = await connectDB();
     const [rows] = await db.execute(query, [instructorId]);
-    console.log(
-      `[instructorRepository] Query result rows count: ${rows.length}`
-    );
+  
 
     // Debug: Kiểm tra xem có courses nào (kể cả không PUBLISHED) cho instructor này không
     const [allCourses] = await db.execute(
       `SELECT CourseID, Title, Status, InstructorID FROM course WHERE InstructorID = ?`,
       [instructorId]
     );
-    console.log(
-      `[instructorRepository] All courses for instructor ${instructorId}:`,
-      allCourses
-    );
-    console.log(
-      `[instructorRepository] Courses with PUBLISHED status:`,
-      allCourses.filter((c) => c.Status === "PUBLISHED")
-    );
-
     if (rows.length === 0) return null;
 
     // Group courses
@@ -756,18 +738,10 @@ class InstructorRepository {
       }
     });
 
-    console.log(
-      `[instructorRepository] Final instructor object with ${instructor.courses.length} PUBLISHED courses`
-    );
-    console.log(`[instructorRepository] Courses:`, instructor.courses);
 
     return instructor;
   }
 
-  // Lấy lịch dạy của giảng viên (sessions)
-  // Logic mới: Phân biệt fulltime và parttime
-  // - Fulltime: Mặc định full ca T2-T7, chỉ check session và HOLIDAY
-  // - Parttime: Chỉ dạy các ca có Status='AVAILABLE' trong instructortimeslot
   async getSchedule(
     instructorId,
     startDate = null,

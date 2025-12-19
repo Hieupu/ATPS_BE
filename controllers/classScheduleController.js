@@ -622,21 +622,12 @@ const classScheduleController = {
     }
   },
 
-  // =====================================================
-  // INSTRUCTOR LEAVE MANAGEMENT
-  // =====================================================
-
   listInstructorLeaves: async (req, res) => {
     try {
-      console.log("[listInstructorLeaves] Query params:", req.query);
       const result = await instructorLeaveService.listInstructorLeaves(
         req.query
       );
-      console.log(
-        "[listInstructorLeaves] Result:",
-        result?.items?.length || 0,
-        "items"
-      );
+
       res.json({
         success: true,
         data: result,
@@ -828,16 +819,6 @@ const classScheduleController = {
         ClassID,
       } = req.body;
 
-      console.log("[searchTimeslots] START", {
-        InstructorID,
-        Numofsession,
-        sessionsPerWeek,
-        requiredSlotsPerWeek,
-        currentStartDate,
-        daysOfWeek: DaysOfWeek,
-        hasTimeslotsByDay: !!TimeslotsByDay,
-      });
-
       if (!InstructorID || !DaysOfWeek || !TimeslotsByDay || !Numofsession) {
         return res.status(400).json({
           success: false,
@@ -863,16 +844,7 @@ const classScheduleController = {
       });
 
       const durationMs = Date.now() - startTime;
-      console.log("[searchTimeslots] DONE", {
-        InstructorID,
-        Numofsession,
-        sessionsPerWeek,
-        requiredSlotsPerWeek,
-        currentStartDate,
-        suggestionCount: suggestions?.length || 0,
-        suggestions,
-        durationMs,
-      });
+     
 
       res.json({
         success: true,

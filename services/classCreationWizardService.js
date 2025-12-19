@@ -1822,7 +1822,7 @@ async function findAvailableSlotsForEdit(params) {
  * @param {number} params.ClassID
  * @param {string} params.Date
  * @param {number} params.TimeslotID
- * @returns {Object} { isValid: boolean, conflicts: [], summary: {} }
+ * @returns {Object}
  */
 async function checkLearnerConflicts(params) {
   const { ClassID, Date, TimeslotID } = params;
@@ -1848,7 +1848,6 @@ async function checkLearnerConflicts(params) {
 
     const pool = require("../config/db");
 
-    // Gom tất cả LearnerID đang active/enrolled thành 1 mảng để query bulk
     const learnerIds = activeLearners.map((e) => e.LearnerID);
     const placeholders = learnerIds.map(() => "?").join(", ");
 
@@ -1996,16 +1995,6 @@ async function analyzeBlockedDays(params) {
 
     const totalWeeks = Math.ceil(Numofsession / sessionsPerWeek);
 
-    console.log("[analyzeBlockedDays] INPUT", {
-      InstructorID,
-      OpendatePlan,
-      Numofsession,
-      DaysOfWeek,
-      TimeslotsByDay,
-      sessionsPerWeek,
-      totalWeeks,
-    });
-
     // Tính ngày kết thúc dự kiến (xấp xỉ)
     const startDate = new Date(OpendatePlan);
     const endDate = new Date(startDate);
@@ -2032,11 +2021,6 @@ async function analyzeBlockedDays(params) {
     );
 
     const teachingStats = buildConflictStats(teachingSchedules);
-
-    console.log("[analyzeBlockedDays] RAW BLOCKS", {
-      OTHER_count: relevantBlocks.length,
-      SESSION_count: teachingSchedules.length,
-    });
 
     // Chuẩn bị meta timeslot cho pattern đang xét (TimeslotsByDay)
     const timeslotMetaMap = new Map();
@@ -2119,20 +2103,9 @@ async function analyzeBlockedDays(params) {
           manualOccurrences: manualCount,
           sessionOccurrences: sessionCount,
           totalBusyCount,
-          isBlocked: totalBusyCount > 0, // Logic mới: > 0 là blocked (không cho trùng)
+          isBlocked: totalBusyCount > 0, 
           blockedDates,
         };
-
-        console.log("[analyzeBlockedDays] SLOT ANALYSIS", {
-          dayOfWeek,
-          timeslotId,
-          slotKey,
-          manualCount,
-          sessionCount,
-          totalBusyCount,
-          isBlocked: totalBusyCount > 0,
-          blockedDates,
-        });
       }
 
       // Nếu có timeslot bị khóa, lưu vào blockedDays
@@ -2402,23 +2375,11 @@ async function searchTimeslots(params) {
           });
         });
 
-        // Logic mới: Suggest ngày khi TẤT CẢ timeslots đều AVAILABLE (không trùng)
-        // 1. availableSlots === totalSlots (tất cả ca đều không trùng)
-        // 2. totalSlots >= minRequiredSlots (đủ số ca đã chọn)
-        console.log("[searchTimeslots] CANDIDATE", {
-          dateString,
-          dayOfWeekNum,
-          availableSlots,
-          totalSlots,
-          minRequiredSlots,
-        });
-
         if (
           availableSlots === totalSlots &&
           totalSlots >= minRequiredSlots &&
           totalSlots > 0
         ) {
-          // ✅ Thêm check learner conflicts nếu có ClassID
           let learnerConflictCount = 0;
           let learnerConflicts = [];
           if (ClassID) {

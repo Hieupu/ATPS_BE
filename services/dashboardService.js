@@ -55,6 +55,19 @@ class DashboardService {
          )`
       );
 
+      // Tổng số học viên mới tháng trước
+      const [newLearnersLastMonth] = await pool.execute(
+        `SELECT COUNT(DISTINCT e.LearnerID) as total 
+         FROM enrollment e
+         WHERE MONTH(e.EnrollmentDate) = MONTH(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH))
+         AND YEAR(e.EnrollmentDate) = YEAR(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH))
+         AND e.EnrollmentID = (
+           SELECT MIN(e2.EnrollmentID) 
+           FROM enrollment e2 
+           WHERE e2.LearnerID = e.LearnerID
+         )`
+      );
+
       // Tổng số giảng viên
       const [instructorCount] = await pool.execute(
         `SELECT COUNT(*) as total FROM instructor`
@@ -119,12 +132,6 @@ class DashboardService {
           successStatusList.includes(String(entry.name || "").toLowerCase())
         )
         .reduce((sum, entry) => sum + entry.value, 0);
-      console.log(
-        "[Dashboard] payment status breakdown:",
-        paymentStatusBreakdown
-      );
-
-      // Số lượng đăng ký mới trong tháng này
       const [newEnrollmentsThisMonth] = await pool.execute(
         `SELECT COUNT(*) as total FROM enrollment 
          WHERE MONTH(EnrollmentDate) = MONTH(CURRENT_DATE()) 
@@ -161,6 +168,14 @@ class DashboardService {
           ? ((newEnrollmentsThisMonth[0].total -
               lastMonthEnrollments[0].total) /
               lastMonthEnrollments[0].total) *
+            100
+          : 0;
+
+      // Tính phần trăm thay đổi học viên mới
+      const learnerChange =
+        newLearnersLastMonth[0].total > 0
+          ? ((newLearnersThisMonth[0].total - newLearnersLastMonth[0].total) /
+              newLearnersLastMonth[0].total) *
             100
           : 0;
 
@@ -280,13 +295,13 @@ class DashboardService {
         revenue: Number(row.Revenue) || 0,
       }));
 
-      // Giảng viên thu nhập cao
+      // Giảng viên thu nhập cao (dựa trên tổng lương thực tế trong năm được chọn)
       const [topInstructorRows] = await pool.execute(
         `SELECT base.InstructorID,
                 base.FullName,
                 base.Type,
                 base.activeClasses,
-                COALESCE(pay.totalIncome, 0) AS income
+                COALESCE(salary.totalSalary, 0) AS income
          FROM (
            SELECT i.InstructorID,
                   i.FullName,
@@ -303,17 +318,19 @@ class DashboardService {
          ) base
          LEFT JOIN (
            SELECT i.InstructorID,
-                  COALESCE(SUM(p.Amount), 0) AS totalIncome
+                  (COUNT(DISTINCT CASE 
+                    WHEN a.Status IN ('Present', 'PRESENT') THEN s.SessionID 
+                    ELSE NULL 
+                  END) * COALESCE(i.InstructorFee, 0)) AS totalSalary
            FROM instructor i
-           LEFT JOIN \`class\` c ON c.InstructorID = i.InstructorID
-           LEFT JOIN enrollment e ON e.ClassID = c.ClassID
-           LEFT JOIN payment p 
-             ON p.EnrollmentID = e.EnrollmentID 
-            AND p.Status = 'completed'
+           LEFT JOIN session s ON s.InstructorID = i.InstructorID
+           LEFT JOIN attendance a ON a.SessionID = s.SessionID
+           WHERE s.Date IS NULL OR YEAR(s.Date) = ?
            GROUP BY i.InstructorID
-         ) pay ON pay.InstructorID = base.InstructorID
+         ) salary ON salary.InstructorID = base.InstructorID
          ORDER BY income DESC
-         LIMIT 5`
+         LIMIT 5`,
+        [selectedYear]
       );
 
       let eveningMap = {};
@@ -345,18 +362,6 @@ class DashboardService {
         income: Number(row.income) || 0,
         oneOnOneSlots: eveningMap[row.InstructorID] || 0,
       }));
-
-      console.log(
-        "[Dashboard] classNewByMonth (year=%s):",
-        selectedYear,
-        classNewByMonth
-      );
-      console.log("[Dashboard] classDetails count:", classDetails.length);
-      console.log(
-        "[Dashboard] topInstructors sample:",
-        topInstructors.slice(0, 3)
-      );
-
       // Tỷ lệ điểm danh giảng viên (dựa trên số session có chấm công)
       const [recentSessions] = await pool.execute(
         `SELECT COUNT(*) as total
@@ -398,7 +403,8 @@ class DashboardService {
         learners: {
           total: learnerCount[0].total,
           newThisMonth: newLearnersThisMonth[0].total,
-          change: enrollmentChange.toFixed(1),
+          newLastMonth: newLearnersLastMonth[0].total,
+          change: learnerChange.toFixed(1),
         },
         instructors: {
           total: instructorCount[0].total,

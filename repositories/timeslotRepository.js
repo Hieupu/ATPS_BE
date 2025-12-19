@@ -773,12 +773,6 @@ class TimeslotRepository {
 
       const [rows] = await pool.execute(query);
 
-      console.log(" Raw rows result:", rows);
-      console.log(" Rows type:", typeof rows);
-      console.log(
-        " Rows length:",
-        Array.isArray(rows) ? rows.length : "NOT ARRAY"
-      );
       if (!Array.isArray(rows)) {
         console.error("Unexpected result format from database:", typeof rows);
         return [];

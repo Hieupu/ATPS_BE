@@ -5,7 +5,6 @@ const dashboardController = {
   getDashboardStats: async (req, res) => {
     try {
       const { year } = req.query;
-      console.log("[Dashboard] getDashboardStats called with year:", year);
       const stats = await dashboardService.getDashboardStats(year);
 
       res.json({

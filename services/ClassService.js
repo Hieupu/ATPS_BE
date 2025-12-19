@@ -29,8 +29,6 @@ class ClassService {
           400
         );
       }
-
-      // dbver5: Sử dụng các trường mới (không có ZoomURL)
       const { CLASS_STATUS } = require("../constants/classStatus");
       const classData = {
         Name: className,
@@ -42,13 +40,11 @@ class ClassService {
         Fee: data.Fee || null,
         OpendatePlan: data.OpendatePlan || null,
         EnddatePlan: data.EnddatePlan || null,
-        // Numofsession sẽ được tính từ Duration của course (dbver7)
         Numofsession: data.Numofsession || 0,
         Maxstudent: data.Maxstudent || 0,
-        CreatedByStaffID: data.CreatedByStaffID || null, // Thêm CreatedByStaffID
+        CreatedByStaffID: data.CreatedByStaffID || null,
       };
 
-      // Nếu DB yêu cầu ZoomID NOT NULL: tạo meeting mặc định khi thiếu
       if (!classData.ZoomID) {
         try {
           const zoomMeeting = await zoomService.createZoomMeeting({
@@ -72,15 +68,12 @@ class ClassService {
         }
       }
 
-      // Check if course exists (only if CourseID is provided)
       if (classData.CourseID) {
         const course = await courseRepository.findById(classData.CourseID);
         if (!course) {
           throw new ServiceError("Khóa học không tồn tại", 404);
         }
 
-        // dbver7: Tính Numofsession từ Duration của course
-        // Quy tắc: Numofsession = max(1, ceil(Duration / 2))
         const duration = Number(course.Duration);
         if (!Number.isNaN(duration) && duration > 0) {
           const raw = duration / 2;
@@ -240,16 +233,16 @@ class ClassService {
 
       // Các trường được phép sửa (metadata không ảnh hưởng sessions)
       const allowedFields = [
-        "Name", // Tên lớp
-        "CourseID", // ID khóa học
-        "Status", // Trạng thái
-        "ZoomID", // Zoom meeting ID
-        "Zoompass", // Zoom password
-        "Fee", // Học phí
-        "Maxstudent", // Sĩ số tối đa
-        // Các trường thực tế (không ảnh hưởng sessions khi chỉ cập nhật)
-        "Opendate", // Ngày bắt đầu thực tế
-        "Enddate", // Ngày kết thúc thực tế
+        "Name",
+        "CourseID",
+        "Status",
+        "ZoomID",
+        "Zoompass",
+        "Fee",
+        "Maxstudent",
+
+        "Opendate",
+        "Enddate",
       ];
 
       const filteredData = {};
@@ -286,7 +279,6 @@ class ClassService {
       await enrollmentRepository.deleteByClassId(id);
 
       // 3. Delete sessions and related records
-      // dbver5: attendance trực tiếp có SessionID, không cần sessiontimeslot
       for (const session of sessions) {
         // Delete attendance records first (they reference SessionID)
         await attendanceRepository.deleteBySessionId(session.SessionID);
@@ -859,12 +851,6 @@ class ClassService {
     }
   }
 
-  /**
-   * Hủy lớp học - Xử lý khi class status được đổi thành CANCEL
-   * 1. Xóa các sessions sau datetime hiện tại
-   * 2. Chuyển instructortimeslot từ OTHER về AVAILABLE cho các sessions bị xóa
-   * 3. Tạo refundrequest cho các học sinh của lớp
-   */
   async cancelClass(classId) {
     const pool = await connectDB();
     const connection = await pool.getConnection();
@@ -908,11 +894,6 @@ class ClassService {
         currentDate,
         currentTime,
       ]);
-
-      console.log(
-        `[cancelClass] Tìm thấy ${sessionsToDelete.length} sessions sau datetime hiện tại (${currentDate} ${currentTime})`
-      );
-
       // 4. Xóa các sessions và chuyển instructortimeslot từ OTHER về AVAILABLE
       const deletedSessionIds = [];
       for (const session of sessionsToDelete) {
@@ -923,8 +904,6 @@ class ClassService {
         await sessionRepository.delete(session.SessionID);
         deletedSessionIds.push(session.SessionID);
 
-        // Chuyển instructortimeslot từ OTHER về AVAILABLE
-        // Tìm instructortimeslot có cùng InstructorID, TimeslotID, Date
         const findInstructorTimeslotQuery = `
           SELECT InstructortimeslotID, Status
           FROM instructortimeslot
@@ -975,13 +954,6 @@ class ClassService {
 
           const refund = await refundRepository.create(refundData);
           refundRequests.push(refund);
-          console.log(
-            `[cancelClass] Tạo refundrequest ${refund.RefundID} cho enrollment ${enrollment.EnrollmentID}`
-          );
-        } else {
-          console.log(
-            `[cancelClass] Enrollment ${enrollment.EnrollmentID} đã có refundrequest, bỏ qua`
-          );
         }
       }
 
@@ -1006,7 +978,6 @@ class ClassService {
           "[cancelClass] Error sending email notifications:",
           emailError
         );
-        // Không throw error để không rollback transaction
       }
 
       return {

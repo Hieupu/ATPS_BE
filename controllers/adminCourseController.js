@@ -304,7 +304,7 @@ const courseController = {
   updateCourseStatus: async (req, res) => {
     try {
       const courseId = req.params.id;
-      const { Status, action } = req.body;
+      const { Status, action, reason } = req.body;
       const adminAccID = req.user ? req.user.AccID : null;
 
       if (!Status) {
@@ -313,6 +313,8 @@ const courseController = {
           message: "Status là bắt buộc",
         });
       }
+
+      const course = await courseService.getCourseById(courseId);
 
       const updatedCourse = await courseService.updateCourseStatus(
         courseId,
@@ -327,6 +329,54 @@ const courseController = {
           accId: adminAccID,
           detail: `CourseID: ${updatedCourse.CourseID}, Status: ${updatedCourse.Status}`,
         });
+      }
+
+      // Gửi notification cho giảng viên
+      if (course?.InstructorID) {
+        let shouldSendNotification = false;
+        let notificationContent = "";
+        let notificationType = "";
+
+        // Xác định loại notification dựa trên action
+        if (action === "reject") {
+          shouldSendNotification = true;
+          const rejectReason = reason ? ` Lý do: ${reason}` : "";
+          notificationContent = `Khóa học "${updatedCourse.Title}" của bạn đã bị từ chối duyệt.${rejectReason}`;
+          notificationType = "course_rejected";
+        } else if (action === "approve") {
+          shouldSendNotification = true;
+          notificationContent = `Khóa học "${updatedCourse.Title}" đã được duyệt thành công.`;
+          notificationType = "course_approved";
+        } else if (action === "revert") {
+          shouldSendNotification = true;
+          const revertReason = reason ? ` Lý do: ${reason}` : "";
+          notificationContent = `Khóa học "${updatedCourse.Title}" của bạn đã bị hoàn tác duyệt.${revertReason}`;
+          notificationType = "course_reverted";
+        }
+
+        if (shouldSendNotification) {
+          try {
+            const instructorRepository = require("../repositories/instructorRepository");
+            const notificationService = require("../services/notificationService");
+
+            const instructor = await instructorRepository.findById(
+              course.InstructorID
+            );
+
+            if (instructor && instructor.AccID) {
+              const notification = await notificationService.create({
+                content: notificationContent,
+                type: notificationType,
+                accId: instructor.AccID,
+              });
+            }
+          } catch (notifError) {
+            console.error(
+              `[updateCourseStatus] Lỗi gửi thông báo tới giảng viên`,
+              notifError
+            );
+          }
+        }
       }
 
       res.json({
@@ -349,7 +399,7 @@ const courseController = {
   approveCourse: async (req, res) => {
     try {
       const courseId = req.params.id;
-      const { action } = req.body; // 'APPROVE' hoặc 'REJECT'
+      const { action, reason } = req.body; // 'APPROVE' hoặc 'REJECT', và lý do (nếu reject)
       const adminAccID = req.user ? req.user.AccID : null;
 
       if (!action || !["APPROVE", "REJECT"].includes(action)) {
@@ -388,6 +438,36 @@ const courseController = {
           accId: adminAccID,
           detail: `CourseID: ${updatedCourse.CourseID}, Title: ${updatedCourse.Title}`,
         });
+      }
+
+      // Gửi notification cho giảng viên khi từ chối
+      if (action === "REJECT" && course.InstructorID) {
+        try {
+          const instructorRepository = require("../repositories/instructorRepository");
+          const notificationService = require("../services/notificationService");
+
+          const instructor = await instructorRepository.findById(
+            course.InstructorID
+          );
+          if (instructor && instructor.AccID) {
+            const rejectReason = reason ? ` Lý do: ${reason}` : "";
+            const notificationContent = `Khóa học "${updatedCourse.Title}" của bạn đã bị từ chối duyệt.${rejectReason}`;
+
+            const notification = await notificationService.create({
+              content: notificationContent,
+              type: "course_rejected",
+              accId: instructor.AccID,
+            });
+          } else {
+            console.log(`[approveCourse] Lỗi gửi thông báo tới giảng viên`);
+          }
+        } catch (notifError) {
+          console.error(
+            `[approveCourse] Lỗi gửi thông báo tới giảng viên`,
+            notifError
+          );
+          // Không throw error để không ảnh hưởng đến flow chính
+        }
       }
 
       res.json({
