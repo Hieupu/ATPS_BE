@@ -38,13 +38,6 @@ class ProfileRepository {
     ]);
     return rows[0] || null; // Trả về null nếu không tìm thấy
   }
-  async findParentByAccountId(accountId) {
-    const db = await connectDB();
-    const [rows] = await db.query("SELECT * FROM staff WHERE AccID = ?", [
-      accountId,
-    ]);
-    return rows[0] || null; // Trả về null nếu không tìm thấy
-  }
 
   async updateAccount(accountId, data) {
     const db = await connectDB();

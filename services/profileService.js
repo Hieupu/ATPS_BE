@@ -59,8 +59,7 @@ class ProfileService {
     if (staff) return "staff";
     const admin = await profileRepository.findAdminByAccountId(accountId);
     if (admin) return "admin";
-    const parent = await profileRepository.findParentByAccountId(accountId);
-    if (parent) return "parent";
+
 
     throw new ServiceError("Role not found for this account", 404);
   }
@@ -166,7 +165,6 @@ class ProfileService {
 
   async uploadAvatar(file, accountId) {
     try {
-      // Upload ảnh lên Cloudinary - SỬA LẠI PHẦN NÀY
       const result = await cloudinary.uploader.upload(
         `data:${file.mimetype};base64,${file.buffer.toString("base64")}`,
         {
