@@ -38,17 +38,19 @@ describe("instructorCourseService - updateLessonService", () => {
     });
   }
 
-  test("UTCID01 - course Status PUBLISHED -> ném ServiceError 'Không thể sửa Lesson khi course không ở trạng thái DRAFT'", async () => {
+  test("UTCID01 - course Status PUBLISHED -> không ném lỗi mà trả về thông báo không có thay đổi hợp lệ", async () => {
     mockUnitAndCourse("PUBLISHED");
 
     const data = {
       Title: "New",
     };
 
-    await expect(
-      updateLessonService(lessonId, unitId, data, null)
-    ).rejects.toThrow("Không thể sửa Lesson khi course không ở trạng thái DRAFT");
+    const result = await updateLessonService(lessonId, unitId, data, null);
+
     expect(lessonRepository.update).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      message: "Không có thay đổi hợp lệ được cập nhật",
+    });
   });
 
   test("UTCID02 - unitId không tồn tại -> ném ServiceError 'Unit không tồn tại'", async () => {
@@ -139,7 +141,7 @@ describe("instructorCourseService - updateLessonService", () => {
     expect(result).toEqual({ message: "Đã cập nhật lesson" });
   });
 
-  test("UTCID07 - không có field nào để cập nhật, không file -> trả message 'Không có thay đổi để cập nhật', không gọi update", async () => {
+  test("UTCID07 - không có field nào để cập nhật, không file -> trả message 'Không có thay đổi hợp lệ được cập nhật', không gọi update", async () => {
     mockUnitAndCourse("DRAFT");
 
     const data = {};
@@ -147,8 +149,8 @@ describe("instructorCourseService - updateLessonService", () => {
     const result = await updateLessonService(lessonId, unitId, data, null);
 
     expect(lessonRepository.update).not.toHaveBeenCalled();
-    expect(result).toEqual({ message: "Không có thay đổi để cập nhật" });
+    expect(result).toEqual({
+      message: "Không có thay đổi hợp lệ được cập nhật",
+    });
   });
 });
-
-

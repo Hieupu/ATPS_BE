@@ -34,7 +34,6 @@ const {
   getExamResultsService,
   getLearnerSubmissionService,
   autoGradeExamService,
-  manualGradeExamService,
 
   importQuestionsFromExcel,
 
@@ -676,26 +675,6 @@ const autoGradeExam = async (req, res) => {
   }
 };
 
-
-const manualGradeExam = async (req, res) => {
-  try {
-    const instructorAccId = req.user.id;
-    const { examId, learnerId } = req.params;
-    const { score, feedback } = req.body;
-
-    const result = await manualGradeExamService(instructorAccId, examId, learnerId, score, feedback);
-
-    res.status(200).json({
-      success: true,
-      ...result
-    });
-  } catch (err) {
-    res.status(err.status || 400).json({
-      success: false,
-      message: err.message || "Lỗi khi chấm bài"
-    });
-  }
-};
 const importQuestionsExcelController = async (req, res) => {
   try {
     const instructorAccId = req.user.id;
@@ -906,7 +885,6 @@ module.exports = {
   getExamResults,
   getLearnerSubmission,
   autoGradeExam,
-  manualGradeExam,
 
   importQuestionsExcelController,
   createQuestionAndAssignToSection,

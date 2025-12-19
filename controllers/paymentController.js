@@ -159,13 +159,12 @@ const createPaymentLink = async (req, res) => {
     const learnerId = learner.LearnerID;
 
     // Kiểm tra lớp học và lấy thông tin thanh toán
-    // Logic giá tiền: Nếu class có Fee thì lấy từ class, nếu không thì lấy từ course
     const [classData] = await db.query(
       `SELECT cl.*, c.Title as CourseTitle, 
-   COALESCE(cl.Fee, 0) as TuitionFee  -- Sửa: chỉ dùng cl.Fee
-   FROM class cl 
-   LEFT JOIN course c ON cl.CourseID = c.CourseID 
-   WHERE cl.ClassID = ? AND cl.Status IN ('active')`,
+       COALESCE(cl.Fee, 0) as TuitionFee
+       FROM class cl 
+       LEFT JOIN course c ON cl.CourseID = c.CourseID 
+       WHERE cl.ClassID = ? AND cl.Status IN ('active')`,
       [classID]
     );
     if (!classData.length)
@@ -202,9 +201,11 @@ const createPaymentLink = async (req, res) => {
       } catch (_) {}
     }
 
+    // Tính toán số tiền sau giảm giá
+    let finalAmount = amount;
     if (appliedDiscountPercent > 0) {
       const discounted = amount * (1 - appliedDiscountPercent / 100);
-      amount = Math.max(0, Math.round(discounted));
+      finalAmount = Math.max(0, Math.round(discounted));
     }
 
     // Chặn trùng: nếu đã Enrolled -> từ chối; nếu Pending -> tái sử dụng OrderCode
@@ -222,19 +223,61 @@ const createPaymentLink = async (req, res) => {
         .json({ message: "Already enrolled in this class" });
     }
 
-    // Tạo hoặc tái sử dụng OrderCode numeric 15 chữ số (<= 9007199254740991)
+    // Tạo OrderCode cho mọi trường hợp
     const genOrderCode = () => {
       const base = Date.now(); // 13 digits
       const rand = Math.floor(Math.random() * 90) + 10; // 2 digits (10-99)
       const code = Number(`${base}${rand}`);
-      // Bảo đảm không vượt MAX_SAFE_INTEGER (chuẩn PayOS)
       return Math.min(code, 9007199254740991);
     };
 
     let orderCode = existingEnrollments[0]?.OrderCode || genOrderCode();
+
+    // Xử lý trường hợp giảm giá 100%
+    if (appliedDiscountPercent === 100) {
+      console.log("100% discount applied - enrolling directly without payment");
+      
+      // Tạo orderCode mới nếu chưa có
+      if (!orderCode) {
+        for (let i = 0; i < 3; i++) {
+          const [exists] = await db.query(
+            "SELECT 1 FROM enrollment WHERE OrderCode = ? LIMIT 1",
+            [orderCode]
+          );
+          if (!exists.length) break;
+          orderCode = genOrderCode();
+        }
+      }
+
+      // Nếu đã có enrollment pending, cập nhật thành Enrolled
+      if (existingEnrollments.length && existingEnrollments[0].Status === "Pending") {
+        await db.query(
+          "UPDATE enrollment SET Status = 'Enrolled', EnrollmentDate = NOW() WHERE EnrollmentID = ?",
+          [existingEnrollments[0].EnrollmentID]
+        );
+      } else {
+        // Tạo enrollment mới với status Enrolled
+        await db.query(
+          "INSERT INTO enrollment (EnrollmentDate, Status, LearnerID, ClassID, OrderCode) VALUES (NOW(), 'Enrolled', ?, ?, ?)",
+          [learnerId, classID, orderCode]
+        );
+      }
+
+      return res.json({
+        success: true,
+        enrolled: true,
+        paymentUrl: `${process.env.FRONTEND_URL}/my-courses`,
+        message: "Successfully enrolled with 100% discount",
+        appliedPromo: appliedPromoCode,
+        amount: 0,
+        discount: 100,
+        orderCode: orderCode // Trả về orderCode để thống nhất
+      });
+    }
+
+    // Nếu không phải giảm giá 100%, tiếp tục tạo payment link như bình thường
     if (!existingEnrollments.length) {
       // Insert enrollment Pending kèm OrderCode
-      // đảm bảo không trùng OrderCode
       for (let i = 0; i < 3; i++) {
         const [exists] = await db.query(
           "SELECT 1 FROM enrollment WHERE OrderCode = ? LIMIT 1",
@@ -249,61 +292,97 @@ const createPaymentLink = async (req, res) => {
       );
     }
 
-    // PayOS chỉ cho phép description tối đa 25 ký tự
-    const description = "Thanh toán lớp học".substring(0, 25);
+    // Tạo payment link chỉ khi số tiền > 0
+    if (finalAmount > 0) {
+      const description = "Thanh toán lớp học".substring(0, 25);
 
-    const body = {
-      orderCode: orderCode,
-      amount: Math.round(amount),
-      description: description,
-      returnUrl: `${
-        process.env.FRONTEND_URL
-      }/payment-success?orderCode=${encodeURIComponent(orderCode)}`,
-      cancelUrl: `${
-        process.env.FRONTEND_URL
-      }/payment-failed?orderCode=${encodeURIComponent(orderCode)}`,
-      buyerName: learner.FullName || req.user.name || "Người học",
-      buyerEmail: req.user.email || "unknown@example.com",
-      buyerPhone: req.user.phone || "0000000000",
-    };
-
-    //     console.log("Creating payment link with body:", body);
-
-    try {
-      const paymentLink = await createPaymentWithBody(body);
-
-      console.log("Payment link response:", paymentLink);
-
-      res.json({
-        success: true,
-        paymentUrl: paymentLink.checkoutUrl || paymentLink.url,
+      const body = {
         orderCode: orderCode,
-        amount: Math.round(amount),
-        appliedPromo: appliedPromoCode,
-      });
-    } catch (e) {
-      if (e?.error?.code === "231") {
-        const info = await getExistingPaymentLink(orderCode);
+        amount: Math.round(finalAmount),
+        description: description,
+        returnUrl: `${
+          process.env.FRONTEND_URL
+        }/payment-success?orderCode=${encodeURIComponent(orderCode)}`,
+        cancelUrl: `${
+          process.env.FRONTEND_URL
+        }/payment-failed?orderCode=${encodeURIComponent(orderCode)}`,
+        buyerName: learner.FullName || req.user.name || "Người học",
+        buyerEmail: req.user.email || "unknown@example.com",
+        buyerPhone: req.user.phone || "0000000000",
+      };
 
-        if (info?.status === "PAID") {
-          return res.json({
-            success: true,
-            paymentUrl: null,
-            orderCode: orderCode,
-            message: "Payment already completed for this order",
-          });
+      try {
+        const paymentLink = await createPaymentWithBody(body);
+        console.log("Payment link response:", paymentLink);
+
+        return res.json({
+          success: true,
+          paymentUrl: paymentLink.checkoutUrl || paymentLink.url,
+          orderCode: orderCode,
+          amount: Math.round(finalAmount),
+          appliedPromo: appliedPromoCode,
+          discount: appliedDiscountPercent
+        });
+      } catch (e) {
+        if (e?.error?.code === "231") {
+          const info = await getExistingPaymentLink(orderCode);
+
+          if (info?.status === "PAID") {
+            return res.json({
+              success: true,
+              paymentUrl: null,
+              orderCode: orderCode,
+              message: "Payment already completed for this order",
+            });
+          }
+
+          if (info?.url) {
+            return res.json({
+              success: true,
+              paymentUrl: info.url,
+              orderCode: orderCode,
+              reused: true,
+            });
+          }
         }
-
-        if (info?.url) {
-          return res.json({
-            success: true,
-            paymentUrl: info.url,
-            orderCode: orderCode,
-            reused: true,
-          });
+        throw e;
+      }
+    } else {
+      // Trường hợp amount = 0 nhưng không phải do giảm giá 100%
+      // (có thể lớp học miễn phí)
+      
+      // Đảm bảo có orderCode
+      if (!orderCode) {
+        for (let i = 0; i < 3; i++) {
+          const [exists] = await db.query(
+            "SELECT 1 FROM enrollment WHERE OrderCode = ? LIMIT 1",
+            [orderCode]
+          );
+          if (!exists.length) break;
+          orderCode = genOrderCode();
         }
       }
-      throw e;
+      
+      if (existingEnrollments.length && existingEnrollments[0].Status === 'Pending') {
+        await db.query(
+          "UPDATE enrollment SET Status = 'Enrolled', EnrollmentDate = NOW() WHERE EnrollmentID = ?",
+          [existingEnrollments[0].EnrollmentID]
+        );
+      } else {
+        await db.query(
+          "INSERT INTO enrollment (EnrollmentDate, Status, LearnerID, ClassID, OrderCode) VALUES (NOW(), 'Enrolled', ?, ?, ?)",
+          [learnerId, classID, orderCode]
+        );
+      }
+      
+      return res.json({
+        success: true,
+        enrolled: true,
+        message: "Successfully enrolled in free class",
+        amount: 0,
+        discount: appliedDiscountPercent,
+        orderCode: orderCode
+      });
     }
   } catch (error) {
     console.error("Create payment link error:", error);

@@ -99,7 +99,6 @@ const submitExam = async (req, res) => {
         maxScore: result.maxScore,
         totalScore: result.totalScore,
         autoGradedCount: result.autoGradedCount,
-        manualGradeCount: result.manualGradeCount,
         isLate: result.isLate,
         submissionStatus: result.submissionStatus,
         durationSec: result.durationSec

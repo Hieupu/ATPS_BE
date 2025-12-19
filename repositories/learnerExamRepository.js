@@ -84,7 +84,12 @@ class LearnerExamRepository {
       ei.StartTime ASC
   `;
 
-    const [rows] = await db.query(sql, [learnerId, learnerId, learnerId, learnerId]);
+    const [rows] = await db.query(sql, [
+      learnerId,
+      learnerId,
+      learnerId,
+      learnerId,
+    ]);
     return rows;
   }
 
@@ -114,13 +119,17 @@ class LearnerExamRepository {
     return rows[0] || null;
   }
 
-
   async checkLearnerAccessToInstance(instanceId, learnerId) {
     const db = await connectDB();
     const sql = `
       SELECT COUNT(*) AS cnt
       FROM exam_instances ei
-      JOIN class cl      ON ei.ClassId = cl.ClassID
+      LEFT JOIN unit u ON ei.UnitId = u.UnitID
+      JOIN class cl ON (
+        (ei.ClassId IS NOT NULL AND cl.ClassID = ei.ClassId)
+        OR 
+        (ei.UnitId IS NOT NULL AND cl.CourseID = u.CourseID)
+      )
       JOIN enrollment en ON cl.ClassID = en.ClassID
       WHERE 
         ei.InstanceId = ?
@@ -130,7 +139,6 @@ class LearnerExamRepository {
     const [rows] = await db.query(sql, [instanceId, learnerId]);
     return rows[0].cnt > 0;
   }
-
 
   async saveAnswers(learnerId, answers = []) {
     if (!Array.isArray(answers) || answers.length === 0) return;
@@ -143,12 +151,8 @@ class LearnerExamRepository {
         Answer = VALUES(Answer)
     `;
 
-    const promises = answers.map(ans =>
-      db.query(sql, [
-        learnerId,
-        ans.examQuestionId,
-        ans.answer ?? null
-      ])
+    const promises = answers.map((ans) =>
+      db.query(sql, [learnerId, ans.examQuestionId, ans.answer ?? null])
     );
 
     await Promise.all(promises);
@@ -167,7 +171,6 @@ class LearnerExamRepository {
     return rows[0] || null;
   }
 
-
   async getResultByExamAndLearner(examId, learnerId) {
     const db = await connectDB();
     const [rows] = await db.query(
@@ -179,7 +182,6 @@ class LearnerExamRepository {
     );
     return rows[0] || null;
   }
-
 
   async getResultsHistoryByLearner(learnerId) {
     const db = await connectDB();
@@ -235,7 +237,6 @@ class LearnerExamRepository {
     return rows[0]?.attempts || 0;
   }
 
-
   async getDetailedSubmissionForReview(examId, learnerId) {
     const db = await connectDB();
     const sql = `
@@ -290,11 +291,11 @@ class LearnerExamRepository {
     const {
       learnerId,
       examId,
-      status = 'submitted',
+      status = "submitted",
       score = null,
       feedback = null,
       content = null,
-      durationSec = null
+      durationSec = null,
     } = data;
 
     const sql = `
@@ -317,7 +318,7 @@ class LearnerExamRepository {
       score,
       feedback,
       content,
-      durationSec
+      durationSec,
     ]);
 
     return result.insertId;
@@ -331,15 +332,15 @@ class LearnerExamRepository {
     const values = [];
 
     if (score !== undefined) {
-      updates.push('Score = ?');
+      updates.push("Score = ?");
       values.push(score);
     }
     if (feedback !== undefined) {
-      updates.push('Feedback = ?');
+      updates.push("Feedback = ?");
       values.push(feedback);
     }
     if (status !== undefined) {
-      updates.push('Status = ?');
+      updates.push("Status = ?");
       values.push(status);
     }
 
@@ -349,7 +350,7 @@ class LearnerExamRepository {
 
     const sql = `
       UPDATE submission 
-      SET ${updates.join(', ')}
+      SET ${updates.join(", ")}
       WHERE SubmissionID = ?
     `;
 

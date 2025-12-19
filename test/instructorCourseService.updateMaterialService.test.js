@@ -31,9 +31,9 @@ describe("instructorCourseService - updateMaterialService", () => {
       Title: "New Title",
     };
 
-    await expect(
-      updateMaterialService(materialId, data, null)
-    ).rejects.toThrow("Material không tồn tại");
+    await expect(updateMaterialService(materialId, data, null)).rejects.toThrow(
+      "Material không tồn tại"
+    );
     expect(materialRepository.update).not.toHaveBeenCalled();
   });
 
@@ -51,13 +51,13 @@ describe("instructorCourseService - updateMaterialService", () => {
       Title: "New Title",
     };
 
-    await expect(
-      updateMaterialService(materialId, data, null)
-    ).rejects.toThrow("Course không tồn tại");
+    await expect(updateMaterialService(materialId, data, null)).rejects.toThrow(
+      "Course không tồn tại"
+    );
     expect(materialRepository.update).not.toHaveBeenCalled();
   });
 
-  test("UTCID03 - course Status không phải DRAFT (PUBLISHED) -> ném ServiceError 'Không thể cập nhật Material khi course không ở trạng thái DRAFT'", async () => {
+  test("UTCID03 - course Status không phải DRAFT (PUBLISHED) và không gửi Status mới -> Trả về message không có thay đổi", async () => {
     materialRepository.findById.mockResolvedValue({
       MaterialID: materialId,
       CourseID: 1,
@@ -74,12 +74,12 @@ describe("instructorCourseService - updateMaterialService", () => {
       Title: "New Title",
     };
 
-    await expect(
-      updateMaterialService(materialId, data, null)
-    ).rejects.toThrow(
-      "Không thể cập nhật Material khi course không ở trạng thái DRAFT"
-    );
+    const result = await updateMaterialService(materialId, data, null);
+
     expect(materialRepository.update).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      message: "Không có thay đổi hợp lệ được cập nhật",
+    });
   });
 
   test("UTCID04 - Status không hợp lệ -> ném ServiceError 'Status không hợp lệ (VISIBLE|HIDDEN|DELETED)'", async () => {
@@ -99,13 +99,13 @@ describe("instructorCourseService - updateMaterialService", () => {
       Status: "INVALID",
     };
 
-    await expect(
-      updateMaterialService(materialId, data, null)
-    ).rejects.toThrow("Status không hợp lệ (VISIBLE|HIDDEN|DELETED)");
+    await expect(updateMaterialService(materialId, data, null)).rejects.toThrow(
+      "Status không hợp lệ (VISIBLE|HIDDEN|DELETED)"
+    );
     expect(materialRepository.update).not.toHaveBeenCalled();
   });
 
-  test("UTCID05 - không có field nào để cập nhật, không file -> service vẫn gọi update với FileURL cũ và trả message 'Đã cập nhật material'", async () => {
+  test("UTCID05 - không có field nào để cập nhật, không file -> trả message không có thay đổi và không gọi update", async () => {
     materialRepository.findById.mockResolvedValue({
       MaterialID: materialId,
       CourseID: 1,
@@ -122,12 +122,10 @@ describe("instructorCourseService - updateMaterialService", () => {
 
     const result = await updateMaterialService(materialId, data, null);
 
-    expect(materialRepository.update).toHaveBeenCalledWith(materialId, {
-      Title: undefined,
-      FileURL: "old-url",
-      Status: undefined,
+    expect(materialRepository.update).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      message: "Không có thay đổi hợp lệ được cập nhật",
     });
-    expect(result).toEqual({ message: "Đã cập nhật material" });
   });
 
   test("UTCID06 - dữ liệu hợp lệ (Title, Status VISIBLE) và có file upload -> FileURL mới, gọi update và trả message 'Đã cập nhật material'", async () => {
@@ -162,5 +160,3 @@ describe("instructorCourseService - updateMaterialService", () => {
     expect(result).toEqual({ message: "Đã cập nhật material" });
   });
 });
-
-
