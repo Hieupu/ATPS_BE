@@ -768,6 +768,31 @@ const cancelRefundRequest = async(req, res) => {
   }
 };
 
+const checkPayOSConfiguration = async (req, res) => {
+  try {
+    const hasClientId = Boolean(process.env.PAYOS_CLIENT_ID);
+    const hasApiKey = Boolean(process.env.PAYOS_API_KEY);
+    const hasChecksumKey = Boolean(process.env.PAYOS_CHECKSUM_KEY);
+    
+    const isConfigured = hasClientId && hasApiKey && hasChecksumKey;
+    
+    return res.json({
+      configured: isConfigured,
+      details: {
+        hasClientId,
+        hasApiKey,
+        hasChecksumKey,
+      },
+    });
+  } catch (error) {
+    console.error("Error in checkPayOSConfiguration:", error);
+    return res.status(500).json({ 
+      configured: false,
+      message: "Server error" 
+    });
+  }
+};
+
 module.exports = {
   createPaymentLink,
   updatePaymentStatus,
@@ -776,5 +801,6 @@ module.exports = {
   requestRefund,
   getPaymentHistory,
   getAdminPaymentHistory,
-  cancelRefundRequest
+  cancelRefundRequest,
+  checkPayOSConfiguration,
 };

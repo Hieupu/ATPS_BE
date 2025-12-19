@@ -123,11 +123,9 @@ const emailTemplateRepository = {
           if (Array.isArray(variables) && variables.length > 0) {
             return variables;
           }
-        } catch (e) {
-        }
+        } catch (e) {}
       }
 
-      
       const defaultVariables = {
         ACCOUNT_STATUS_CHANGED: ["userName", "oldStatus", "newStatus"],
         CLASS_CANCELLED_TO_LEARNER: [
@@ -153,32 +151,18 @@ const emailTemplateRepository = {
           "userName",
           "refundCode",
           "refundAmount",
-          "className",       
+          "className",
           "transferDate",
           "transferRef",
         ],
         REFUND_REJECTED: ["userName", "refundCode", "rejectionReason"],
-        // REFUND_COMPLETED: [
-        //   "userName",
-        //   "refundCode",
-        //   "refundAmount",
-        //   "className",
-        //   "completedDate",
-        // ],
         REFUND_ACCOUNT_INFO_REQUEST: [
           "userName",
           "refundCode",
           "refundAmount",
           "className",
         ],
-        // REFUND_ACCOUNT_SUCCESS: [
-        //   "userName",
-        //   "refundCode",
-        //   "refundAmount",
-        //   "className",
-        //   "transferDate",
-        //   "transferRef",
-        // ],
+
       };
 
       return defaultVariables[eventType] || [];

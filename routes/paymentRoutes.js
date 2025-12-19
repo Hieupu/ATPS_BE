@@ -8,7 +8,8 @@ const {
   requestRefund,
   getPaymentHistory,
   getAdminPaymentHistory,
-  cancelRefundRequest
+  cancelRefundRequest,
+  checkPayOSConfiguration,
 } = require("../controllers/paymentController");
 const { verifyToken } = require("../middlewares/middware");
 
@@ -26,6 +27,7 @@ router.get("/get-link/:orderCode", verifyToken, getPaymentLinkByOrderCode);
 
 router.get("/learner/:learnerId",verifyToken, getPaymentHistory);
 router.get("/admin/history", verifyToken, getAdminPaymentHistory);
+router.get("/check-payos-config", verifyToken, checkPayOSConfiguration);
 
 // Request refund
 router.post("/refunds/request", verifyToken, requestRefund);

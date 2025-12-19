@@ -217,128 +217,128 @@ async createRefundNotification(enrollmentId, refundId, action) {
 //     }
 //   }
 
-//   /**
-//    * Thông báo đổi lớp cho học viên
-//    * Ví dụ nội dung: "Bạn đã được đổi lớp từ lớp {oldClassName} sang {newClassName}."
-//    */
-//   async createClassChangeNotification(
-//     enrollmentId,
-//     oldClassName,
-//     newClassName
-//   ) {
-//     try {
-//       const db = await connectDB();
+  /**
+   * Thông báo đổi lớp cho học viên
+   * Ví dụ nội dung: "Bạn đã được đổi lớp từ lớp {oldClassName} sang {newClassName}."
+   */
+  async createClassChangeNotification(
+    enrollmentId,
+    oldClassName,
+    newClassName
+  ) {
+    try {
+      const db = await connectDB();
 
-//       const [enrollmentRows] = await db.query(
-//         `SELECT e.*, l.AccID 
-//          FROM enrollment e 
-//          INNER JOIN learner l ON e.LearnerID = l.LearnerID 
-//          WHERE e.EnrollmentID = ?`,
-//         [enrollmentId]
-//       );
+      const [enrollmentRows] = await db.query(
+        `SELECT e.*, l.AccID 
+         FROM enrollment e 
+         INNER JOIN learner l ON e.LearnerID = l.LearnerID 
+         WHERE e.EnrollmentID = ?`,
+        [enrollmentId]
+      );
 
-//       if (enrollmentRows.length === 0) return;
+      if (enrollmentRows.length === 0) return;
 
-//       const enrollment = enrollmentRows[0];
-//       const safeOldName = oldClassName || "lớp cũ";
-//       const safeNewName = newClassName || "lớp mới";
+      const enrollment = enrollmentRows[0];
+      const safeOldName = oldClassName || "lớp cũ";
+      const safeNewName = newClassName || "lớp mới";
 
-//       const content = `Bạn đã được đổi lớp từ lớp "${safeOldName}" sang "${safeNewName}".`;
+      const content = `Bạn đã được đổi lớp từ lớp "${safeOldName}" sang "${safeNewName}".`;
 
-//       await db.query(
-//         `INSERT INTO notification (AccID, Content, Type, Status) 
-//          VALUES (?, ?, 'class', 'unread')`,
-//         [enrollment.AccID, content]
-//       );
+      await db.query(
+        `INSERT INTO notification (AccID, Content, Type, Status) 
+         VALUES (?, ?, 'class', 'unread')`,
+        [enrollment.AccID, content]
+      );
 
-//       console.log(
-//         `Class change notification created for AccID: ${enrollment.AccID}, from "${safeOldName}" to "${safeNewName}"`
-//       );
-//     } catch (error) {
-//       console.error("Error creating class change notification:", error);
-//       // Không throw error để không ảnh hưởng đến flow chính
-//     }
-//   }
+      console.log(
+        `Class change notification created for AccID: ${enrollment.AccID}, from "${safeOldName}" to "${safeNewName}"`
+      );
+    } catch (error) {
+      console.error("Error creating class change notification:", error);
+      // Không throw error để không ảnh hưởng đến flow chính
+    }
+  }
 
-//   /**
-//    * Notify learners of a class when a session is rescheduled successfully.
-//    * Content (VI): Buổi học của lớp {} ngày {} đã được chuyển sang ngày {}...
-//    */
-//   async notifyClassSessionRescheduled({
-//     classId,
-//     className,
-//     oldDate,
-//     newDate,
-//   }) {
-//     try {
-//       const safeName = className || `Class ${classId}`;
-//       const oldD = this.formatDateVI(oldDate);
-//       const newD = this.formatDateVI(newDate);
+  /**
+   * Notify learners of a class when a session is rescheduled successfully.
+   * Content (VI): Buổi học của lớp {} ngày {} đã được chuyển sang ngày {}...
+   */
+  async notifyClassSessionRescheduled({
+    classId,
+    className,
+    oldDate,
+    newDate,
+  }) {
+    try {
+      const safeName = className || `Class ${classId}`;
+      const oldD = this.formatDateVI(oldDate);
+      const newD = this.formatDateVI(newDate);
 
-//       const content = `Buổi học của lớp "${safeName}" ngày ${oldD} đã được chuyển sang ngày ${newD}. Vui lòng xem lại lịch học để nắm thông tin cập nhật mới nhất.`;
-//       const learnerAccIds = await this.getLearnerAccIdsByClassId(classId);
-//       if (!learnerAccIds || learnerAccIds.length === 0) return;
+      const content = `Buổi học của lớp "${safeName}" ngày ${oldD} đã được chuyển sang ngày ${newD}. Vui lòng xem lại lịch học để nắm thông tin cập nhật mới nhất.`;
+      const learnerAccIds = await this.getLearnerAccIdsByClassId(classId);
+      if (!learnerAccIds || learnerAccIds.length === 0) return;
 
-//       await this.createBulk({
-//         accIds: learnerAccIds,
-//         content,
-//         type: "session_rescheduled",
-//       });
-//     } catch (error) {
-//       console.error("Error notifyClassSessionRescheduled:", error);
-//       // Don't throw to avoid breaking main flow
-//     }
-//   }
+      await this.createBulk({
+        accIds: learnerAccIds,
+        content,
+        type: "session_rescheduled",
+      });
+    } catch (error) {
+      console.error("Error notifyClassSessionRescheduled:", error);
+      // Don't throw to avoid breaking main flow
+    }
+  }
 
-//   /**
-//    * Notify learners (if any), instructor, and staff when class start date is postponed.
-//    * Content (VI): Lớp {} đã được điều chỉnh ngày bắt đầu sang {}...
-//    */
-//   async notifyClassStartDatePostponed({
-//     classId,
-//     className,
-//     newOpendatePlan,
-//     instructorId,
-//     createdByStaffId,
-//   }) {
-//     try {
-//       const safeName = className || `Class ${classId}`;
-//       const newD = this.formatDateVI(newOpendatePlan);
-//       const content = `Lớp "${safeName}" đã được điều chỉnh ngày bắt đầu sang ${newD}. Vui lòng xem lại lịch học để nắm thông tin cập nhật mới nhất.`;
+  /**
+   * Notify learners (if any), instructor, and staff when class start date is postponed.
+   * Content (VI): Lớp {} đã được điều chỉnh ngày bắt đầu sang {}...
+   */
+  async notifyClassStartDatePostponed({
+    classId,
+    className,
+    newOpendatePlan,
+    instructorId,
+    createdByStaffId,
+  }) {
+    try {
+      const safeName = className || `Class ${classId}`;
+      const newD = this.formatDateVI(newOpendatePlan);
+      const content = `Lớp "${safeName}" đã được điều chỉnh ngày bắt đầu sang ${newD}. Vui lòng xem lại lịch học để nắm thông tin cập nhật mới nhất.`;
 
-//       const accIds = new Set();
+      const accIds = new Set();
 
-//       // Learners (if any)
-//       const learnerAccIds = await this.getLearnerAccIdsByClassId(classId);
-//       learnerAccIds.forEach((id) => accIds.add(id));
+      // Learners (if any)
+      const learnerAccIds = await this.getLearnerAccIdsByClassId(classId);
+      learnerAccIds.forEach((id) => accIds.add(id));
 
-//       // Instructor
-//       if (instructorId) {
-//         const instructorRepository = require("../repositories/instructorRepository");
-//         const instructor = await instructorRepository.findById(instructorId);
-//         if (instructor?.AccID) accIds.add(instructor.AccID);
-//       }
+      // Instructor
+      if (instructorId) {
+        const instructorRepository = require("../repositories/instructorRepository");
+        const instructor = await instructorRepository.findById(instructorId);
+        if (instructor?.AccID) accIds.add(instructor.AccID);
+      }
 
-//       // Staff (creator)
-//       if (createdByStaffId) {
-//         const staffRepository = require("../repositories/staffRepository");
-//         const staff = await staffRepository.findById(createdByStaffId);
-//         if (staff?.AccID) accIds.add(staff.AccID);
-//       }
+      // Staff (creator)
+      if (createdByStaffId) {
+        const staffRepository = require("../repositories/staffRepository");
+        const staff = await staffRepository.findById(createdByStaffId);
+        if (staff?.AccID) accIds.add(staff.AccID);
+      }
 
-//       const finalAccIds = Array.from(accIds).filter(Boolean);
-//       if (finalAccIds.length === 0) return;
+      const finalAccIds = Array.from(accIds).filter(Boolean);
+      if (finalAccIds.length === 0) return;
 
-//       await this.createBulk({
-//         accIds: finalAccIds,
-//         content,
-//         type: "class_startdate_changed",
-//       });
-//     } catch (error) {
-//       console.error("Error notifyClassStartDatePostponed:", error);
-//       // Don't throw to avoid breaking main flow
-//     }
-//   }
+      await this.createBulk({
+        accIds: finalAccIds,
+        content,
+        type: "class_startdate_changed",
+      });
+    } catch (error) {
+      console.error("Error notifyClassStartDatePostponed:", error);
+      // Don't throw to avoid breaking main flow
+    }
+  }
 }
 
 module.exports = new NotificationService();

@@ -2,7 +2,7 @@ const payrollService = require("../services/payrollService");
 
 const getInstructorPayroll = async (req, res) => {
   try {
-    const { startDate, endDate, instructorId } = req.query;
+    const { startDate, endDate, instructorId, page, limit } = req.query;
 
     if (!startDate || !endDate) {
       return res.status(400).json({
@@ -11,15 +11,19 @@ const getInstructorPayroll = async (req, res) => {
       });
     }
 
-    const payrollData = await payrollService.getInstructorPayroll(
+    const result = await payrollService.getInstructorPayroll(
       startDate,
       endDate,
-      instructorId || null
+      instructorId || null,
+      page || 1,
+      limit || 10
     );
 
     res.status(200).json({
       success: true,
-      data: payrollData,
+      data: result.data,
+      pagination: result.pagination,
+      grandTotals: result.grandTotals,
     });
   } catch (error) {
     console.error("Error in getInstructorPayroll controller:", error);

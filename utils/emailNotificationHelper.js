@@ -109,6 +109,7 @@ async function notifyClassCancelled(classId, reason = "Lớp học đã bị h�
 
     const results = [];
 
+    // Gửi email cho tất cả học viên trong lớp
     for (const enrollment of enrollments) {
       try {
         const learnerRepository = require("../repositories/learnerRepository");
@@ -119,7 +120,7 @@ async function notifyClassCancelled(classId, reason = "Lớp học đã bị h�
         if (!account || !account.Email) continue;
 
         const result = await sendEmailNotification(
-          "CLASS_CANCELLED",
+          "CLASS_CANCELLED_TO_LEARNER",
           account.Email,
           {
             userName: learner.FullName || account.Email,
@@ -133,6 +134,44 @@ async function notifyClassCancelled(classId, reason = "Lớp học đã bị h�
       } catch (error) {
         console.error(
           `[notifyClassCancelled] Error sending to enrollment ${enrollment.EnrollmentID}:`,
+          error
+        );
+        results.push({
+          email: "N/A",
+          result: { success: false, error: error.message },
+        });
+      }
+    }
+
+    // Gửi email cho giảng viên của lớp
+    if (classInfo.InstructorID) {
+      try {
+        const instructorRepository = require("../repositories/instructorRepository");
+        const instructor = await instructorRepository.findById(
+          classInfo.InstructorID
+        );
+        if (instructor && instructor.AccID) {
+          const instructorAccount = await accountRepository.findById(
+            instructor.AccID
+          );
+          if (instructorAccount && instructorAccount.Email) {
+            const result = await sendEmailNotification(
+              "CLASS_CANCELLED_TO_INSTRUCTOR",
+              instructorAccount.Email,
+              {
+                userName: instructor.FullName || instructorAccount.Email,
+                className: classInfo.Name || "N/A",
+                classCode: `ClassID: ${classId}`,
+                reason: reason,
+              }
+            );
+
+            results.push({ email: instructorAccount.Email, result });
+          }
+        }
+      } catch (error) {
+        console.error(
+          `[notifyClassCancelled] Error sending to instructor ${classInfo.InstructorID}:`,
           error
         );
         results.push({
@@ -299,7 +338,9 @@ async function notifyRefundApproved(refundId) {
 
     // Tính toán số tiền hoàn trực tiếp (không lưu vào database)
     const refundService = require("../services/refundService");
-    const refundCalculation = await refundService.calculateRefundAmount(refund.EnrollmentID);
+    const refundCalculation = await refundService.calculateRefundAmount(
+      refund.EnrollmentID
+    );
 
     const refundAmount = refundCalculation.refundAmount || 0;
     const refundReason = refundCalculation.refundReason || "Không có thông tin";

@@ -1606,7 +1606,7 @@ async function findAvailableInstructorSlots(params) {
         }
 
         console.log(
-          `[findAvailableInstructorSlots] ⛔ Ngày ${dateString} BẬN - ${reason}`
+          `[findAvailableInstructorSlots] Ngày ${dateString} BẬN - ${reason}`
         );
         busySlots.push({
           date: dateString,

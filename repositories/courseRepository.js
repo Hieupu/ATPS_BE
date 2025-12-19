@@ -49,7 +49,7 @@ class CourseRepository {
           orderBy = "EnrollmentCount DESC";
           break;
         case "rating":
-          orderBy = "ReviewCount DESC"; // Sửa thành ReviewCount thay vì AverageRating
+          orderBy = "ReviewCount DESC";
           break;
         case "newest":
         default:
@@ -522,8 +522,8 @@ class CourseRepository {
       const db = await connectDB();
 
       // Main query - optimized
-    const [classes] = await db.query(
-  `SELECT 
+      const [classes] = await db.query(
+        `SELECT 
     cl.ClassID,
     cl.CourseID,
     cl.Name as ClassName,
@@ -556,9 +556,8 @@ class CourseRepository {
      cl.Opendate, cl.Enddate, cl.Numofsession, 
      i.InstructorID, i.FullName, enr.StudentCount
    ORDER BY cl.ClassID`,
-  [courseId]
-);
-
+        [courseId]
+      );
 
       // Check if there are any classes before processing
       if (!classes.length) {

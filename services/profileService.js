@@ -43,6 +43,7 @@ class ProfileService {
       profileData = { ...profileData, ...staff };
     }
 
+
     return profileData;
   }
 
@@ -53,6 +54,8 @@ class ProfileService {
     if (learner) return "learner";
     const admin = await profileRepository.findAdminByAccountId(accountId);
     if (admin) return "admin";
+    const parent = await profileRepository.findParentByAccountId(accountId);
+    if (parent) return "parent";
 
     throw new ServiceError("Role not found for this account", 404);
   }

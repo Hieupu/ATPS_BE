@@ -284,7 +284,7 @@ const newsController = {
       const adminAccID = req.user ? req.user.AccID : null;
       const updatedNews = await newsService.approveNews(id);
 
-       // Gửi notification tới staff tạo tin
+      // Gửi notification tới staff tạo tin
       try {
         const staffRepository = require("../repositories/staffRepository");
         const notificationService = require("../services/notificationService");
@@ -293,7 +293,7 @@ const newsController = {
           const staff = await staffRepository.findById(updatedNews.StaffID);
           if (staff?.AccID) {
             const title = updatedNews.Title || "tin tức";
-            const content = `Tin tức "${title}" của bạn đã được admin duyệt và sẽ hiển thị cho học viên.`;
+            const content = `Tin tức "${title}" của bạn đã được admin duyệt và sẽ hiển thị lên trang tin tức.`;
             await notificationService.create({
               accId: staff.AccID,
               content,
@@ -303,7 +303,7 @@ const newsController = {
         }
       } catch (notifError) {
         console.error(
-          "[newsController.approveNews] Error sending notification to staff:",
+          "[newsController.approveNews] Lỗi gửi notification tới staff:",
           notifError
         );
       }
@@ -382,7 +382,7 @@ const newsController = {
         }
       } catch (notifError) {
         console.error(
-          "[newsController.rejectNews] Error sending notification to staff:",
+          "[newsController.rejectNews] Lỗi gửi notification tới staff:",
           notifError
         );
       }

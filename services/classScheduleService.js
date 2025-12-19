@@ -324,6 +324,27 @@ async function rescheduleSession(sessionId, newSchedule) {
     { updateZoom: true }
   );
 
+  // Đồng bộ Title theo chuẩn: "Session for class {tên lớp}"
+  try {
+    const classId = updated?.ClassID;
+    if (classId) {
+      const classData = await classRepository.findById(classId);
+      const className =
+        classData?.[0]?.Name || classData?.[0]?.ClassName || `Class ${classId}`;
+      const standardTitle = `Session for class ${className}`;
+
+      // Chỉ update nếu title khác để tránh query thừa
+      if (updated?.Title !== standardTitle) {
+        await sessionService.updateSession(sessionId, { Title: standardTitle });
+        const refreshed = await sessionService.getSessionById(sessionId);
+        return refreshed || updated;
+      }
+    }
+  } catch (e) {
+    // Không block flow chính
+    console.error("[classScheduleService.rescheduleSession] Title sync error:", e);
+  }
+
   return updated;
 }
 
