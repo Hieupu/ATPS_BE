@@ -19,15 +19,14 @@ describe("profileService - updateProfile", () => {
     jest.clearAllMocks();
   });
 
-  test("UTCID01 - role learner, chỉ cập nhật profile (FullName, DateOfBirth, Job, Address) -> không cập nhật account", async () => {
+  test("UTCID01 - role learner, chỉ cập nhật profile (FullName, DateOfBirth, Job, Address)", async () => {
     jest
       .spyOn(profileService, "determineRole")
       .mockResolvedValueOnce("learner");
+
     jest
       .spyOn(profileService, "getProfileByAccountId")
-      .mockResolvedValueOnce({ profile: "updated-learner-2" });
-
-    const spyGenerate = jest.spyOn(profileService, "generateUsername");
+      .mockResolvedValueOnce({ profile: "updated-learner" });
 
     const updateData = {
       FullName: "Nguyen Van A",
@@ -38,22 +37,24 @@ describe("profileService - updateProfile", () => {
 
     await profileService.updateProfile(accountId, updateData);
 
-    expect(spyGenerate).toHaveBeenCalledWith("Nguyen Van A");
-    const generated = spyGenerate.mock.results[0].value;
+    expect(profileRepository.updateAccount).not.toHaveBeenCalled();
 
-    expect(profileRepository.updateAccount).toHaveBeenCalledWith(accountId, {
-      Username: generated,
-    });
     expect(profileRepository.updateLearner).toHaveBeenCalledWith(accountId, {
       FullName: "Nguyen Van A",
       DateOfBirth: "2000-01-01",
       Job: "Student",
       Address: "HN",
     });
-  });
 
-  test("UTCID02 - role staff, cập nhật FullName, Phone, Address -> gọi updateAccount và updateStaff", async () => {
-    jest.spyOn(profileService, "determineRole").mockResolvedValueOnce("staff");
+    expect(profileRepository.updateInstructor).not.toHaveBeenCalled();
+    expect(profileRepository.updateStaff).not.toHaveBeenCalled();
+    });
+
+    test("UTCID02 - role staff, cập nhật FullName, Phone, Address -> gọi updateAccount và updateStaff", async () => {
+    jest
+      .spyOn(profileService, "determineRole")
+      .mockResolvedValueOnce("staff");
+
     jest
       .spyOn(profileService, "getProfileByAccountId")
       .mockResolvedValueOnce({ profile: "updated-staff" });
@@ -64,21 +65,17 @@ describe("profileService - updateProfile", () => {
       Address: "HN",
     };
 
-    const spyGenerate = jest.spyOn(profileService, "generateUsername");
-
     await profileService.updateProfile(accountId, updateData);
-
-    expect(spyGenerate).toHaveBeenCalledWith("Giao vien N");
-    const generated = spyGenerate.mock.results[0].value;
 
     expect(profileRepository.updateAccount).toHaveBeenCalledWith(accountId, {
       Phone: "0123456789",
-      Username: generated,
     });
+
     expect(profileRepository.updateStaff).toHaveBeenCalledWith(accountId, {
       FullName: "Giao vien N",
       Address: "HN",
     });
+
     expect(profileRepository.updateLearner).not.toHaveBeenCalled();
     expect(profileRepository.updateInstructor).not.toHaveBeenCalled();
   });

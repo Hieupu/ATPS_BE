@@ -13,6 +13,7 @@ const getProfile = async (req, res) => {
 
 const updateProfile = async (req, res) => {
   try {
+    console.log("Update", req);
     const { id } = req.user;
     const updateData = req.body;
     

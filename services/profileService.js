@@ -44,7 +44,6 @@ class ProfileService {
       profileData = { ...profileData, ...staff };
     }
 
-
     return profileData;
   }
 
@@ -60,14 +59,11 @@ class ProfileService {
     const admin = await profileRepository.findAdminByAccountId(accountId);
     if (admin) return "admin";
 
-
     throw new ServiceError("Role not found for this account", 404);
   }
 
   async updateProfile(accountId, updateData) {
     const role = await this.determineRole(accountId);
-
-    console.log(`Updating profile for account ${accountId} with role: ${role}`);
 
     const accountData = {};
     const profileData = {};
@@ -91,9 +87,9 @@ class ProfileService {
       profileData.Major = updateData.Major;
     }
 
-    if (updateData.FullName && !updateData.Username) {
-      accountData.Username = this.generateUsername(updateData.FullName);
-    }
+    // if (updateData.FullName && !updateData.Username) {
+    //   accountData.Username = this.generateUsername(updateData.FullName);
+    // }
 
     if (Object.keys(accountData).length > 0) {
       await profileRepository.updateAccount(accountId, accountData);
