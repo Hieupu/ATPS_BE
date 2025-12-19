@@ -265,7 +265,6 @@ class ZoomService {
             join_before_host: false,
             mute_upon_entry: true,
             waiting_room: false,
-            approval_type: 0,
             auto_recording: "cloud",
           },
         },

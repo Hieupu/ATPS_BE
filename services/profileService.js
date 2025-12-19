@@ -65,8 +65,6 @@ class ProfileService {
   async updateProfile(accountId, updateData) {
     const role = await this.determineRole(accountId);
 
-    console.log(`Updating profile for account ${accountId} with role: ${role}`);
-
     const accountData = {};
     const profileData = {};
 
